@@ -2,18 +2,18 @@ use super::*;
 
 #[test]
 fn test_linear() {
-    let x = array![0.05, 0.10, 0.15];
-    let y = array![0.10, 0.20, 0.30];
-    let f_xy = array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]];
     let interp = Interp2D::new(
-        x.view(),
-        y.view(),
-        f_xy.view(),
+        array![0.05, 0.10, 0.15],
+        array![0.10, 0.20, 0.30],
+        array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
         strategy::Linear,
         Extrapolate::Error,
     )
     .unwrap();
     // Check that interpolating at grid points just retrieves the value
+    let x = &interp.data.grid[0];
+    let y = &interp.data.grid[1];
+    let f_xy = &interp.data.values;
     for (i, x_i) in x.iter().enumerate() {
         for (j, y_j) in y.iter().enumerate() {
             assert_eq!(interp.interpolate(&[*x_i, *y_j]).unwrap(), f_xy[[i, j]]);
@@ -64,18 +64,18 @@ fn test_linear_extrapolation() {
 
 #[test]
 fn test_nearest() {
-    let x = array![0.05, 0.10, 0.15];
-    let y = array![0.10, 0.20, 0.30];
-    let f_xy = array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]];
     let interp = Interp2D::new(
-        x.view(),
-        y.view(),
-        f_xy.view(),
+        array![0.05, 0.10, 0.15],
+        array![0.10, 0.20, 0.30],
+        array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
         strategy::Nearest,
         Extrapolate::Error,
     )
     .unwrap();
     // Check that interpolating at grid points just retrieves the value
+    let x = &interp.data.grid[0];
+    let y = &interp.data.grid[1];
+    let f_xy = &interp.data.values;
     for (i, x_i) in x.iter().enumerate() {
         for (j, y_j) in y.iter().enumerate() {
             assert_eq!(interp.interpolate(&[*x_i, *y_j]).unwrap(), f_xy[[i, j]]);

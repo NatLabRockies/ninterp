@@ -67,10 +67,13 @@ impl<D, const N: usize> InterpData<D, N>
 where
     Dim<[Ix; N]>: Dimension,
     D: Data + RawDataClone + Clone,
-    D::Elem: PartialOrd + Debug,
+    D::Elem: PartialEq + Debug,
 {
     /// Validate interpolator data.
-    pub fn validate(&self) -> Result<(), ValidateError> {
+    pub fn validate(&self) -> Result<(), ValidateError>
+    where
+        D::Elem: PartialOrd,
+    {
         for i in 0..N {
             let i_grid_len = self.grid[i].len();
             // Check that each grid dimension has elements

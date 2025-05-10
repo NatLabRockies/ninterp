@@ -10,11 +10,11 @@
 //! use ndarray::prelude::*;
 //! use ninterp::prelude::*;
 //!
-//! let x = array![0., 1., 2., 3., 4.];
-//! let f_x = array![0.2, 0.4, 0.6, 0.8, 1.0];
-//! let mut interp: Interp1DViewed<_, strategy::enums::Strategy1DEnum> = Interp1D::new(
-//!     x.view(),
-//!     f_x.view(),
+//! let mut interp: Interp1DOwned<_, strategy::enums::Strategy1DEnum> = Interp1D::new(
+//!     // x
+//!     array![0., 1., 2., 3., 4.],
+//!     // f(x)
+//!     array![0.2, 0.4, 0.6, 0.8, 1.0],
 //!     strategy::Linear.into(),
 //!     Extrapolate::Error,
 //! )
@@ -54,11 +54,9 @@ mod tests {
 
     #[test]
     fn test_1d() {
-        let x = array![0., 1., 2., 3., 4.];
-        let f_x = array![0.2, 0.4, 0.6, 0.8, 1.0];
         let mut interp: Interp1D<_, strategy::enums::Strategy1DEnum> = Interp1D::new(
-            x.view(),
-            f_x.view(),
+            array![0., 1., 2., 3., 4.],
+            array![0.2, 0.4, 0.6, 0.8, 1.0],
             strategy::Linear.into(),
             Extrapolate::Error,
         )
@@ -82,21 +80,24 @@ mod tests {
 
     #[test]
     fn test_2d() {
-        let x = array![0.05, 0.10, 0.15];
-        let y = array![0.10, 0.20, 0.30];
-        let f_xy = array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]];
         let mut interp: Interp2D<_, strategy::enums::Strategy2DEnum> = Interp2D::new(
-            x.view(),
-            y.view(),
-            f_xy.view(),
+            array![0.05, 0.10, 0.15],
+            array![0.10, 0.20, 0.30],
+            array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
             strategy::Linear.into(),
             Extrapolate::Error,
         )
         .unwrap();
+        let x = &interp.data.grid[0];
+        let y = &interp.data.grid[1];
+        let f_xy = &interp.data.values;
+
         assert_eq!(interp.interpolate(&[x[2], y[1]]).unwrap(), f_xy[[2, 1]]);
         assert_eq!(interp.interpolate(&[0.075, 0.25]).unwrap(), 3.);
 
         interp.set_strategy(strategy::Nearest).unwrap();
+        let f_xy = &interp.data.values; // need fresh reference after mutation
+
         assert_eq!(interp.interpolate(&[0.05, 0.12]).unwrap(), f_xy[[0, 0]]);
         assert_eq!(
             // float imprecision
@@ -111,23 +112,23 @@ mod tests {
 
     #[test]
     fn test_3d() {
-        let x = array![0.05, 0.10, 0.15];
-        let y = array![0.10, 0.20, 0.30];
-        let z = array![0.20, 0.40, 0.60];
-        let f_xyz = array![
-            [[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
-            [[9., 10., 11.], [12., 13., 14.], [15., 16., 17.]],
-            [[18., 19., 20.], [21., 22., 23.], [24., 25., 26.],],
-        ];
         let mut interp: Interp3D<_, strategy::enums::Strategy3DEnum> = Interp3D::new(
-            x.view(),
-            y.view(),
-            z.view(),
-            f_xyz.view(),
+            array![0.05, 0.10, 0.15],
+            array![0.10, 0.20, 0.30],
+            array![0.20, 0.40, 0.60],
+            array![
+                [[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+                [[9., 10., 11.], [12., 13., 14.], [15., 16., 17.]],
+                [[18., 19., 20.], [21., 22., 23.], [24., 25., 26.],],
+            ],
             strategy::Linear.into(),
             Extrapolate::Error,
         )
         .unwrap();
+        let x = &interp.data.grid[0];
+        let y = &interp.data.grid[1];
+        let z = &interp.data.grid[2];
+
         assert_approx_eq!(interp.interpolate(&[x[0], y[0], 0.3]).unwrap(), 0.5);
         assert_approx_eq!(interp.interpolate(&[x[0], 0.15, z[0]]).unwrap(), 1.5);
         assert_approx_eq!(interp.interpolate(&[x[0], 0.15, 0.3]).unwrap(), 2.);
@@ -148,21 +149,26 @@ mod tests {
 
     #[test]
     fn test_nd() {
-        let x = array![0.05, 0.10, 0.15];
-        let y = array![0.10, 0.20, 0.30];
-        let z = array![0.20, 0.40, 0.60];
-        let f_xyz = array![
-            [[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
-            [[9., 10., 11.], [12., 13., 14.], [15., 16., 17.]],
-            [[18., 19., 20.], [21., 22., 23.], [24., 25., 26.],],
-        ];
         let mut interp: InterpND<_, strategy::enums::StrategyNDEnum> = InterpND::new(
-            vec![x.view(), y.view(), z.view()],
-            f_xyz.view().into_dyn(),
+            vec![
+                array![0.05, 0.10, 0.15],
+                array![0.10, 0.20, 0.30],
+                array![0.20, 0.40, 0.60],
+            ],
+            array![
+                [[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+                [[9., 10., 11.], [12., 13., 14.], [15., 16., 17.]],
+                [[18., 19., 20.], [21., 22., 23.], [24., 25., 26.],],
+            ]
+            .into_dyn(),
             strategy::Linear.into(),
             Extrapolate::Error,
         )
         .unwrap();
+        let x = &interp.data.grid[0];
+        let y = &interp.data.grid[1];
+        let z = &interp.data.grid[2];
+
         assert_approx_eq!(interp.interpolate(&[x[0], y[0], 0.3]).unwrap(), 0.5);
         assert_approx_eq!(interp.interpolate(&[x[0], 0.15, z[0]]).unwrap(), 1.5);
         assert_approx_eq!(interp.interpolate(&[x[0], 0.15, 0.3]).unwrap(), 2.);

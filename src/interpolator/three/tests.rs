@@ -2,30 +2,29 @@ use super::*;
 
 #[test]
 fn test_linear() {
-    let x = array![0.05, 0.10, 0.15];
-    let y = array![0.10, 0.20, 0.30];
-    let z = array![0.20, 0.40, 0.60];
-    let f_xyz = array![
-        [[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
-        [[9., 10., 11.], [12., 13., 14.], [15., 16., 17.]],
-        [[18., 19., 20.], [21., 22., 23.], [24., 25., 26.],],
-    ];
     let interp = Interp3D::new(
-        x.view(),
-        y.view(),
-        z.view(),
-        f_xyz.view(),
+        array![0.05, 0.10, 0.15],
+        array![0.10, 0.20, 0.30],
+        array![0.20, 0.40, 0.60],
+        array![
+            [[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+            [[9., 10., 11.], [12., 13., 14.], [15., 16., 17.]],
+            [[18., 19., 20.], [21., 22., 23.], [24., 25., 26.],],
+        ],
         strategy::Linear,
         Extrapolate::Error,
     )
     .unwrap();
     // Check that interpolating at grid points just retrieves the value
+    let x = &interp.data.grid[0];
+    let y = &interp.data.grid[1];
+    let z = &interp.data.grid[2];
     for (i, x_i) in x.iter().enumerate() {
         for (j, y_j) in y.iter().enumerate() {
             for (k, z_k) in z.iter().enumerate() {
                 assert_eq!(
                     interp.interpolate(&[*x_i, *y_j, *z_k]).unwrap(),
-                    f_xyz[[i, j, k]]
+                    interp.data.values[[i, j, k]]
                 );
             }
         }
@@ -95,26 +94,25 @@ fn test_linear_offset() {
 
 #[test]
 fn test_nearest() {
-    let x = array![0., 1.];
-    let y = array![0., 1.];
-    let z = array![0., 1.];
-    let f_xyz = array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],];
     let interp = Interp3D::new(
-        x.view(),
-        y.view(),
-        z.view(),
-        f_xyz.view(),
+        array![0., 1.],
+        array![0., 1.],
+        array![0., 1.],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]],
         strategy::Nearest,
         Extrapolate::Error,
     )
     .unwrap();
     // Check that interpolating at grid points just retrieves the value
+    let x = &interp.data.grid[0];
+    let y = &interp.data.grid[1];
+    let z = &interp.data.grid[2];
     for (i, x_i) in x.iter().enumerate() {
         for (j, y_j) in y.iter().enumerate() {
             for (k, z_k) in z.iter().enumerate() {
                 assert_eq!(
                     interp.interpolate(&[*x_i, *y_j, *z_k]).unwrap(),
-                    f_xyz[[i, j, k]]
+                    interp.data.values[[i, j, k]]
                 );
             }
         }

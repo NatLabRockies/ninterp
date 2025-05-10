@@ -20,12 +20,12 @@ use strategy::enums::*;
 /// use ninterp::prelude::*;
 ///
 /// // 1-D linear
-/// let x = array![0., 1., 2., 3., 4.];
-/// let f_x = array![0.2, 0.4, 0.6, 0.8, 1.0];
 /// // type annotation for clarity
-/// let mut interp: InterpolatorEnumViewed<&f64> = InterpolatorEnum::new_1d(
-///     x.view(),
-///     f_x.view(),
+/// let mut interp: InterpolatorEnumOwned<_> = InterpolatorEnum::new_1d(
+///     // x
+///     array![0., 1., 2., 3., 4.],
+///     // f(x)
+///     array![0.2, 0.4, 0.6, 0.8, 1.0],
 ///     strategy::Linear, // strategy mod is exposed via `use ndarray::prelude::*;`
 ///     Extrapolate::Error,
 /// )
@@ -35,17 +35,22 @@ use strategy::enums::*;
 /// assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);
 ///
 /// // 2-D nearest
-/// let x = array![0.05, 0.10, 0.15];
-/// let y = array![0.10, 0.20, 0.30];
-/// let f_xy = array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]];
 /// interp = InterpolatorEnum::new_2d(
-///     x.view(),
-///     y.view(),
-///     f_xy.view(),
+///     // x
+///     array![0.05, 0.10, 0.15],
+///     // y
+///     array![0.10, 0.20, 0.30],
+///     // f(x, y)
+///     array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
 ///     strategy::Nearest,
 ///     Extrapolate::Error,
 /// )
 /// .unwrap();
+/// let f_xy = match &interp {
+///     InterpolatorEnum::Interp2D(interp) => &interp.data.values,
+///     _ => unreachable!(),
+/// };
+///
 /// assert_eq!(interp.interpolate(&[0.08, 0.21]).unwrap(), f_xy[[1, 1]]);
 /// assert_eq!(interp.interpolate(&[0.11, 0.26]).unwrap(), f_xy[[1, 2]]);
 /// assert_eq!(interp.interpolate(&[0.13, 0.12]).unwrap(), f_xy[[2, 0]]);

@@ -18,12 +18,17 @@ fn test_invalid_args() {
 
 #[test]
 fn test_linear() {
-    let x = array![0., 1., 2., 3., 4.];
-    let f_x = array![0.2, 0.4, 0.6, 0.8, 1.0];
-    let interp = Interp1D::new(x.view(), f_x.view(), strategy::Linear, Extrapolate::Error).unwrap();
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
     // Check that interpolating at grid points just retrieves the value
+    let x = &interp.data.grid[0];
     for (i, x_i) in x.iter().enumerate() {
-        assert_eq!(interp.interpolate(&[*x_i]).unwrap(), f_x[i]);
+        assert_eq!(interp.interpolate(&[*x_i]).unwrap(), interp.data.values[i]);
     }
     assert_eq!(interp.interpolate(&[3.00]).unwrap(), 0.8);
     assert_eq!(interp.interpolate(&[3.75]).unwrap(), 0.95);
@@ -32,16 +37,16 @@ fn test_linear() {
 
 #[test]
 fn test_left_nearest() {
-    let x = array![0., 1., 2., 3., 4.];
-    let f_x = array![0.2, 0.4, 0.6, 0.8, 1.0];
     let interp = Interp1D::new(
-        x.view(),
-        f_x.view(),
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
         strategy::LeftNearest,
         Extrapolate::Error,
     )
     .unwrap();
     // Check that interpolating at grid points just retrieves the value
+    let x = &interp.data.grid[0];
+    let f_x = &interp.data.values;
     for (i, x_i) in x.iter().enumerate() {
         assert_eq!(interp.interpolate(&[*x_i]).unwrap(), f_x[i]);
     }
@@ -52,16 +57,16 @@ fn test_left_nearest() {
 
 #[test]
 fn test_right_nearest() {
-    let x = array![0., 1., 2., 3., 4.];
-    let f_x = array![0.2, 0.4, 0.6, 0.8, 1.0];
     let interp = Interp1D::new(
-        x.view(),
-        f_x.view(),
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
         strategy::RightNearest,
         Extrapolate::Error,
     )
     .unwrap();
     // Check that interpolating at grid points just retrieves the value
+    let x = &interp.data.grid[0];
+    let f_x = &interp.data.values;
     for (i, x_i) in x.iter().enumerate() {
         assert_eq!(interp.interpolate(&[*x_i]).unwrap(), f_x[i]);
     }
@@ -72,11 +77,16 @@ fn test_right_nearest() {
 
 #[test]
 fn test_nearest() {
-    let x = array![0., 1., 2., 3., 4.];
-    let f_x = array![0.2, 0.4, 0.6, 0.8, 1.0];
-    let interp =
-        Interp1D::new(x.view(), f_x.view(), strategy::Nearest, Extrapolate::Error).unwrap();
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::Nearest,
+        Extrapolate::Error,
+    )
+    .unwrap();
     // Check that interpolating at grid points just retrieves the value
+    let x = &interp.data.grid[0];
+    let f_x = &interp.data.values;
     for (i, x_i) in x.iter().enumerate() {
         assert_eq!(interp.interpolate(&[*x_i]).unwrap(), f_x[i]);
     }

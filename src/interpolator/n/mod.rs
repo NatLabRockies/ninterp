@@ -55,29 +55,26 @@ where
 impl<D> InterpDataND<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: PartialOrd + Debug,
+    D::Elem: PartialEq + Debug,
 {
-    /// Get data dimensionality.
-    pub fn ndim(&self) -> usize {
-        if self.values.len() == 1 {
-            0
-        } else {
-            self.values.ndim()
-        }
-    }
-
     /// Construct and validate a new [`InterpDataND`].
     pub fn new(
         grid: Vec<ArrayBase<D, Ix1>>,
         values: ArrayBase<D, IxDyn>,
-    ) -> Result<Self, ValidateError> {
+    ) -> Result<Self, ValidateError>
+    where
+        D::Elem: PartialOrd,
+    {
         let data = Self { grid, values };
         data.validate()?;
         Ok(data)
     }
 
     /// Validate interpolator data.
-    pub fn validate(&self) -> Result<(), ValidateError> {
+    pub fn validate(&self) -> Result<(), ValidateError>
+    where
+        D::Elem: PartialOrd,
+    {
         let n = self.ndim();
         if (self.grid.len() != n) && !(n == 0 && self.grid.iter().all(|g| g.is_empty())) {
             // Only possible for `InterpDataND`
@@ -104,6 +101,15 @@ where
             }
         }
         Ok(())
+    }
+
+    /// Get data dimensionality.
+    pub fn ndim(&self) -> usize {
+        if self.values.len() == 1 {
+            0
+        } else {
+            self.values.ndim()
+        }
     }
 }
 

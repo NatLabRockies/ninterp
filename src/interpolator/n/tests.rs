@@ -2,24 +2,32 @@ use super::*;
 
 #[test]
 fn test_linear() {
-    let x = array![0.05, 0.10, 0.15];
-    let y = array![0.10, 0.20, 0.30];
-    let z = array![0.20, 0.40, 0.60];
-    let grid = vec![x.view(), y.view(), z.view()];
-    let values = array![
-        [[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
-        [[9., 10., 11.], [12., 13., 14.], [15., 16., 17.]],
-        [[18., 19., 20.], [21., 22., 23.], [24., 25., 26.]],
-    ]
-    .into_dyn();
-    let interp = InterpND::new(grid, values.view(), strategy::Linear, Extrapolate::Error).unwrap();
+    let interp = InterpND::new(
+        vec![
+            array![0.05, 0.10, 0.15],
+            array![0.10, 0.20, 0.30],
+            array![0.20, 0.40, 0.60],
+        ],
+        array![
+            [[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+            [[9., 10., 11.], [12., 13., 14.], [15., 16., 17.]],
+            [[18., 19., 20.], [21., 22., 23.], [24., 25., 26.]],
+        ]
+        .into_dyn(),
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
     // Check that interpolating at grid points just retrieves the value
+    let x = &interp.data.grid[0];
+    let y = &interp.data.grid[1];
+    let z = &interp.data.grid[2];
     for i in 0..x.len() {
         for j in 0..y.len() {
             for k in 0..z.len() {
                 assert_eq!(
-                    &interp.interpolate(&[x[i], y[j], z[k]]).unwrap(),
-                    values.slice(s![i, j, k]).first().unwrap()
+                    interp.interpolate(&[x[i], y[j], z[k]]).unwrap(),
+                    interp.data.values[[i, j, k]]
                 );
             }
         }
@@ -206,19 +214,23 @@ fn test_linear_extrapolate_3d() {
 
 #[test]
 fn test_nearest() {
-    let x = array![0., 1.];
-    let y = array![0., 1.];
-    let z = array![0., 1.];
-    let grid = vec![x.view(), y.view(), z.view()];
-    let values = array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn();
-    let interp = InterpND::new(grid, values.view(), strategy::Nearest, Extrapolate::Error).unwrap();
+    let interp = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Nearest,
+        Extrapolate::Error,
+    )
+    .unwrap();
     // Check that interpolating at grid points just retrieves the value
+    let x = &interp.data.grid[0];
+    let y = &interp.data.grid[1];
+    let z = &interp.data.grid[2];
     for i in 0..x.len() {
         for j in 0..y.len() {
             for k in 0..z.len() {
                 assert_eq!(
-                    &interp.interpolate(&[x[i], y[j], z[k]]).unwrap(),
-                    values.slice(s![i, j, k]).first().unwrap()
+                    interp.interpolate(&[x[i], y[j], z[k]]).unwrap(),
+                    interp.data.values[[i, j, k]]
                 );
             }
         }
@@ -281,32 +293,28 @@ fn test_extrapolate_fill() {
 
 #[test]
 fn test_extrapolate_clamp() {
-    let x = array![0.1, 1.1];
-    let y = array![0.2, 1.2];
-    let z = array![0.3, 1.3];
-    let values = array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn();
     let interp = InterpND::new(
-        vec![x.view(), y.view(), z.view()],
-        values.view(),
+        vec![array![0.1, 1.1], array![0.2, 1.2], array![0.3, 1.3]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
         strategy::Linear,
         Extrapolate::Clamp,
     )
     .unwrap();
     assert_eq!(
         interp.interpolate(&[-1., -1., -1.]).unwrap(),
-        values[[0, 0, 0]]
+        interp.data.values[[0, 0, 0]]
     );
     assert_eq!(
         interp.interpolate(&[-1., 2., -1.]).unwrap(),
-        values[[0, 1, 0]]
+        interp.data.values[[0, 1, 0]]
     );
     assert_eq!(
         interp.interpolate(&[2., -1., 2.]).unwrap(),
-        values[[1, 0, 1]]
+        interp.data.values[[1, 0, 1]]
     );
     assert_eq!(
         interp.interpolate(&[2., 2., 2.]).unwrap(),
-        values[[1, 1, 1]]
+        interp.data.values[[1, 1, 1]]
     );
 }
 
