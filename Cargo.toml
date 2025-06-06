@@ -1,6 +1,6 @@
 [package]
 name = "ninterp"
-version = "0.7.0"
+version = "0.7.3"
 edition = "2021"
 description = "Numerical interpolation for N-dimensional rectilinear grids"
 repository = "https://github.com/NREL/ninterp"

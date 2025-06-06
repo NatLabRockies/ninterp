@@ -11,9 +11,9 @@ const N: usize = 3;
 /// [`InterpData`] for 3-D data.
 pub type InterpData3D<D> = InterpData<D, N>;
 /// [`InterpData3D`] that views data.
-pub type InterpData3DViewed<T> = InterpData3D<ndarray::ViewRepr<T>>;
+pub type InterpData3DViewed<T> = InterpData3D<ViewRepr<T>>;
 /// [`InterpData3D`] that owns data.
-pub type InterpData3DOwned<T> = InterpData3D<ndarray::OwnedRepr<T>>;
+pub type InterpData3DOwned<T> = InterpData3D<OwnedRepr<T>>;
 
 impl<D> InterpData3D<D>
 where
@@ -68,9 +68,9 @@ where
     pub extrapolate: Extrapolate<D::Elem>,
 }
 /// [`Interp3D`] that views data.
-pub type Interp3DViewed<T, S> = Interp3D<ndarray::ViewRepr<T>, S>;
+pub type Interp3DViewed<T, S> = Interp3D<ViewRepr<T>, S>;
 /// [`Interp3D`] that owns data.
-pub type Interp3DOwned<T, S> = Interp3D<ndarray::OwnedRepr<T>, S>;
+pub type Interp3DOwned<T, S> = Interp3D<OwnedRepr<T>, S>;
 
 extrapolate_impl!(Interp3D, Strategy3D);
 partialeq_impl!(Interp3D, InterpData3D, Strategy3D);
@@ -142,6 +142,32 @@ where
         interpolator.check_extrapolate(&interpolator.extrapolate)?;
         interpolator.strategy.init(&interpolator.data)?;
         Ok(interpolator)
+    }
+
+    /// Return an interpolator with viewed data.
+    pub fn view(&self) -> Interp3DViewed<&D::Elem, S>
+    where
+        S: for<'a> Strategy3D<ViewRepr<&'a D::Elem>>,
+        D::Elem: Clone,
+    {
+        Interp3DViewed {
+            data: self.data.view(),
+            strategy: self.strategy.clone(),
+            extrapolate: self.extrapolate.clone(),
+        }
+    }
+
+    /// Turn the interpolator into an [`Interp3DOwned`], cloning the array elements if necessary.
+    pub fn into_owned(self) -> Interp3DOwned<D::Elem, S>
+    where
+        S: Strategy3D<OwnedRepr<D::Elem>>,
+        D::Elem: Clone,
+    {
+        Interp3DOwned {
+            data: self.data.into_owned(),
+            strategy: self.strategy.clone(),
+            extrapolate: self.extrapolate.clone(),
+        }
     }
 }
 

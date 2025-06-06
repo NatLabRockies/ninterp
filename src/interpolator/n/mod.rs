@@ -37,9 +37,9 @@ where
     pub values: ArrayBase<D, IxDyn>,
 }
 /// [`InterpDataND`] that views data.
-pub type InterpDataNDViewed<T> = InterpDataND<ndarray::ViewRepr<T>>;
+pub type InterpDataNDViewed<T> = InterpDataND<ViewRepr<T>>;
 /// [`InterpDataND`] that owns data.
-pub type InterpDataNDOwned<T> = InterpDataND<ndarray::OwnedRepr<T>>;
+pub type InterpDataNDOwned<T> = InterpDataND<OwnedRepr<T>>;
 
 impl<D> PartialEq for InterpDataND<D>
 where
@@ -111,6 +111,25 @@ where
             self.values.ndim()
         }
     }
+
+    /// View interpolator data.
+    pub fn view(&self) -> InterpDataNDViewed<&D::Elem> {
+        InterpDataNDViewed {
+            grid: self.grid.iter().map(|g| g.view()).collect(),
+            values: self.values.view(),
+        }
+    }
+
+    /// Turn the data into an [`InterpDataNDOwned`], cloning the array elements if necessary.
+    pub fn into_owned(self) -> InterpDataNDOwned<D::Elem>
+    where
+        D::Elem: Clone,
+    {
+        InterpDataNDOwned {
+            grid: self.grid.into_iter().map(|g| g.into_owned()).collect(),
+            values: self.values.into_owned(),
+        }
+    }
 }
 
 /// N-D interpolator
@@ -145,9 +164,9 @@ where
     pub extrapolate: Extrapolate<D::Elem>,
 }
 /// [`InterpND`] that views data.
-pub type InterpNDViewed<T, S> = InterpND<ndarray::ViewRepr<T>, S>;
+pub type InterpNDViewed<T, S> = InterpND<ViewRepr<T>, S>;
 /// [`InterpND`] that owns data.
-pub type InterpNDOwned<T, S> = InterpND<ndarray::OwnedRepr<T>, S>;
+pub type InterpNDOwned<T, S> = InterpND<OwnedRepr<T>, S>;
 
 extrapolate_impl!(InterpND, StrategyND);
 partialeq_impl!(InterpND, InterpDataND, StrategyND);
@@ -220,6 +239,32 @@ where
         interpolator.check_extrapolate(&interpolator.extrapolate)?;
         interpolator.strategy.init(&interpolator.data)?;
         Ok(interpolator)
+    }
+
+    /// Return an interpolator with viewed data.
+    pub fn view(&self) -> InterpNDViewed<&D::Elem, S>
+    where
+        S: for<'a> StrategyND<ViewRepr<&'a D::Elem>>,
+        D::Elem: Clone,
+    {
+        InterpNDViewed {
+            data: self.data.view(),
+            strategy: self.strategy.clone(),
+            extrapolate: self.extrapolate.clone(),
+        }
+    }
+
+    /// Turn the interpolator into an [`InterpNDOwned`], cloning the array elements if necessary.
+    pub fn into_owned(self) -> InterpNDOwned<D::Elem, S>
+    where
+        S: StrategyND<OwnedRepr<D::Elem>>,
+        D::Elem: Clone,
+    {
+        InterpNDOwned {
+            data: self.data.into_owned(),
+            strategy: self.strategy.clone(),
+            extrapolate: self.extrapolate.clone(),
+        }
     }
 }
 

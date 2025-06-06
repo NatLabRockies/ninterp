@@ -47,9 +47,9 @@ where
     pub values: ArrayBase<D, Dim<[Ix; N]>>,
 }
 /// [`InterpData`] that views data.
-pub type InterpDataViewed<T, const N: usize> = InterpData<ndarray::ViewRepr<T>, N>;
+pub type InterpDataViewed<T, const N: usize> = InterpData<ViewRepr<T>, N>;
 /// [`InterpData`] that owns data.
-pub type InterpDataOwned<T, const N: usize> = InterpData<ndarray::ViewRepr<T>, N>;
+pub type InterpDataOwned<T, const N: usize> = InterpData<OwnedRepr<T>, N>;
 
 impl<D, const N: usize> PartialEq for InterpData<D, N>
 where
@@ -90,5 +90,25 @@ where
             }
         }
         Ok(())
+    }
+
+    /// View interpolator data.
+    pub fn view(&self) -> InterpDataViewed<&D::Elem, N> {
+        InterpDataViewed {
+            grid: std::array::from_fn(|i| self.grid[i].view()),
+            values: self.values.view(),
+        }
+    }
+
+    /// Turn the data into an [`InterpDataOwned`], cloning the array elements if necessary.
+    pub fn into_owned(self) -> InterpDataOwned<D::Elem, N>
+    where
+        Dim<[Ix; N]>: Dimension,
+        D::Elem: Clone,
+    {
+        InterpDataOwned {
+            grid: self.grid.map(|arr| arr.into_owned()),
+            values: self.values.into_owned(),
+        }
     }
 }

@@ -87,9 +87,9 @@ where
     InterpND(InterpND<D, StrategyNDEnum>),
 }
 /// [`InterpolatorEnum`] that views data.
-pub type InterpolatorEnumViewed<T> = InterpolatorEnum<ndarray::ViewRepr<T>>;
+pub type InterpolatorEnumViewed<T> = InterpolatorEnum<ViewRepr<T>>;
 /// [`InterpolatorEnum`] that owns data.
-pub type InterpolatorEnumOwned<T> = InterpolatorEnum<ndarray::OwnedRepr<T>>;
+pub type InterpolatorEnumOwned<T> = InterpolatorEnum<OwnedRepr<T>>;
 
 impl<D> PartialEq for InterpolatorEnum<D>
 where
@@ -188,6 +188,31 @@ where
             strategy.into(),
             extrapolate,
         )?))
+    }
+
+    /// Return an interpolator with viewed data.
+    pub fn view(&self) -> InterpolatorEnumViewed<&D::Elem> {
+        match self {
+            InterpolatorEnum::Interp0D(interp) => InterpolatorEnum::Interp0D(interp.clone()),
+            InterpolatorEnum::Interp1D(interp) => InterpolatorEnum::Interp1D(interp.view()),
+            InterpolatorEnum::Interp2D(interp) => InterpolatorEnum::Interp2D(interp.view()),
+            InterpolatorEnum::Interp3D(interp) => InterpolatorEnum::Interp3D(interp.view()),
+            InterpolatorEnum::InterpND(interp) => InterpolatorEnum::InterpND(interp.view()),
+        }
+    }
+
+    /// Turn the interpolator into an [`InterpolatorEnumOwned`], cloning the array elements if necessary.
+    pub fn into_owned(self) -> InterpolatorEnumOwned<D::Elem>
+    where
+        D::Elem: Clone,
+    {
+        match self {
+            InterpolatorEnum::Interp0D(interp) => InterpolatorEnum::Interp0D(interp.clone()),
+            InterpolatorEnum::Interp1D(interp) => InterpolatorEnum::Interp1D(interp.into_owned()),
+            InterpolatorEnum::Interp2D(interp) => InterpolatorEnum::Interp2D(interp.into_owned()),
+            InterpolatorEnum::Interp3D(interp) => InterpolatorEnum::Interp3D(interp.into_owned()),
+            InterpolatorEnum::InterpND(interp) => InterpolatorEnum::InterpND(interp.into_owned()),
+        }
     }
 }
 
@@ -310,18 +335,41 @@ mod tests {
     #[test]
     #[cfg(feature = "serde")]
     fn test_serde() {
-        let interp0: Interp1D<_, strategy::enums::Strategy1DEnum> = Interp1D::new(
-            array![0., 1., 2., 3., 4.],
-            array![0.2, 0.4, 0.6, 0.8, 1.0],
-            strategy::LeftNearest.into(),
+        let x = array![0.05, 0.10, 0.15];
+        let y = array![0.10, 0.20, 0.30];
+        let f_xy = array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]];
+        let f_xy_dyn = f_xy.clone().into_dyn();
+
+        let interp0: Interp2D<_, strategy::enums::Strategy2DEnum> = Interp2D::new(
+            x.view(),
+            y.view(),
+            f_xy.view(),
+            strategy::Nearest.into(),
             Extrapolate::Error,
         )
         .unwrap();
         let interp1 = InterpolatorEnum::from(interp0.clone());
 
+        let interp2: InterpND<_, strategy::enums::StrategyNDEnum> = InterpND::new(
+            vec![x.view(), y.view()],
+            f_xy_dyn.view(),
+            strategy::Nearest.into(),
+            Extrapolate::Error,
+        )
+        .unwrap();
+        let interp3 = InterpolatorEnum::from(interp2.view());
+
         assert_eq!(
             serde_json::to_string(&interp0).unwrap(),
-            serde_json::to_string(&interp1).unwrap()
+            serde_json::to_string(&interp1).unwrap(),
+        );
+        assert_eq!(
+            serde_json::to_string(&interp1).unwrap(),
+            serde_json::to_string(&interp2).unwrap(),
+        );
+        assert_eq!(
+            serde_json::to_string(&interp2).unwrap(),
+            serde_json::to_string(&interp3).unwrap(),
         );
     }
 }
