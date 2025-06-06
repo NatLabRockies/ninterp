@@ -52,11 +52,16 @@ pub(crate) mod serde_arr_array {
         De: Deserializer<'de>,
     {
         match GridType::deserialize(deserializer)? {
-            GridType::VecVec(vecs) => vecs.into_iter().map(|v| v.into()).collect(),
+            GridType::VecVec(vecs) => vecs.into_iter().map(Into::into).collect(),
             GridType::VecArray(arrays) => arrays,
         }
         .try_into()
-        .map_err(|e| De::Error::custom(format_args!("expected {N} array(s): {e:?}")))
+        .map_err(|e: Vec<_>| {
+            De::Error::custom(format_args!(
+                "expected {N} array(s), found {}: {e:?}",
+                e.len()
+            ))
+        })
     }
 }
 
@@ -86,7 +91,7 @@ pub(crate) mod serde_vec_array {
         De: Deserializer<'de>,
     {
         Ok(match GridType::deserialize(deserializer)? {
-            GridType::VecVec(vecs) => vecs.into_iter().map(|v| v.into()).collect(),
+            GridType::VecVec(vecs) => vecs.into_iter().map(Into::into).collect(),
             GridType::VecArray(arrays) => arrays,
         })
     }
