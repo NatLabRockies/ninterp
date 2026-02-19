@@ -21,10 +21,11 @@ jobs:
         cargo test --verbose
         cargo test --no-default-features --verbose
         cargo test --all-features --verbose
-    - name: run examples
-      run: |
-        cargo install cargo-examples --version 0.5.0
-        cargo examples
+    # TODO: add this back when the cargo examples repo is more functional
+    # - name: run examples
+    #   run: |
+    #     cargo install cargo-examples
+    #     cargo examples
     - name: check semver
       uses: obi1kenobi/cargo-semver-checks-action@v2
 
