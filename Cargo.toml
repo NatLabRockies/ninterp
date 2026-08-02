@@ -3,7 +3,7 @@ name = "ninterp"
 version = "0.9.0"
 edition = "2021"
 description = "Numerical interpolation for N-dimensional rectilinear grids"
-repository = "https://github.com/NREL/ninterp"
+repository = "https://github.com/NatLabRockies/ninterp"
 license = "BSD-3-Clause"
 keywords = [
     "interpolation",

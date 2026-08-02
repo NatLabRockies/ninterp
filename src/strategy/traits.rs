@@ -4,9 +4,9 @@ use super::*;
 
 /// Find nearest index in `arr` left of `target`
 ///
-/// This method contains code from RouteE Compass, another open-source NREL-developed tool
-/// <https://www.nrel.gov/transportation/route-energy-prediction-model.html>
-/// <https://github.com/NREL/routee-compass/>
+/// This method contains code from RouteE Compass, another open-source NLR-developed tool
+/// <https://www.nlr.gov/transportation/route-energy-prediction-model.html>
+/// <https://github.com/NatLabRockies/routee-compass/>
 pub fn find_nearest_index<T: PartialOrd>(arr: ArrayView1<T>, target: &T) -> usize {
     if target == arr.last().unwrap() {
         return arr.len() - 2;

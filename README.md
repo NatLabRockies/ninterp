@@ -2,7 +2,7 @@
 
 [<img alt="docs.rs" src="https://img.shields.io/badge/docs.rs-ninterp-F74C00?style=for-the-badge&logo=docs.rs" height=25>](https://docs.rs/ninterp/latest/ninterp)
 [<img alt="crates.io" src="https://img.shields.io/crates/v/ninterp?style=for-the-badge&color=FFC932&logo=rust" height=25>](https://crates.io/crates/ninterp)
-[<img alt="github.com" src="https://img.shields.io/badge/github-NREL/ninterp-0076BD?style=for-the-badge&logo=github" height=25>](https://github.com/NREL/ninterp/)
+[<img alt="github.com" src="https://img.shields.io/badge/github-NatLabRockies/ninterp-0076BD?style=for-the-badge&logo=github" height=25>](https://github.com/NatLabRockies/ninterp/)
 
 The `ninterp` crate provides [multivariate interpolation](https://en.wikipedia.org/wiki/Multivariate_interpolation#Regular_grid) over rectilinear grids of any dimensionality.
 
@@ -30,7 +30,7 @@ See examples in `new` method documentation:
 - [`Interp3D::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp3D.html#method.new)
 - [`InterpND::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.InterpND.html#method.new)
 
-Also see the [`examples`](https://github.com/NREL/ninterp/tree/main/examples) directory for advanced examples:
+Also see the [`examples`](https://github.com/NatLabRockies/ninterp/tree/main/examples) directory for advanced examples:
 - Swapping strategies at runtime: **[`dynamic_strategy.rs`](examples/dynamic_strategy.rs)**
   - Using strategy enums (`strategy::enums::Strategy1DEnum`/etc.)
     - Compatible with `serde`
