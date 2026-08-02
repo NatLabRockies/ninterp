@@ -29,8 +29,11 @@ where
     D::Elem: PartialEq + Debug,
 {
     /// Coordinate grid: a vector of 1-dimensional [`ArrayBase<D, Ix1>`].
+    #[cfg_attr(feature = "serde", serde(with = "serde_vec_array"))]
     pub grid: Vec<ArrayBase<D, Ix1>>,
     /// Function values at coordinates: a single dynamic-dimensional [`ArrayBase`].
+    #[cfg_attr(feature = "serde", serde(serialize_with = "serde_ndim::serialize"))]
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_dyn"))]
     pub values: ArrayBase<D, IxDyn>,
 }
 /// [`InterpDataND`] that views data.
@@ -142,7 +145,7 @@ where
         deserialize = "
             D: DataOwned,
             D::Elem: Deserialize<'de>,
-            S: Deserialize<'de>
+            S: Deserialize<'de>,
         "
     ))
 )]

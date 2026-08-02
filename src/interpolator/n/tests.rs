@@ -405,4 +405,21 @@ fn test_serde() {
     let ser = serde_json::to_string(&interp).unwrap();
     let de: InterpNDOwned<f64, strategy::Nearest> = serde_json::from_str(&ser).unwrap();
     assert_eq!(interp, de);
+
+    // simple format (new serialization output)
+    let ser0 = "{\"grid\":[[0.1,1.1],[0.2,1.2],[0.3,1.3]],\"values\":[[[0.0,1.0],[2.0,3.0]],[[4.0,5.0],[6.0,7.0]]]}";
+    let de0: InterpDataND<_> = serde_json::from_str(&ser0).unwrap();
+    assert_eq!(interp.data, de0);
+    // mixed format (simple grid)
+    let ser1 = "{\"grid\":[[0.1,1.1],[0.2,1.2],[0.3,1.3]],\"values\":{\"v\":1,\"dim\":[2,2,2],\"data\":[0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0]}}";
+    let de1: InterpDataND<_> = serde_json::from_str(&ser1).unwrap();
+    assert_eq!(interp.data, de1);
+    // mixed format (simple values)
+    let ser2 = "{\"grid\":[{\"v\":1,\"dim\":[2],\"data\":[0.1,1.1]},{\"v\":1,\"dim\":[2],\"data\":[0.2,1.2]},{\"v\":1,\"dim\":[2],\"data\":[0.3,1.3]}],\"values\":[[[0.0,1.0],[2.0,3.0]],[[4.0,5.0],[6.0,7.0]]]}";
+    let de2: InterpDataND<_> = serde_json::from_str(&ser2).unwrap();
+    assert_eq!(interp.data, de2);
+    // complex format (legacy serialization output)
+    let ser3 = "{\"grid\":[{\"v\":1,\"dim\":[2],\"data\":[0.1,1.1]},{\"v\":1,\"dim\":[2],\"data\":[0.2,1.2]},{\"v\":1,\"dim\":[2],\"data\":[0.3,1.3]}],\"values\":{\"v\":1,\"dim\":[2,2,2],\"data\":[0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0]}}";
+    let de3: InterpDataND<_> = serde_json::from_str(&ser3).unwrap();
+    assert_eq!(interp.data, de3);
 }

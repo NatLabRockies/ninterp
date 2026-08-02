@@ -23,7 +23,8 @@ pub use two::{InterpData2D, InterpData2DOwned, InterpData2DViewed};
         deserialize = "
             D: DataOwned,
             D::Elem: Deserialize<'de>,
-            Dim<[usize; N]>: Deserialize<'de>,
+            Dim<[usize; N]>: Deserialize<'de> + Dimension,
+            [usize; N]: IntoDimension<Dim = Dim<[usize; N]>>,
             [ArrayBase<D, Ix1>; N]: Deserialize<'de>,
         "
     ))
@@ -38,8 +39,11 @@ where
     /// - 1-D: `[x]`
     /// - 2-D: `[x, y]`
     /// - 3-D: `[x, y, z]`
+    #[cfg_attr(feature = "serde", serde(with = "serde_arr_array"))]
     pub grid: [ArrayBase<D, Ix1>; N],
     /// Function values at coordinates: a single `N`-dimensional [`ArrayBase`].
+    #[cfg_attr(feature = "serde", serde(serialize_with = "serde_ndim::serialize"))]
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_fixed"))]
     pub values: ArrayBase<D, Dim<[Ix; N]>>,
 }
 /// [`InterpData`] that views data.

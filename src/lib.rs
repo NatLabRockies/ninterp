@@ -57,11 +57,10 @@ pub(crate) use num_traits::{clamp, Euclid, Num, One};
 pub(crate) use dyn_clone::*;
 
 #[cfg(feature = "serde")]
-pub(crate) use ndarray::DataOwned;
+#[path = "serde.rs"]
+mod serde_mod;
 #[cfg(feature = "serde")]
-pub(crate) use serde::{Deserialize, Serialize};
-#[cfg(feature = "serde")]
-pub(crate) use serde_unit_struct::{Deserialize_unit_struct, Serialize_unit_struct};
+pub(crate) use serde_mod::*;
 
 #[cfg(test)]
 /// Alias for [`approx::assert_abs_diff_eq`] with `epsilon = 1e-6`

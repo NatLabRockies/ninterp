@@ -2,6 +2,8 @@ name: test
 
 on:
   push:
+    branches:
+      - main
   pull_request:
 
 env:
@@ -12,17 +14,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - run: cargo build --verbose
-    - name: compile benchmarks
-      run: cargo bench --no-run
-    - name: test
-      run: |
-        cargo test --verbose
-        cargo test --no-default-features --verbose
-        cargo test --all-features --verbose
-    # TODO: add this back when the cargo examples repo is more functional
-    # - name: run examples
-    #   run: |
-    #     cargo install cargo-examples
-    #     cargo examples
+      - uses: actions/checkout@v4
+      - run: cargo build --verbose
+      - name: compile benchmarks
+        run: cargo bench --no-run
+      - name: test
+        run: |
+          cargo test --verbose
+          cargo test --no-default-features --verbose
+          cargo test --all-features --verbose
+      # TODO: add this back when the cargo examples repo is more functional
+      # - name: run examples
+      #   run: |
+      #     cargo install cargo-examples
+      #     cargo examples
