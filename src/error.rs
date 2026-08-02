@@ -18,7 +18,7 @@ pub enum ValidateError {
     ExtrapolateSelection(String),
     #[error("supplied grid coordinates cannot be empty: dim {0}")]
     EmptyGrid(usize),
-    #[error("supplied coordinates must be sorted and non-repeating: dim {0}")]
+    #[error("supplied coordinates must be monotonically increasing: dim {0}")]
     Monotonicity(usize),
     #[error("supplied grid and values are not compatible shapes: dim {0}")]
     IncompatibleShapes(usize),
