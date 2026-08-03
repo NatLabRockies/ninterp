@@ -29,10 +29,20 @@ where
     D::Elem: PartialEq + Debug,
 {
     /// Coordinate grid: a vector of 1-dimensional [`ArrayBase<D, Ix1>`].
-    #[cfg_attr(feature = "serde", serde(with = "serde_vec_array"))]
+    #[cfg_attr(
+        feature = "serde",
+        serde(deserialize_with = "serde_vec_array::deserialize")
+    )]
+    #[cfg_attr(
+        feature = "serde_ndim",
+        serde(serialize_with = "serde_vec_array::serialize")
+    )]
     pub grid: Vec<ArrayBase<D, Ix1>>,
     /// Function values at coordinates: a single dynamic-dimensional [`ArrayBase`].
-    #[cfg_attr(feature = "serde", serde(serialize_with = "serde_ndim::serialize"))]
+    #[cfg_attr(
+        feature = "serde_ndim",
+        serde(serialize_with = "serde_ndim::serialize")
+    )]
     #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_dyn"))]
     pub values: ArrayBase<D, IxDyn>,
 }

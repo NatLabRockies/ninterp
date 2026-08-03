@@ -17,9 +17,13 @@ cargo add ninterp
 ```
 
 #### Cargo Features
-- `serde`: support for [`serde`](https://crates.io/crates/serde) 1.x
+- `serde`: support for [`serde`](https://crates.io/crates/serde) 1.x using ndarray's built-in legacy wire format
   ```text
   cargo add ninterp --features serde
+  ```
+- `serde_ndim`: enable `serde` feature and switch output to the column-major nested array format from [`serde-ndim`](https://crates.io/crates/serde-ndim)
+  ```text
+  cargo add ninterp --features serde_ndim
   ```
 
 ## Examples

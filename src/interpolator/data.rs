@@ -39,10 +39,20 @@ where
     /// - 1-D: `[x]`
     /// - 2-D: `[x, y]`
     /// - 3-D: `[x, y, z]`
-    #[cfg_attr(feature = "serde", serde(with = "serde_arr_array"))]
+    #[cfg_attr(
+        feature = "serde",
+        serde(deserialize_with = "serde_arr_array::deserialize")
+    )]
+    #[cfg_attr(
+        feature = "serde_ndim",
+        serde(serialize_with = "serde_arr_array::serialize")
+    )]
     pub grid: [ArrayBase<D, Ix1>; N],
     /// Function values at coordinates: a single `N`-dimensional [`ArrayBase`].
-    #[cfg_attr(feature = "serde", serde(serialize_with = "serde_ndim::serialize"))]
+    #[cfg_attr(
+        feature = "serde_ndim",
+        serde(serialize_with = "serde_ndim::serialize")
+    )]
     #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_fixed"))]
     pub values: ArrayBase<D, Dim<[Ix; N]>>,
 }

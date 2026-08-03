@@ -1,6 +1,6 @@
 [package]
 name = "ninterp"
-version = "0.9.0"
+version = "0.9.1"
 edition = "2021"
 description = "Numerical interpolation for N-dimensional rectilinear grids"
 repository = "https://github.com/NatLabRockies/ninterp"
@@ -42,3 +42,4 @@ serde = [
     "dep:serde_unit_struct",
     "dep:serde-ndim",
 ]
+serde_ndim = ["serde"]
