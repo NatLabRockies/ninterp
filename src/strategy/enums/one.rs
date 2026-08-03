@@ -35,7 +35,7 @@ impl From<Step> for Strategy1DEnum {
 impl<D> Strategy1D<D> for Strategy1DEnum
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
     #[inline]
     fn init(&mut self, data: &InterpData1D<D>) -> Result<(), ValidateError> {

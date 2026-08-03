@@ -78,7 +78,7 @@ use strategy::enums::*;
 pub enum InterpolatorEnum<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
     Interp0D(Interp0D<D::Elem>),
     Interp1D(Interp1D<D, Strategy1DEnum>),
@@ -94,7 +94,7 @@ pub type InterpolatorEnumOwned<T> = InterpolatorEnum<OwnedRepr<T>>;
 impl<D> PartialEq for InterpolatorEnum<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
     ArrayBase<D, Ix1>: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
@@ -112,7 +112,7 @@ where
 impl<D> InterpolatorEnum<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
     /// Create [`InterpolatorEnum::Interp0D`], internally calling [`Interp0D::new`].
     #[inline]
@@ -219,7 +219,7 @@ where
 impl<D> Interpolator<D::Elem> for InterpolatorEnum<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + Euclid + PartialOrd + Copy + Debug,
+    D::Elem: Float + Euclid + Debug,
 {
     #[inline]
     fn ndim(&self) -> usize {
@@ -269,7 +269,7 @@ where
 impl<D> From<Interp0D<D::Elem>> for InterpolatorEnum<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
     #[inline]
     fn from(interpolator: Interp0D<D::Elem>) -> Self {
@@ -280,7 +280,7 @@ where
 impl<D> From<Interp1D<D, Strategy1DEnum>> for InterpolatorEnum<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
     #[inline]
     fn from(interpolator: Interp1D<D, Strategy1DEnum>) -> Self {
@@ -291,7 +291,7 @@ where
 impl<D> From<Interp2D<D, Strategy2DEnum>> for InterpolatorEnum<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
     #[inline]
     fn from(interpolator: Interp2D<D, Strategy2DEnum>) -> Self {
@@ -302,7 +302,7 @@ where
 impl<D> From<Interp3D<D, Strategy3DEnum>> for InterpolatorEnum<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
     #[inline]
     fn from(interpolator: Interp3D<D, Strategy3DEnum>) -> Self {
@@ -313,7 +313,7 @@ where
 impl<D> From<InterpND<D, StrategyNDEnum>> for InterpolatorEnum<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
     #[inline]
     fn from(interpolator: InterpND<D, StrategyNDEnum>) -> Self {

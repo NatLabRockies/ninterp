@@ -35,7 +35,7 @@ impl From<Step> for StrategyNDEnum {
 impl<D> StrategyND<D> for StrategyNDEnum
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
     #[inline]
     fn init(&mut self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
