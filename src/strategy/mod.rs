@@ -13,6 +13,32 @@ pub mod traits;
 )]
 pub struct Linear;
 
+/// Linear interpolation optimized for uniformly-spaced grids.
+///
+/// Uses an O(1) direct index calculation instead of the O(log N) binary search in [`Linear`].
+/// The grid is validated to be uniformly spaced at construction time; a [`ValidateError`] is
+/// returned if it is not.
+///
+/// # Examples
+/// ```
+/// use ndarray::prelude::*;
+/// use ninterp::prelude::*;
+///
+/// let interp = Interp1D::new(
+///     array![0., 1., 2., 3., 4.],
+///     array![0.2, 0.4, 0.6, 0.8, 1.0],
+///     strategy::LinearUniform,
+///     Extrapolate::Error,
+/// ).unwrap();
+/// assert_eq!(interp.interpolate(&[2.5]).unwrap(), 0.7);
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(
+    feature = "serde",
+    derive(Deserialize_unit_struct, Serialize_unit_struct)
+)]
+pub struct LinearUniform;
+
 /// Nearest value interpolation: <https://en.wikipedia.org/wiki/Nearest-neighbor_interpolation>
 ///
 /// # Note

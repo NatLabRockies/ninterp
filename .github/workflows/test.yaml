@@ -5,6 +5,7 @@ on:
     branches:
       - main
   pull_request:
+  workflow_call:
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,16 +16,23 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - run: cargo build --verbose
+
+      - name: install cargo-hack
+        uses: taiki-e/install-action@cargo-hack
+
+      - name: check formatting
+        run: cargo fmt --check
+
+      - name: test
+        # Note: this will be unwieldy if there are many features, but for now it is fine.
+        run: cargo hack test --feature-powerset --verbose
+
+      - name: run all examples
+        run: |
+          for name in $(cargo metadata --no-deps --format-version 1 | \
+            python3 -c "import sys,json; [print(t['name']) for p in json.load(sys.stdin)['packages'] for t in p['targets'] if 'example' in t['kind']]"); do
+            cargo run --example "$name"
+          done
+
       - name: compile benchmarks
         run: cargo bench --no-run
-      - name: test
-        run: |
-          cargo test --verbose
-          cargo test --no-default-features --verbose
-          cargo test --all-features --verbose
-      # TODO: add this back when the cargo examples repo is more functional
-      # - name: run examples
-      #   run: |
-      #     cargo install cargo-examples
-      #     cargo examples
