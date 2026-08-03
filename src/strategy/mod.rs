@@ -95,10 +95,18 @@ pub enum StepDirection {
 /// assert_eq!(interp.interpolate(&[3.00]).unwrap(), 0.8); // exact grid point
 ///
 /// // Per-dimension: floor in x, ceiling in y (2-D interpolator)
-/// let mixed = strategy::Step(vec![
-///     strategy::StepDirection::Lower,
-///     strategy::StepDirection::Upper,
-/// ]);
+/// let interp = Interp2D::new(
+///     array![0., 1., 2.],
+///     array![0., 1., 2.],
+///     array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+///     strategy::Step(vec![
+///         strategy::StepDirection::Lower,
+///         strategy::StepDirection::Upper,
+///     ]),
+///     Extrapolate::Error,
+/// )
+/// .unwrap();
+/// assert_eq!(interp.interpolate(&[0.7, 1.4]).unwrap(), 2.); // floor x→0, ceil y→2
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct Step(pub Vec<StepDirection>);
