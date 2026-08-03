@@ -7,6 +7,7 @@ use super::*;
 #[cfg_attr(feature = "serde", serde(untagged))]
 pub enum Strategy2DEnum {
     Linear(strategy::Linear),
+    LinearUniform(strategy::LinearUniform),
     Nearest(strategy::Nearest),
 }
 
@@ -14,6 +15,13 @@ impl From<Linear> for Strategy2DEnum {
     #[inline]
     fn from(strategy: Linear) -> Self {
         Self::Linear(strategy)
+    }
+}
+
+impl From<LinearUniform> for Strategy2DEnum {
+    #[inline]
+    fn from(strategy: LinearUniform) -> Self {
+        Self::LinearUniform(strategy)
     }
 }
 
@@ -27,12 +35,13 @@ impl From<Nearest> for Strategy2DEnum {
 impl<D> Strategy2D<D> for Strategy2DEnum
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
     #[inline]
     fn init(&mut self, data: &InterpData2D<D>) -> Result<(), ValidateError> {
         match self {
             Strategy2DEnum::Linear(strategy) => Strategy2D::<D>::init(strategy, data),
+            Strategy2DEnum::LinearUniform(strategy) => Strategy2D::<D>::init(strategy, data),
             Strategy2DEnum::Nearest(strategy) => Strategy2D::<D>::init(strategy, data),
         }
     }
@@ -45,6 +54,9 @@ where
     ) -> Result<D::Elem, InterpolateError> {
         match self {
             Strategy2DEnum::Linear(strategy) => Strategy2D::<D>::interpolate(strategy, data, point),
+            Strategy2DEnum::LinearUniform(strategy) => {
+                Strategy2D::<D>::interpolate(strategy, data, point)
+            }
             Strategy2DEnum::Nearest(strategy) => {
                 Strategy2D::<D>::interpolate(strategy, data, point)
             }
@@ -55,6 +67,7 @@ where
     fn allow_extrapolate(&self) -> bool {
         match self {
             Strategy2DEnum::Linear(strategy) => Strategy2D::<D>::allow_extrapolate(strategy),
+            Strategy2DEnum::LinearUniform(strategy) => Strategy2D::<D>::allow_extrapolate(strategy),
             Strategy2DEnum::Nearest(strategy) => Strategy2D::<D>::allow_extrapolate(strategy),
         }
     }
