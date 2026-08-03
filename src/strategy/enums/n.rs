@@ -54,7 +54,9 @@ where
     ) -> Result<D::Elem, InterpolateError> {
         match self {
             StrategyNDEnum::Linear(strategy) => StrategyND::<D>::interpolate(strategy, data, point),
-            StrategyNDEnum::LinearUniform(strategy) => StrategyND::<D>::interpolate(strategy, data, point),
+            StrategyNDEnum::LinearUniform(strategy) => {
+                StrategyND::<D>::interpolate(strategy, data, point)
+            }
             StrategyNDEnum::Nearest(strategy) => {
                 StrategyND::<D>::interpolate(strategy, data, point)
             }

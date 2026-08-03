@@ -91,10 +91,10 @@ where
         let y_u = y_l + 1;
         let x_diff = (point[0] - data.grid[0][x_l]) / x_step;
         let y_diff = (point[1] - data.grid[1][y_l]) / y_step;
-        let f0 = data.values[[x_l, y_l]] * (D::Elem::one() - x_diff)
-            + data.values[[x_u, y_l]] * x_diff;
-        let f1 = data.values[[x_l, y_u]] * (D::Elem::one() - x_diff)
-            + data.values[[x_u, y_u]] * x_diff;
+        let f0 =
+            data.values[[x_l, y_l]] * (D::Elem::one() - x_diff) + data.values[[x_u, y_l]] * x_diff;
+        let f1 =
+            data.values[[x_l, y_u]] * (D::Elem::one() - x_diff) + data.values[[x_u, y_u]] * x_diff;
         Ok(f0 * (D::Elem::one() - y_diff) + f1 * y_diff)
     }
 
