@@ -97,15 +97,12 @@ where
     ///     array![0., 1., 2.], // x0, x1, x2
     ///     // f(x)
     ///     array![0.0, 0.4, 0.8], // f(x0), f(x1), f(x2)
-    ///     strategy::Linear, // strategy mod is exposed via `use ndarray::prelude::*;`
+    ///     strategy::Linear,      // strategy mod is exposed via `use ndarray::prelude::*;`
     ///     Extrapolate::Enable,
     /// )
     /// .unwrap();
     /// assert_eq!(interp.interpolate(&[1.4]).unwrap(), 0.56);
-    /// assert_eq!(
-    ///     interp.interpolate(&[3.6]).unwrap(),
-    ///     1.44
-    /// );
+    /// assert_eq!(interp.interpolate(&[3.6]).unwrap(), 1.44);
     /// ```
     pub fn new(
         x: ArrayBase<D, Ix1>,

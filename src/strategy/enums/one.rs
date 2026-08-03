@@ -9,8 +9,7 @@ pub enum Strategy1DEnum {
     Linear(strategy::Linear),
     LinearUniform(strategy::LinearUniform),
     Nearest(strategy::Nearest),
-    LeftNearest(strategy::LeftNearest),
-    RightNearest(strategy::RightNearest),
+    Step(strategy::Step),
 }
 
 impl From<Linear> for Strategy1DEnum {
@@ -34,17 +33,10 @@ impl From<Nearest> for Strategy1DEnum {
     }
 }
 
-impl From<LeftNearest> for Strategy1DEnum {
+impl From<Step> for Strategy1DEnum {
     #[inline]
-    fn from(strategy: LeftNearest) -> Self {
-        Self::LeftNearest(strategy)
-    }
-}
-
-impl From<RightNearest> for Strategy1DEnum {
-    #[inline]
-    fn from(strategy: RightNearest) -> Self {
-        Self::RightNearest(strategy)
+    fn from(strategy: Step) -> Self {
+        Self::Step(strategy)
     }
 }
 
@@ -59,8 +51,7 @@ where
             Strategy1DEnum::Linear(strategy) => Strategy1D::<D>::init(strategy, data),
             Strategy1DEnum::LinearUniform(strategy) => Strategy1D::<D>::init(strategy, data),
             Strategy1DEnum::Nearest(strategy) => Strategy1D::<D>::init(strategy, data),
-            Strategy1DEnum::LeftNearest(strategy) => Strategy1D::<D>::init(strategy, data),
-            Strategy1DEnum::RightNearest(strategy) => Strategy1D::<D>::init(strategy, data),
+            Strategy1DEnum::Step(strategy) => Strategy1D::<D>::init(strategy, data),
         }
     }
 
@@ -78,12 +69,7 @@ where
             Strategy1DEnum::Nearest(strategy) => {
                 Strategy1D::<D>::interpolate(strategy, data, point)
             }
-            Strategy1DEnum::LeftNearest(strategy) => {
-                Strategy1D::<D>::interpolate(strategy, data, point)
-            }
-            Strategy1DEnum::RightNearest(strategy) => {
-                Strategy1D::<D>::interpolate(strategy, data, point)
-            }
+            Strategy1DEnum::Step(strategy) => Strategy1D::<D>::interpolate(strategy, data, point),
         }
     }
 
@@ -93,8 +79,7 @@ where
             Strategy1DEnum::Linear(strategy) => Strategy1D::<D>::allow_extrapolate(strategy),
             Strategy1DEnum::LinearUniform(strategy) => Strategy1D::<D>::allow_extrapolate(strategy),
             Strategy1DEnum::Nearest(strategy) => Strategy1D::<D>::allow_extrapolate(strategy),
-            Strategy1DEnum::LeftNearest(strategy) => Strategy1D::<D>::allow_extrapolate(strategy),
-            Strategy1DEnum::RightNearest(strategy) => Strategy1D::<D>::allow_extrapolate(strategy),
+            Strategy1DEnum::Step(strategy) => Strategy1D::<D>::allow_extrapolate(strategy),
         }
     }
 }
@@ -114,14 +99,6 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&Strategy1DEnum::from(Nearest)).unwrap(),
             serde_json::to_string(&Nearest).unwrap(),
-        );
-        assert_eq!(
-            serde_json::to_string(&Strategy1DEnum::from(LeftNearest)).unwrap(),
-            serde_json::to_string(&LeftNearest).unwrap(),
-        );
-        assert_eq!(
-            serde_json::to_string(&Strategy1DEnum::from(RightNearest)).unwrap(),
-            serde_json::to_string(&RightNearest).unwrap(),
         );
     }
 }

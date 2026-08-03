@@ -32,6 +32,40 @@ pub fn find_nearest_index<T: PartialOrd>(arr: ArrayView1<T>, target: &T) -> usiz
     }
 }
 
+/// Returns the step index for `point` in `grid` using the given [`StepDirection`].
+///
+/// Handles all exact grid-point edge cases that arise from [`find_nearest_index`]'s
+/// interval semantics (returning the lower bracket rather than the exact position).
+pub(crate) fn step_index<T: PartialOrd + Copy>(
+    dir: StepDirection,
+    grid: ArrayView1<T>,
+    point: &T,
+) -> usize {
+    match dir {
+        StepDirection::Lower => {
+            let x_l = find_nearest_index(grid, point);
+            // find_nearest_index returns i where grid[i] < point <= grid[i+1] for interior
+            // matches, so an exact match at grid[i+1] gives i instead of i+1. Correct both:
+            if point == grid.last().unwrap() {
+                grid.len() - 1
+            } else if *point == grid[x_l + 1] {
+                x_l + 1
+            } else {
+                x_l
+            }
+        }
+        StepDirection::Upper => {
+            // find_nearest_index returns 0 when point == grid[0], giving x_l+1 = 1
+            // which would skip values[0]. Handle the first-element case explicitly:
+            if point == grid.first().unwrap() {
+                0
+            } else {
+                find_nearest_index(grid, point) + 1
+            }
+        }
+    }
+}
+
 /// Returns the exact grid index if `point` lies on `grid[lower]` or `grid[lower+1]`, else `None`.
 ///
 /// Used to short-circuit interpolation when a query point coincides with a grid coordinate.

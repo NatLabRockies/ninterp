@@ -73,6 +73,7 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
 {
+    /// Ensures all grid dimensions are uniformly spaced.
     fn init(&mut self, data: &InterpData2D<D>) -> Result<(), ValidateError> {
         check_uniform_grid(data.grid[0].view(), 0)?;
         check_uniform_grid(data.grid[1].view(), 1)
@@ -98,6 +99,7 @@ where
         Ok(f0 * (D::Elem::one() - y_diff) + f1 * y_diff)
     }
 
+    /// Returns `true`.
     fn allow_extrapolate(&self) -> bool {
         true
     }
@@ -130,6 +132,38 @@ where
             y_u
         };
 
+        Ok(data.values[[i, j]])
+    }
+
+    /// Returns `false`.
+    fn allow_extrapolate(&self) -> bool {
+        false
+    }
+}
+
+impl<D> Strategy2D<D> for Step
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug,
+{
+    /// Ensures the number of provided step directions matches the interpolator dimensionality.
+    fn init(&mut self, _data: &InterpData2D<D>) -> Result<(), ValidateError> {
+        if self.0.len() != 1 && self.0.len() != 2 {
+            return Err(ValidateError::Other(format!(
+                "Step strategy has {} directions but interpolator is 2-D (expected 1 or 2)",
+                self.0.len()
+            )));
+        }
+        Ok(())
+    }
+
+    fn interpolate(
+        &self,
+        data: &InterpData2D<D>,
+        point: &[D::Elem; 2],
+    ) -> Result<D::Elem, InterpolateError> {
+        let i = step_index(self.dir(0), data.grid[0].view(), &point[0]);
+        let j = step_index(self.dir(1), data.grid[1].view(), &point[1]);
         Ok(data.values[[i, j]])
     }
 

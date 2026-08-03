@@ -9,6 +9,7 @@ pub enum StrategyNDEnum {
     Linear(strategy::Linear),
     LinearUniform(strategy::LinearUniform),
     Nearest(strategy::Nearest),
+    Step(strategy::Step),
 }
 
 impl From<Linear> for StrategyNDEnum {
@@ -32,6 +33,13 @@ impl From<Nearest> for StrategyNDEnum {
     }
 }
 
+impl From<Step> for StrategyNDEnum {
+    #[inline]
+    fn from(strategy: Step) -> Self {
+        StrategyNDEnum::Step(strategy)
+    }
+}
+
 impl<D> StrategyND<D> for StrategyNDEnum
 where
     D: Data + RawDataClone + Clone,
@@ -43,6 +51,7 @@ where
             StrategyNDEnum::Linear(strategy) => StrategyND::<D>::init(strategy, data),
             StrategyNDEnum::LinearUniform(strategy) => StrategyND::<D>::init(strategy, data),
             StrategyNDEnum::Nearest(strategy) => StrategyND::<D>::init(strategy, data),
+            StrategyNDEnum::Step(strategy) => StrategyND::<D>::init(strategy, data),
         }
     }
 
@@ -60,6 +69,7 @@ where
             StrategyNDEnum::Nearest(strategy) => {
                 StrategyND::<D>::interpolate(strategy, data, point)
             }
+            StrategyNDEnum::Step(strategy) => StrategyND::<D>::interpolate(strategy, data, point),
         }
     }
 
@@ -69,6 +79,7 @@ where
             StrategyNDEnum::Linear(strategy) => StrategyND::<D>::allow_extrapolate(strategy),
             StrategyNDEnum::LinearUniform(strategy) => StrategyND::<D>::allow_extrapolate(strategy),
             StrategyNDEnum::Nearest(strategy) => StrategyND::<D>::allow_extrapolate(strategy),
+            StrategyNDEnum::Step(strategy) => StrategyND::<D>::allow_extrapolate(strategy),
         }
     }
 }

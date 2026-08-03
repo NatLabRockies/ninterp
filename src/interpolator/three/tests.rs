@@ -127,6 +127,64 @@ fn test_nearest() {
 }
 
 #[test]
+fn test_step() {
+    let interp = Interp3D::new(
+        array![0., 1.],
+        array![0., 1.],
+        array![0., 1.],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]],
+        strategy::Step::from(strategy::StepDirection::Lower),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    // At grid points: exact value
+    let x = &interp.data.grid[0];
+    let y = &interp.data.grid[1];
+    let z = &interp.data.grid[2];
+    for (i, xi) in x.iter().enumerate() {
+        for (j, yj) in y.iter().enumerate() {
+            for (k, zk) in z.iter().enumerate() {
+                assert_eq!(
+                    interp.interpolate(&[*xi, *yj, *zk]).unwrap(),
+                    interp.data.values[[i, j, k]]
+                );
+            }
+        }
+    }
+    // Between points: floor each dimension to index 0
+    assert_eq!(interp.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 0.); // floor→[0,0,0]
+    assert_eq!(interp.interpolate(&[0.9, 0.4, 0.1]).unwrap(), 0.); // floor→[0,0,0]
+
+    // Uniform Upper (ceiling)
+    let interp_upper = Interp3D::new(
+        array![0., 1.],
+        array![0., 1.],
+        array![0., 1.],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]],
+        strategy::Step::from(strategy::StepDirection::Upper),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(interp_upper.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 7.); // ceil→[1,1,1]
+
+    // Per-dimension: Lower in x, Upper in y, Lower in z
+    let interp_mixed = Interp3D::new(
+        array![0., 1.],
+        array![0., 1.],
+        array![0., 1.],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]],
+        strategy::Step(vec![
+            strategy::StepDirection::Lower,
+            strategy::StepDirection::Upper,
+            strategy::StepDirection::Lower,
+        ]),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(interp_mixed.interpolate(&[0.6, 0.4, 0.8]).unwrap(), 2.); // floor x→0, ceil y→1, floor z→0 → [0,1,0]
+}
+
+#[test]
 fn test_extrapolate_inputs() {
     // Extrapolate::Extrapolate
     assert!(matches!(

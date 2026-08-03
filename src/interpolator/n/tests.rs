@@ -254,6 +254,71 @@ fn test_nearest() {
 }
 
 #[test]
+fn test_step() {
+    // Uniform Lower (floor) — same grid as test_nearest
+    let interp = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Step::from(strategy::StepDirection::Lower),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    // At grid points: exact value
+    let x = &interp.data.grid[0];
+    let y = &interp.data.grid[1];
+    let z = &interp.data.grid[2];
+    for i in 0..x.len() {
+        for j in 0..y.len() {
+            for k in 0..z.len() {
+                assert_eq!(
+                    interp.interpolate(&[x[i], y[j], z[k]]).unwrap(),
+                    interp.data.values[[i, j, k]]
+                );
+            }
+        }
+    }
+    // Between points: floor each dimension to index 0
+    assert_eq!(interp.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 0.); // floor→[0,0,0]
+    assert_eq!(interp.interpolate(&[0.9, 0.9, 0.9]).unwrap(), 0.); // floor→[0,0,0]
+
+    // Uniform Upper (ceiling)
+    let interp_upper = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Step::from(strategy::StepDirection::Upper),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(interp_upper.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 7.); // ceil→[1,1,1]
+
+    // Per-dimension: Lower in x, Upper in y, Lower in z
+    let interp_mixed = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Step(vec![
+            strategy::StepDirection::Lower,
+            strategy::StepDirection::Upper,
+            strategy::StepDirection::Lower,
+        ]),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(interp_mixed.interpolate(&[0.6, 0.4, 0.8]).unwrap(), 2.); // floor x→0, ceil y→1, floor z→0 → [0,1,0]
+
+    // Invalid: direction count mismatch
+    assert!(InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Step(vec![
+            strategy::StepDirection::Lower,
+            strategy::StepDirection::Lower,
+        ]),
+        Extrapolate::Error,
+    )
+    .is_err());
+}
+
+#[test]
 fn test_extrapolate_inputs() {
     // Extrapolate::Extrapolate
     assert!(matches!(
