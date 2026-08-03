@@ -13,6 +13,7 @@
 /// - Their common trait: [`Interpolator`]
 /// - The [`strategy`] mod, containing pre-defined interpolation strategies:
 ///   - [`strategy::Linear`]
+///   - [`strategy::LinearUniform`]
 ///   - [`strategy::Nearest`]
 ///   - [`strategy::LeftNearest`]
 ///   - [`strategy::RightNearest`]

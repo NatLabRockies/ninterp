@@ -1,6 +1,18 @@
 use super::*;
 
 #[test]
+fn test_linear_0d() {
+    let interp = InterpND::new(
+        vec![array![]],
+        array![0.5].into_dyn(),
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(interp.interpolate(&[]).unwrap(), 0.5);
+}
+
+#[test]
 fn test_linear() {
     let interp = InterpND::new(
         vec![

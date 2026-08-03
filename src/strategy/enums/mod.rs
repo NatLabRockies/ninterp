@@ -27,6 +27,12 @@
 //! assert_eq!(interp.interpolate(&[3.00]).unwrap(), 0.8);
 //! assert_eq!(interp.interpolate(&[3.25]).unwrap(), 0.8);
 //! assert_eq!(interp.interpolate(&[3.50]).unwrap(), 1.0);
+//!
+//! // Swap to LinearUniform — O(1) index lookup for this uniform grid
+//! interp.set_strategy(strategy::LinearUniform).unwrap();
+//! assert_eq!(interp.interpolate(&[3.00]).unwrap(), 0.8);
+//! assert_eq!(interp.interpolate(&[3.75]).unwrap(), 0.95);
+//! assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);
 //! ```
 //! See also: `examples/dynamic_strategy.rs`
 

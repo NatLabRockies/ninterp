@@ -21,6 +21,12 @@ where
         let mut grid: Vec<_> = data.grid.iter().map(|arr| arr.view()).collect();
         let mut values_view = data.values.view();
         for dim in (0..n).rev() {
+            // Skip empty grid dimensions (e.g. the 0-D multilinear case uses an empty grid).
+            // The original iter().position() returned None on empty grids without touching point[dim];
+            // the binary search path would panic on first().unwrap(), so we guard it here.
+            if grid[dim].is_empty() {
+                continue;
+            }
             // Binary search for an exact match: find_nearest_index returns the lower bracket,
             // so the point can only be exactly equal to grid[lower] or grid[lower+1].
             let lower = if &point[dim] < grid[dim].first().unwrap() {
@@ -170,8 +176,8 @@ where
         for d in 0..n {
             let half = 1 << (n - 1 - d);
             for i in 0..half {
-                vals[i] = vals[i] * (D::Elem::one() - interp_diffs[d])
-                    + vals[i + half] * interp_diffs[d];
+                vals[i] =
+                    vals[i] * (D::Elem::one() - interp_diffs[d]) + vals[i + half] * interp_diffs[d];
             }
         }
         Ok(vals[0])
