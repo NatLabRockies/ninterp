@@ -128,3 +128,56 @@ where
         false
     }
 }
+
+impl<D> StrategyND<D> for LinearUniform
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug,
+{
+    fn init(&mut self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
+        for (dim, grid) in data.grid.iter().enumerate() {
+            check_uniform_grid(grid.view(), dim)?;
+        }
+        Ok(())
+    }
+
+    fn interpolate(
+        &self,
+        data: &InterpDataND<D>,
+        point: &[D::Elem],
+    ) -> Result<D::Elem, InterpolateError> {
+        let n = data.values.ndim();
+        let mut lower_idxs = Vec::with_capacity(n);
+        let mut interp_diffs = Vec::with_capacity(n);
+        for dim in 0..n {
+            let step = data.grid[dim][1] - data.grid[dim][0];
+            let lower_idx =
+                uniform_lower_index(data.grid[dim][0], step, data.grid[dim].len(), point[dim]);
+            let diff = (point[dim] - data.grid[dim][lower_idx]) / step;
+            lower_idxs.push(lower_idx);
+            interp_diffs.push(diff);
+        }
+        // Same bitmask/butterfly reduction as Linear ND
+        let size = 1usize << n;
+        let mut vals = vec![D::Elem::zero(); size];
+        let mut idx = vec![0usize; n];
+        for mask in 0..size {
+            for d in 0..n {
+                idx[d] = lower_idxs[d] + ((mask >> (n - 1 - d)) & 1);
+            }
+            vals[mask] = data.values.view()[idx.as_slice()];
+        }
+        for d in 0..n {
+            let half = 1 << (n - 1 - d);
+            for i in 0..half {
+                vals[i] = vals[i] * (D::Elem::one() - interp_diffs[d])
+                    + vals[i + half] * interp_diffs[d];
+            }
+        }
+        Ok(vals[0])
+    }
+
+    fn allow_extrapolate(&self) -> bool {
+        true
+    }
+}

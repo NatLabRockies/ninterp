@@ -117,6 +117,52 @@ where
     }
 }
 
+impl<D> Strategy3D<D> for LinearUniform
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug,
+{
+    fn init(&mut self, data: &InterpData3D<D>) -> Result<(), ValidateError> {
+        check_uniform_grid(data.grid[0].view(), 0)?;
+        check_uniform_grid(data.grid[1].view(), 1)?;
+        check_uniform_grid(data.grid[2].view(), 2)
+    }
+
+    fn interpolate(
+        &self,
+        data: &InterpData3D<D>,
+        point: &[D::Elem; 3],
+    ) -> Result<D::Elem, InterpolateError> {
+        let x_step = data.grid[0][1] - data.grid[0][0];
+        let y_step = data.grid[1][1] - data.grid[1][0];
+        let z_step = data.grid[2][1] - data.grid[2][0];
+        let x_l = uniform_lower_index(data.grid[0][0], x_step, data.grid[0].len(), point[0]);
+        let y_l = uniform_lower_index(data.grid[1][0], y_step, data.grid[1].len(), point[1]);
+        let z_l = uniform_lower_index(data.grid[2][0], z_step, data.grid[2].len(), point[2]);
+        let x_u = x_l + 1;
+        let y_u = y_l + 1;
+        let z_u = z_l + 1;
+        let x_diff = (point[0] - data.grid[0][x_l]) / x_step;
+        let y_diff = (point[1] - data.grid[1][y_l]) / y_step;
+        let z_diff = (point[2] - data.grid[2][z_l]) / z_step;
+        let f00 = data.values[[x_l, y_l, z_l]] * (D::Elem::one() - x_diff)
+            + data.values[[x_u, y_l, z_l]] * x_diff;
+        let f01 = data.values[[x_l, y_l, z_u]] * (D::Elem::one() - x_diff)
+            + data.values[[x_u, y_l, z_u]] * x_diff;
+        let f10 = data.values[[x_l, y_u, z_l]] * (D::Elem::one() - x_diff)
+            + data.values[[x_u, y_u, z_l]] * x_diff;
+        let f11 = data.values[[x_l, y_u, z_u]] * (D::Elem::one() - x_diff)
+            + data.values[[x_u, y_u, z_u]] * x_diff;
+        let f0 = f00 * (D::Elem::one() - y_diff) + f10 * y_diff;
+        let f1 = f01 * (D::Elem::one() - y_diff) + f11 * y_diff;
+        Ok(f0 * (D::Elem::one() - z_diff) + f1 * z_diff)
+    }
+
+    fn allow_extrapolate(&self) -> bool {
+        true
+    }
+}
+
 impl<D> Strategy3D<D> for Nearest
 where
     D: Data + RawDataClone + Clone,

@@ -51,7 +51,7 @@ pub(crate) use ndarray::prelude::*;
 pub(crate) use ndarray::{Data, Ix, OwnedRepr, RawDataClone, ViewRepr};
 
 pub use num_traits;
-pub(crate) use num_traits::{clamp, Euclid, Num, One, Zero};
+pub(crate) use num_traits::{clamp, Euclid, Float, Num, One, Zero};
 
 pub(crate) use dyn_clone::*;
 

@@ -98,6 +98,58 @@ fn test_nearest() {
 }
 
 #[test]
+fn test_linear_uniform() {
+    let grid = array![0., 1., 2., 3., 4.];
+    let values = array![0.2, 0.4, 0.6, 0.8, 1.0];
+
+    let uniform = Interp1D::new(
+        grid.clone(),
+        values.clone(),
+        strategy::LinearUniform,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let linear = Interp1D::new(grid, values, strategy::Linear, Extrapolate::Error).unwrap();
+
+    // Results must match Linear exactly at grid points and between them
+    let x = &uniform.data.grid[0];
+    let f_x = &uniform.data.values;
+    for (i, x_i) in x.iter().enumerate() {
+        assert_eq!(uniform.interpolate(&[*x_i]).unwrap(), f_x[i]);
+    }
+    for point in [0.5, 1.25, 2.75, 3.99] {
+        assert_eq!(
+            uniform.interpolate(&[point]).unwrap(),
+            linear.interpolate(&[point]).unwrap()
+        );
+    }
+}
+
+#[test]
+fn test_linear_uniform_non_uniform_grid_error() {
+    assert!(Interp1D::new(
+        array![0., 1., 2., 3., 4.5], // not uniform
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::LinearUniform,
+        Extrapolate::Error,
+    )
+    .is_err());
+}
+
+#[test]
+fn test_linear_uniform_extrapolate() {
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::LinearUniform,
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    assert_eq!(interp.interpolate(&[-1.0]).unwrap(), 0.0);
+    assert_eq!(interp.interpolate(&[5.0]).unwrap(), 1.2);
+}
+
+#[test]
 fn test_extrapolate_inputs() {
     // Incorrect extrapolation selection
     assert!(matches!(

@@ -49,6 +49,47 @@ pub(crate) fn exact_index<T: PartialOrd>(
     }
 }
 
+/// Computes the lower bracket index for a uniformly-spaced grid in O(1).
+///
+/// Equivalent to [`find_nearest_index`] but replaces binary search with direct arithmetic.
+/// Only valid when the grid spacing is uniform — validate with [`check_uniform_grid`] first.
+pub(crate) fn uniform_lower_index<T: Float>(grid0: T, step: T, n: usize, point: T) -> usize {
+    let t = (point - grid0) / step;
+    if t < T::zero() {
+        0
+    } else {
+        t.floor().to_usize().unwrap_or(0).min(n - 2)
+    }
+}
+
+/// Validates that `grid` is uniformly spaced within floating-point tolerance.
+///
+/// Uses a relative tolerance of 1024 × ε to accommodate accumulated floating-point rounding
+/// error in grids constructed from repeated arithmetic.
+pub(crate) fn check_uniform_grid<T: Float>(
+    grid: ArrayView1<T>,
+    dim: usize,
+) -> Result<(), ValidateError> {
+    let step = grid[1] - grid[0];
+    // 1024 * epsilon via 10 doublings — avoids numeric literal casting
+    let tolerance = {
+        let mut tol = T::epsilon();
+        for _ in 0..10 {
+            tol = tol + tol;
+        }
+        step.abs() * tol
+    };
+    for i in 1..grid.len() - 1 {
+        let gap = grid[i + 1] - grid[i];
+        if (gap - step).abs() > tolerance {
+            return Err(ValidateError::Other(format!(
+                "LinearUniform: grid[{dim}] is not uniformly spaced (gap at index {i})"
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// 1-D interpolation strategy.
 pub trait Strategy1D<D>: Debug + DynClone
 where
