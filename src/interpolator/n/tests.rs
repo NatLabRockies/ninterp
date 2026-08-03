@@ -6,7 +6,7 @@ fn test_cubic_spline() {
     let interp = InterpND::new(
         vec![array![0., 1., 2.], array![0., 1., 2.]],
         array![[0., 1., 2.], [2., 3., 4.], [4., 5., 6.]].into_dyn(),
-        strategy::CubicSpline::new(),
+        strategy::CubicSpline::natural(),
         Extrapolate::Enable,
     )
     .unwrap();
@@ -26,7 +26,7 @@ fn test_cubic_spline_knot_exactness() {
             [9., 10., 13., 18.],
         ]
         .into_dyn(),
-        strategy::CubicSpline::new(),
+        strategy::CubicSpline::natural(),
         Extrapolate::Error,
     )
     .unwrap();

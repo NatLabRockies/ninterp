@@ -7,7 +7,7 @@ fn test_cubic_spline() {
         array![0., 1., 2.],
         array![0., 1., 2.],
         array![[0., 1., 2.], [2., 3., 4.], [4., 5., 6.]],
-        strategy::CubicSpline::new(),
+        strategy::CubicSpline::natural(),
         Extrapolate::Enable,
     )
     .unwrap();
@@ -33,7 +33,7 @@ fn test_cubic_spline_knot_exactness() {
             [4., 5., 8., 13.],
             [9., 10., 13., 18.],
         ], // f(x, y) = x^2 + y
-        strategy::CubicSpline::new(),
+        strategy::CubicSpline::not_a_knot(),
         Extrapolate::Error,
     )
     .unwrap();

@@ -3,7 +3,9 @@
 use super::*;
 
 pub mod enums;
+pub(crate) mod spline;
 pub mod traits;
+pub(crate) mod utils;
 
 /// Linear interpolation: <https://en.wikipedia.org/wiki/Linear_interpolation>
 #[derive(Debug, Clone, PartialEq)]
@@ -161,10 +163,10 @@ mod step_serde {
     }
 }
 
-/// Natural cubic spline interpolation (<https://en.wikipedia.org/wiki/Spline_interpolation>).
+/// Cubic spline interpolation (<https://en.wikipedia.org/wiki/Spline_interpolation>).
 ///
-/// Constructs a C² piecewise cubic polynomial through all data points using
-/// natural boundary conditions (zero second derivative at the endpoints).
+/// Constructs a C² piecewise cubic polynomial through all data points.
+/// The boundary condition is set by [`boundary_conditions`](CubicSpline::boundary_conditions).
 /// Coefficients are precomputed in [`Strategy1D::init`], called automatically
 /// by [`Interp1D::new`] and [`Interp1D::set_strategy`].
 ///
@@ -180,7 +182,7 @@ mod step_serde {
 /// let interp: Interp1DOwned<f64, _> = Interp1D::new(
 ///     array![0., 1., 2., 3.],
 ///     array![1., 3., 5., 7.],
-///     strategy::CubicSpline::new(),
+///     strategy::CubicSpline::not_a_knot(),
 ///     Extrapolate::Enable,
 /// )
 /// .unwrap();
@@ -190,26 +192,80 @@ mod step_serde {
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct CubicSpline<T> {
-    pub(crate) b: Vec<T>,
-    pub(crate) c: Vec<T>,
-    pub(crate) d: Vec<T>,
+    /// Boundary conditions, one per dimension or a single entry broadcast to all.
+    pub boundary_conditions: Vec<CubicBC<T>>,
+    /// Second derivatives `M[i] = S''(x_i)` at each grid point, length `n + 1`
+    /// for `n` intervals. Populated by [`Strategy1D::init`]; boundary values
+    /// are determined by [`boundary_conditions`](CubicBC).
+    ///
+    /// Not included in the serialized form. Call [`Interpolator::validate`] after
+    /// deserializing a 1-D interpolator to recompute these coefficients before use.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub(crate) m: Vec<T>,
 }
 
-impl<T> Default for CubicSpline<T> {
-    fn default() -> Self {
-        Self {
-            b: Vec::new(),
-            c: Vec::new(),
-            d: Vec::new(),
-        }
-    }
+/// Boundary conditions for [`CubicSpline`].
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+pub enum CubicBC<T> {
+    /// C³ continuity at the second and penultimate knots; no extra input required.
+    /// Generally gives better accuracy than [`Natural`](CubicBC::Natural)
+    /// for smooth functions.
+    NotAKnot,
+    /// Zero second derivative at both endpoints.
+    Natural,
+    /// Specified first derivative at both endpoints.
+    Clamped {
+        /// First derivative at the left (lower) endpoint.
+        left: T,
+        /// First derivative at the right (upper) endpoint.
+        right: T,
+    },
+    /// First and second derivatives match at both endpoints.
+    /// Requires `values[0] == values[n]`.
+    Periodic,
 }
 
 impl<T> CubicSpline<T> {
-    /// Create a new cubic spline strategy with no precomputed coefficients.
-    /// Coefficients are computed automatically when passed to [`Interp1D::new`].
-    pub fn new() -> Self {
-        Self::default()
+    /// Returns the boundary condition for the given dimension.
+    /// A single-entry vec is broadcast to all dimensions.
+    pub(crate) fn bc_for_dim(&self, dim: usize) -> &CubicBC<T> {
+        let bcs = &self.boundary_conditions;
+        &bcs[if bcs.len() == 1 { 0 } else { dim }]
+    }
+
+    /// Create a cubic spline with not-a-knot boundary conditions.
+    /// Requires at least 4 data points per dimension.
+    pub fn not_a_knot() -> Self {
+        Self {
+            boundary_conditions: vec![CubicBC::NotAKnot],
+            m: Vec::new(),
+        }
+    }
+
+    /// Create a cubic spline with natural (zero second derivative at endpoints) BCs.
+    pub fn natural() -> Self {
+        Self {
+            boundary_conditions: vec![CubicBC::Natural],
+            m: Vec::new(),
+        }
+    }
+
+    /// Create a cubic spline with specified first derivatives at both endpoints.
+    pub fn clamped(left: T, right: T) -> Self {
+        Self {
+            boundary_conditions: vec![CubicBC::Clamped { left, right }],
+            m: Vec::new(),
+        }
+    }
+
+    /// Create a cubic spline with periodic boundary conditions.
+    /// Requires `values[0] == values[n]`.
+    pub fn periodic() -> Self {
+        Self {
+            boundary_conditions: vec![CubicBC::Periodic],
+            m: Vec::new(),
+        }
     }
 }
 

@@ -6,7 +6,7 @@ fn test_cubic_spline() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3.],
         array![1., 3., 5., 7.], // f(x) = 2x + 1
-        strategy::CubicSpline::new(),
+        strategy::CubicSpline::not_a_knot(),
         Extrapolate::Enable,
     )
     .unwrap();
@@ -30,7 +30,7 @@ fn test_cubic_spline_knot_exactness() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0., 1., 4., 9., 16.], // f(x) = x^2
-        strategy::CubicSpline::new(),
+        strategy::CubicSpline::not_a_knot(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -42,11 +42,12 @@ fn test_cubic_spline_knot_exactness() {
 
 #[test]
 fn test_cubic_spline_two_points() {
-    // Degenerate case: 2 points → degenerates to linear interpolation
+    // Degenerate case: 2 points → degenerates to linear interpolation.
+    // Uses Natural BC since NotAKnot requires ≥ 3 points.
     let interp = Interp1D::new(
         array![0., 1.],
         array![0., 2.],
-        strategy::CubicSpline::new(),
+        strategy::CubicSpline::natural(),
         Extrapolate::Enable,
     )
     .unwrap();

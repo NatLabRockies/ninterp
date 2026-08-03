@@ -42,7 +42,9 @@ pub use interpolator::data;
 pub(crate) use interpolator::data::*;
 
 pub(crate) use error::*;
+pub(crate) use strategy::spline::*;
 pub(crate) use strategy::traits::*;
+pub(crate) use strategy::utils::*;
 
 pub(crate) use std::fmt::Debug;
 

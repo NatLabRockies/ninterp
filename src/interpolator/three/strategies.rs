@@ -253,11 +253,12 @@ where
         point: &[D::Elem; 3],
     ) -> Result<D::Elem, InterpolateError> {
         let grids: Vec<ArrayView1<D::Elem>> = data.grid.iter().map(|g| g.view()).collect();
-        Ok(spline_eval_nd_recursive(
+        spline_eval_nd_recursive(
             &grids,
             data.values.view().into_dyn(),
             point,
-        ))
+            &self.boundary_conditions,
+        )
     }
 
     /// Returns `true`: the boundary cubic polynomials extend naturally.

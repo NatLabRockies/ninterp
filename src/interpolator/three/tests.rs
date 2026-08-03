@@ -12,7 +12,7 @@ fn test_cubic_spline() {
             [[1., 4., 7.], [3., 6., 9.], [5., 8., 11.]],
             [[2., 5., 8.], [4., 7., 10.], [6., 9., 12.]],
         ],
-        strategy::CubicSpline::new(),
+        strategy::CubicSpline::natural(),
         Extrapolate::Enable,
     )
     .unwrap();
@@ -36,7 +36,7 @@ fn test_cubic_spline_knot_exactness() {
             [[9., 10., 11.], [12., 13., 14.], [15., 16., 17.]],
             [[18., 19., 20.], [21., 22., 23.], [24., 25., 26.]],
         ],
-        strategy::CubicSpline::new(),
+        strategy::CubicSpline::natural(),
         Extrapolate::Error,
     )
     .unwrap();
