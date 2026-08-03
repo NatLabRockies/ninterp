@@ -153,7 +153,7 @@ where
 impl<D, S> Interpolator<D::Elem> for Interp1D<D, S>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + Euclid + PartialOrd + Debug + Copy,
+    D::Elem: Float + Euclid + Debug,
     S: Strategy1D<D> + Clone,
 {
     /// Returns `1`.
@@ -228,7 +228,7 @@ where
 impl<D> Interp1D<D, strategy::enums::Strategy1DEnum>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
     /// Update strategy dynamically.
     pub fn set_strategy(

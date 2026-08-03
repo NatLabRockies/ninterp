@@ -174,7 +174,7 @@ where
 impl<D, S> Interpolator<D::Elem> for Interp3D<D, S>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + Euclid + PartialOrd + Debug + Copy,
+    D::Elem: Float + Euclid + Debug,
     S: Strategy3D<D> + Clone,
 {
     /// Returns `3`.
@@ -259,7 +259,7 @@ where
 impl<D> Interp3D<D, strategy::enums::Strategy3DEnum>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
     /// Update strategy dynamically.
     pub fn set_strategy(

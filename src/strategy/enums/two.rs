@@ -27,7 +27,7 @@ impl From<Nearest> for Strategy2DEnum {
 impl<D> Strategy2D<D> for Strategy2DEnum
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
     #[inline]
     fn init(&mut self, data: &InterpData2D<D>) -> Result<(), ValidateError> {

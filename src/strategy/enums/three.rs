@@ -27,7 +27,7 @@ impl From<Nearest> for Strategy3DEnum {
 impl<D> Strategy3D<D> for Strategy3DEnum
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
     #[inline]
     fn init(&mut self, data: &InterpData3D<D>) -> Result<(), ValidateError> {

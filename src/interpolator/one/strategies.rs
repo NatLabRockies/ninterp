@@ -4,7 +4,7 @@ use strategy::*;
 impl<D> Strategy1D<D> for Linear
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
     fn interpolate(
         &self,
@@ -37,7 +37,7 @@ where
 impl<D> Strategy1D<D> for Nearest
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
     fn interpolate(
         &self,
@@ -66,7 +66,7 @@ where
 impl<D> Strategy1D<D> for LeftNearest
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
     fn interpolate(
         &self,
@@ -89,7 +89,7 @@ where
 impl<D> Strategy1D<D> for RightNearest
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
     fn interpolate(
         &self,
