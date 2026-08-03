@@ -24,14 +24,76 @@ where
         });
         let x_l = lowers[0];
         let x_u = x_l + 1;
-        let x_diff = (point[0] - data.grid[0][x_l]) / (data.grid[0][x_u] - data.grid[0][x_l]);
-        // y
         let y_l = lowers[1];
         let y_u = y_l + 1;
-        let y_diff = (point[1] - data.grid[1][y_l]) / (data.grid[1][y_u] - data.grid[1][y_l]);
-        // z
         let z_l = lowers[2];
         let z_u = z_l + 1;
+
+        // Short-circuit if the point lies exactly on a grid coordinate in one or more dimensions,
+        // reducing value lookups from 8 down to 4, 2, or 1.
+        let x_exact = exact_index(data.grid[0].view(), x_l, &point[0]);
+        let y_exact = exact_index(data.grid[1].view(), y_l, &point[1]);
+        let z_exact = exact_index(data.grid[2].view(), z_l, &point[2]);
+        match (x_exact, y_exact, z_exact) {
+            (Some(i), Some(j), Some(k)) => return Ok(data.values[[i, j, k]]),
+            (Some(i), Some(j), None) => {
+                let z_diff =
+                    (point[2] - data.grid[2][z_l]) / (data.grid[2][z_u] - data.grid[2][z_l]);
+                return Ok(data.values[[i, j, z_l]] * (D::Elem::one() - z_diff)
+                    + data.values[[i, j, z_u]] * z_diff);
+            }
+            (Some(i), None, Some(k)) => {
+                let y_diff =
+                    (point[1] - data.grid[1][y_l]) / (data.grid[1][y_u] - data.grid[1][y_l]);
+                return Ok(data.values[[i, y_l, k]] * (D::Elem::one() - y_diff)
+                    + data.values[[i, y_u, k]] * y_diff);
+            }
+            (None, Some(j), Some(k)) => {
+                let x_diff =
+                    (point[0] - data.grid[0][x_l]) / (data.grid[0][x_u] - data.grid[0][x_l]);
+                return Ok(data.values[[x_l, j, k]] * (D::Elem::one() - x_diff)
+                    + data.values[[x_u, j, k]] * x_diff);
+            }
+            (Some(i), None, None) => {
+                let y_diff =
+                    (point[1] - data.grid[1][y_l]) / (data.grid[1][y_u] - data.grid[1][y_l]);
+                let z_diff =
+                    (point[2] - data.grid[2][z_l]) / (data.grid[2][z_u] - data.grid[2][z_l]);
+                let f0 = data.values[[i, y_l, z_l]] * (D::Elem::one() - y_diff)
+                    + data.values[[i, y_u, z_l]] * y_diff;
+                let f1 = data.values[[i, y_l, z_u]] * (D::Elem::one() - y_diff)
+                    + data.values[[i, y_u, z_u]] * y_diff;
+                return Ok(f0 * (D::Elem::one() - z_diff) + f1 * z_diff);
+            }
+            (None, Some(j), None) => {
+                let x_diff =
+                    (point[0] - data.grid[0][x_l]) / (data.grid[0][x_u] - data.grid[0][x_l]);
+                let z_diff =
+                    (point[2] - data.grid[2][z_l]) / (data.grid[2][z_u] - data.grid[2][z_l]);
+                let f0 = data.values[[x_l, j, z_l]] * (D::Elem::one() - x_diff)
+                    + data.values[[x_u, j, z_l]] * x_diff;
+                let f1 = data.values[[x_l, j, z_u]] * (D::Elem::one() - x_diff)
+                    + data.values[[x_u, j, z_u]] * x_diff;
+                return Ok(f0 * (D::Elem::one() - z_diff) + f1 * z_diff);
+            }
+            (None, None, Some(k)) => {
+                let x_diff =
+                    (point[0] - data.grid[0][x_l]) / (data.grid[0][x_u] - data.grid[0][x_l]);
+                let y_diff =
+                    (point[1] - data.grid[1][y_l]) / (data.grid[1][y_u] - data.grid[1][y_l]);
+                let f0 = data.values[[x_l, y_l, k]] * (D::Elem::one() - x_diff)
+                    + data.values[[x_u, y_l, k]] * x_diff;
+                let f1 = data.values[[x_l, y_u, k]] * (D::Elem::one() - x_diff)
+                    + data.values[[x_u, y_u, k]] * x_diff;
+                return Ok(f0 * (D::Elem::one() - y_diff) + f1 * y_diff);
+            }
+            (None, None, None) => {}
+        }
+
+        let x_diff = (point[0] - data.grid[0][x_l]) / (data.grid[0][x_u] - data.grid[0][x_l]);
+        // y
+        let y_diff = (point[1] - data.grid[1][y_l]) / (data.grid[1][y_u] - data.grid[1][y_l]);
+        // z
         let z_diff = (point[2] - data.grid[2][z_l]) / (data.grid[2][z_u] - data.grid[2][z_l]);
         // interpolate in the x-direction
         let f00 = data.values[[x_l, y_l, z_l]] * (D::Elem::one() - x_diff)

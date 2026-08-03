@@ -25,10 +25,33 @@ where
         // x
         let x_l = lowers[0];
         let x_u = x_l + 1;
-        let x_diff = (point[0] - data.grid[0][x_l]) / (data.grid[0][x_u] - data.grid[0][x_l]);
         // y
         let y_l = lowers[1];
         let y_u = y_l + 1;
+
+        // Short-circuit if the point lies exactly on a grid coordinate in one or both dimensions,
+        // reducing value lookups from 4 to 2 or 1. find_nearest_index returns the lower bracket,
+        // so exact matches appear at grid[lower] or grid[lower+1].
+        let x_exact = exact_index(data.grid[0].view(), x_l, &point[0]);
+        let y_exact = exact_index(data.grid[1].view(), y_l, &point[1]);
+        match (x_exact, y_exact) {
+            (Some(i), Some(j)) => return Ok(data.values[[i, j]]),
+            (Some(i), None) => {
+                let y_diff =
+                    (point[1] - data.grid[1][y_l]) / (data.grid[1][y_u] - data.grid[1][y_l]);
+                return Ok(data.values[[i, y_l]] * (D::Elem::one() - y_diff)
+                    + data.values[[i, y_u]] * y_diff);
+            }
+            (None, Some(j)) => {
+                let x_diff =
+                    (point[0] - data.grid[0][x_l]) / (data.grid[0][x_u] - data.grid[0][x_l]);
+                return Ok(data.values[[x_l, j]] * (D::Elem::one() - x_diff)
+                    + data.values[[x_u, j]] * x_diff);
+            }
+            (None, None) => {}
+        }
+
+        let x_diff = (point[0] - data.grid[0][x_l]) / (data.grid[0][x_u] - data.grid[0][x_l]);
         let y_diff = (point[1] - data.grid[1][y_l]) / (data.grid[1][y_u] - data.grid[1][y_l]);
         // interpolate in the x-direction
         let f0 =

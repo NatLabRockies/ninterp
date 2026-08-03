@@ -30,13 +30,7 @@ where
             } else {
                 find_nearest_index(grid[dim].view(), &point[dim])
             };
-            let pos = if grid[dim][lower] == point[dim] {
-                Some(lower)
-            } else if grid[dim][lower + 1] == point[dim] {
-                Some(lower + 1)
-            } else {
-                None
-            };
+            let pos = exact_index(grid[dim].view(), lower, &point[dim]);
             if let Some(pos) = pos {
                 point.remove(dim);
                 grid.remove(dim);

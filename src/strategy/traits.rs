@@ -32,6 +32,23 @@ pub fn find_nearest_index<T: PartialOrd>(arr: ArrayView1<T>, target: &T) -> usiz
     }
 }
 
+/// Returns the exact grid index if `point` lies on `grid[lower]` or `grid[lower+1]`, else `None`.
+///
+/// Used to short-circuit interpolation when a query point coincides with a grid coordinate.
+pub(crate) fn exact_index<T: PartialOrd>(
+    grid: ArrayView1<T>,
+    lower: usize,
+    point: &T,
+) -> Option<usize> {
+    if grid[lower] == *point {
+        Some(lower)
+    } else if grid[lower + 1] == *point {
+        Some(lower + 1)
+    } else {
+        None
+    }
+}
+
 /// 1-D interpolation strategy.
 pub trait Strategy1D<D>: Debug + DynClone
 where
