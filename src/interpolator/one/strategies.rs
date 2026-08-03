@@ -31,6 +31,34 @@ where
     }
 }
 
+impl<D> Strategy1D<D> for LinearUniform
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug,
+{
+    fn init(&mut self, data: &InterpData1D<D>) -> Result<(), ValidateError> {
+        check_uniform_grid(data.grid[0].view(), 0)
+    }
+
+    fn interpolate(
+        &self,
+        data: &InterpData1D<D>,
+        point: &[D::Elem; 1],
+    ) -> Result<D::Elem, InterpolateError> {
+        let grid = data.grid[0].view();
+        let step = grid[1] - grid[0];
+        let x_l = uniform_lower_index(grid[0], step, grid.len(), point[0]);
+        let x_u = x_l + 1;
+        let x_diff = (point[0] - grid[x_l]) / step;
+        Ok(data.values[x_l] * (D::Elem::one() - x_diff) + data.values[x_u] * x_diff)
+    }
+
+    /// Returns `true`.
+    fn allow_extrapolate(&self) -> bool {
+        true
+    }
+}
+
 impl<D> Strategy1D<D> for Nearest
 where
     D: Data + RawDataClone + Clone,

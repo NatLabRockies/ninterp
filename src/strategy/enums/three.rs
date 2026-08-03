@@ -7,6 +7,7 @@ use super::*;
 #[cfg_attr(feature = "serde", serde(untagged))]
 pub enum Strategy3DEnum {
     Linear(strategy::Linear),
+    LinearUniform(strategy::LinearUniform),
     Nearest(strategy::Nearest),
     Step(strategy::Step),
 }
@@ -15,6 +16,13 @@ impl From<Linear> for Strategy3DEnum {
     #[inline]
     fn from(strategy: Linear) -> Self {
         Self::Linear(strategy)
+    }
+}
+
+impl From<LinearUniform> for Strategy3DEnum {
+    #[inline]
+    fn from(strategy: LinearUniform) -> Self {
+        Self::LinearUniform(strategy)
     }
 }
 
@@ -41,6 +49,7 @@ where
     fn init(&mut self, data: &InterpData3D<D>) -> Result<(), ValidateError> {
         match self {
             Strategy3DEnum::Linear(strategy) => Strategy3D::<D>::init(strategy, data),
+            Strategy3DEnum::LinearUniform(strategy) => Strategy3D::<D>::init(strategy, data),
             Strategy3DEnum::Nearest(strategy) => Strategy3D::<D>::init(strategy, data),
             Strategy3DEnum::Step(strategy) => Strategy3D::<D>::init(strategy, data),
         }
@@ -54,6 +63,9 @@ where
     ) -> Result<D::Elem, InterpolateError> {
         match self {
             Strategy3DEnum::Linear(strategy) => Strategy3D::<D>::interpolate(strategy, data, point),
+            Strategy3DEnum::LinearUniform(strategy) => {
+                Strategy3D::<D>::interpolate(strategy, data, point)
+            }
             Strategy3DEnum::Nearest(strategy) => {
                 Strategy3D::<D>::interpolate(strategy, data, point)
             }
@@ -65,6 +77,7 @@ where
     fn allow_extrapolate(&self) -> bool {
         match self {
             Strategy3DEnum::Linear(strategy) => Strategy3D::<D>::allow_extrapolate(strategy),
+            Strategy3DEnum::LinearUniform(strategy) => Strategy3D::<D>::allow_extrapolate(strategy),
             Strategy3DEnum::Nearest(strategy) => Strategy3D::<D>::allow_extrapolate(strategy),
             Strategy3DEnum::Step(strategy) => Strategy3D::<D>::allow_extrapolate(strategy),
         }

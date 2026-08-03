@@ -13,6 +13,7 @@
 /// - Their common trait: [`Interpolator`]
 /// - The [`strategy`] mod, containing pre-defined interpolation strategies:
 ///   - [`strategy::Linear`]
+///   - [`strategy::LinearUniform`]
 ///   - [`strategy::Nearest`]
 ///   - [`strategy::Step`] (replaces the former `LeftNearest`/`RightNearest`)
 ///   - `serde`-compatible strategy enums: [`strategy::enums::Strategy1DEnum`]/etc.
@@ -50,7 +51,6 @@ pub(crate) use ndarray::prelude::*;
 pub(crate) use ndarray::{Data, Ix, OwnedRepr, RawDataClone, ViewRepr};
 
 pub use num_traits;
-
 pub(crate) use num_traits::{clamp, Euclid, Float, One, Zero};
 
 pub(crate) use dyn_clone::*;

@@ -90,12 +90,13 @@ and call `set_strategy`.
 ### Strategies
 An interpolation strategy (e.g.
 [`Linear`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Linear.html),
+[`LinearUniform`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.LinearUniform.html),
 [`Nearest`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Nearest.html),
 [`LeftNearest`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.LeftNearest.html),
 [`RightNearest`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.RightNearest.html))
 must be specified.
 Not all interpolation strategies are implemented for every dimensionality.
-`Linear` and `Nearest` are implemented for all dimensionalities.
+`Linear`, `LinearUniform`, and `Nearest` are implemented for all dimensionalities.
 
 Custom strategies can be defined. See
 [`examples/custom_strategy.rs`](examples/custom_strategy.rs)
@@ -111,7 +112,7 @@ The following settings are applicable for all interpolators:
 - `Extrapolate::Wrap`
 - `Extrapolate::Error`
 
-`Extrapolate::Enable` is valid for `Linear` for all dimensionalities.
+`Extrapolate::Enable` is valid for `Linear` and `LinearUniform` for all dimensionalities.
 
 If you are unsure which variant to choose, `Extrapolate::Error` is likely what you want.
 

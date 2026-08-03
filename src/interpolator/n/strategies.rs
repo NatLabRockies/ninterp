@@ -21,6 +21,12 @@ where
         let mut grid: Vec<_> = data.grid.iter().map(|arr| arr.view()).collect();
         let mut values_view = data.values.view();
         for dim in (0..n).rev() {
+            // Skip empty grid dimensions (e.g. the 0-D multilinear case uses an empty grid).
+            // The original iter().position() returned None on empty grids without touching point[dim];
+            // the binary search path would panic on first().unwrap(), so we guard it here.
+            if grid[dim].is_empty() {
+                continue;
+            }
             // Binary search for an exact match: find_nearest_index returns the lower bracket,
             // so the point can only be exactly equal to grid[lower] or grid[lower+1].
             let lower = if &point[dim] < grid[dim].first().unwrap() {
@@ -30,13 +36,7 @@ where
             } else {
                 find_nearest_index(grid[dim].view(), &point[dim])
             };
-            let pos = if grid[dim][lower] == point[dim] {
-                Some(lower)
-            } else if grid[dim][lower + 1] == point[dim] {
-                Some(lower + 1)
-            } else {
-                None
-            };
+            let pos = exact_index(grid[dim].view(), lower, &point[dim]);
             if let Some(pos) = pos {
                 point.remove(dim);
                 grid.remove(dim);
@@ -164,8 +164,60 @@ where
         Ok(data.values.view()[idx.as_slice()])
     }
 
-    /// Returns `false`.
     fn allow_extrapolate(&self) -> bool {
         false
+    }
+}
+
+impl<D> StrategyND<D> for LinearUniform
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug,
+{
+    fn init(&mut self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
+        for (dim, grid) in data.grid.iter().enumerate() {
+            check_uniform_grid(grid.view(), dim)?;
+        }
+        Ok(())
+    }
+
+    fn interpolate(
+        &self,
+        data: &InterpDataND<D>,
+        point: &[D::Elem],
+    ) -> Result<D::Elem, InterpolateError> {
+        let n = data.values.ndim();
+        let mut lower_idxs = Vec::with_capacity(n);
+        let mut interp_diffs = Vec::with_capacity(n);
+        for dim in 0..n {
+            let step = data.grid[dim][1] - data.grid[dim][0];
+            let lower_idx =
+                uniform_lower_index(data.grid[dim][0], step, data.grid[dim].len(), point[dim]);
+            let diff = (point[dim] - data.grid[dim][lower_idx]) / step;
+            lower_idxs.push(lower_idx);
+            interp_diffs.push(diff);
+        }
+        // Same bitmask/butterfly reduction as Linear ND
+        let size = 1usize << n;
+        let mut vals = vec![D::Elem::zero(); size];
+        let mut idx = vec![0usize; n];
+        for mask in 0..size {
+            for d in 0..n {
+                idx[d] = lower_idxs[d] + ((mask >> (n - 1 - d)) & 1);
+            }
+            vals[mask] = data.values.view()[idx.as_slice()];
+        }
+        for d in 0..n {
+            let half = 1 << (n - 1 - d);
+            for i in 0..half {
+                vals[i] =
+                    vals[i] * (D::Elem::one() - interp_diffs[d]) + vals[i + half] * interp_diffs[d];
+            }
+        }
+        Ok(vals[0])
+    }
+
+    fn allow_extrapolate(&self) -> bool {
+        true
     }
 }

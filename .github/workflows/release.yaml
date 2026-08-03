@@ -9,33 +9,20 @@ env:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v4
-    - run: cargo build --verbose
-    - name: compile benchmarks
-      run: cargo bench --no-run
-    - name: test
-      run: |
-        cargo test --verbose
-        cargo test --no-default-features --verbose
-        cargo test --all-features --verbose
-    # TODO: add this back when the cargo examples repo is more functional
-    # - name: run examples
-    #   run: |
-    #     cargo install cargo-examples
-    #     cargo examples
-    - name: check semver
-      uses: obi1kenobi/cargo-semver-checks-action@v2
+    uses: ./.github/workflows/test.yaml
 
   release:
     runs-on: ubuntu-latest
     needs: test
 
     steps:
-    - uses: actions/checkout@v4
-    - run: cargo publish --dry-run
-    - run: cargo publish
-      env:
-        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - uses: actions/checkout@v4
+
+      - name: check semver
+        uses: obi1kenobi/cargo-semver-checks-action@v2
+
+      - run: cargo publish --dry-run
+
+      - run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
