@@ -1,6 +1,48 @@
 use super::*;
 
 #[test]
+fn test_cubic_spline() {
+    // f(x, y) = 2x + y: linear, reproduced exactly by any spline
+    let interp = InterpND::new(
+        vec![array![0., 1., 2.], array![0., 1., 2.]],
+        array![[0., 1., 2.], [2., 3., 4.], [4., 5., 6.]].into_dyn(),
+        strategy::CubicSpline::new(),
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    assert_approx_eq!(interp.interpolate(&[0.5, 0.5]).unwrap(), 1.5);
+    assert_approx_eq!(interp.interpolate(&[1., 1.]).unwrap(), 3.);
+    assert_approx_eq!(interp.interpolate(&[3., 1.]).unwrap(), 7.); // extrapolation
+}
+
+#[test]
+fn test_cubic_spline_knot_exactness() {
+    let interp = InterpND::new(
+        vec![array![0., 1., 2., 3.], array![0., 1., 2., 3.]],
+        array![
+            [0., 1., 4., 9.],
+            [1., 2., 5., 10.],
+            [4., 5., 8., 13.],
+            [9., 10., 13., 18.],
+        ]
+        .into_dyn(),
+        strategy::CubicSpline::new(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for i in 0..4usize {
+        for j in 0..4usize {
+            let xi = interp.data.grid[0][i];
+            let yj = interp.data.grid[1][j];
+            assert_approx_eq!(
+                interp.interpolate(&[xi, yj]).unwrap(),
+                interp.data.values[[i, j]]
+            );
+        }
+    }
+}
+
+#[test]
 fn test_linear_0d() {
     let interp = InterpND::new(
         vec![array![]],

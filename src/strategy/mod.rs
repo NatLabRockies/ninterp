@@ -161,6 +161,58 @@ mod step_serde {
     }
 }
 
+/// Natural cubic spline interpolation (<https://en.wikipedia.org/wiki/Spline_interpolation>).
+///
+/// Constructs a C² piecewise cubic polynomial through all data points using
+/// natural boundary conditions (zero second derivative at the endpoints).
+/// Coefficients are precomputed in [`Strategy1D::init`], called automatically
+/// by [`Interp1D::new`] and [`Interp1D::set_strategy`].
+///
+/// Supports [`Extrapolate::Enable`]: evaluation beyond the grid extends the
+/// boundary cubic polynomials.
+///
+/// # Example
+/// ```
+/// use ndarray::prelude::*;
+/// use ninterp::prelude::*;
+///
+/// // f(x) = 2x + 1 (linear — reproduced exactly by any spline)
+/// let interp: Interp1DOwned<f64, _> = Interp1D::new(
+///     array![0., 1., 2., 3.],
+///     array![1., 3., 5., 7.],
+///     strategy::CubicSpline::new(),
+///     Extrapolate::Enable,
+/// )
+/// .unwrap();
+/// assert_eq!(interp.interpolate(&[1.5]).unwrap(), 4.0);
+/// assert_eq!(interp.interpolate(&[4.0]).unwrap(), 9.0); // extrapolation
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+pub struct CubicSpline<T> {
+    pub(crate) b: Vec<T>,
+    pub(crate) c: Vec<T>,
+    pub(crate) d: Vec<T>,
+}
+
+impl<T> Default for CubicSpline<T> {
+    fn default() -> Self {
+        Self {
+            b: Vec::new(),
+            c: Vec::new(),
+            d: Vec::new(),
+        }
+    }
+}
+
+impl<T> CubicSpline<T> {
+    /// Create a new cubic spline strategy with no precomputed coefficients.
+    /// Coefficients are computed automatically when passed to [`Interp1D::new`].
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[allow(unused_imports)]

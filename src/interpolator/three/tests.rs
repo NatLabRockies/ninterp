@@ -1,6 +1,61 @@
 use super::*;
 
 #[test]
+fn test_cubic_spline() {
+    // f(x, y, z) = x + 2y + 3z: linear, reproduced exactly by any spline
+    let interp = Interp3D::new(
+        array![0., 1., 2.],
+        array![0., 1., 2.],
+        array![0., 1., 2.],
+        array![
+            [[0., 3., 6.], [2., 5., 8.], [4., 7., 10.]],
+            [[1., 4., 7.], [3., 6., 9.], [5., 8., 11.]],
+            [[2., 5., 8.], [4., 7., 10.], [6., 9., 12.]],
+        ],
+        strategy::CubicSpline::new(),
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    // Knots
+    assert_approx_eq!(interp.interpolate(&[1., 1., 1.]).unwrap(), 6.);
+    // Midpoints
+    assert_approx_eq!(interp.interpolate(&[0.5, 0.5, 0.5]).unwrap(), 3.);
+    assert_approx_eq!(interp.interpolate(&[1.0, 0.5, 1.0]).unwrap(), 5.);
+    // Extrapolation
+    assert_approx_eq!(interp.interpolate(&[3., 1., 1.]).unwrap(), 8.);
+}
+
+#[test]
+fn test_cubic_spline_knot_exactness() {
+    let interp = Interp3D::new(
+        array![0., 1., 2.],
+        array![0., 1., 2.],
+        array![0., 1., 2.],
+        array![
+            [[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+            [[9., 10., 11.], [12., 13., 14.], [15., 16., 17.]],
+            [[18., 19., 20.], [21., 22., 23.], [24., 25., 26.]],
+        ],
+        strategy::CubicSpline::new(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let x = interp.data.grid[0].clone();
+    let y = interp.data.grid[1].clone();
+    let z = interp.data.grid[2].clone();
+    for (i, xi) in x.iter().enumerate() {
+        for (j, yj) in y.iter().enumerate() {
+            for (k, zk) in z.iter().enumerate() {
+                assert_approx_eq!(
+                    interp.interpolate(&[*xi, *yj, *zk]).unwrap(),
+                    interp.data.values[[i, j, k]]
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn test_linear() {
     let interp = Interp3D::new(
         array![0.05, 0.10, 0.15],

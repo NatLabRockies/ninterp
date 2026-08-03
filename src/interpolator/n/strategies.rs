@@ -225,3 +225,23 @@ where
         false
     }
 }
+
+impl<D> StrategyND<D> for CubicSpline<D::Elem>
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug,
+{
+    fn interpolate(
+        &self,
+        data: &InterpDataND<D>,
+        point: &[D::Elem],
+    ) -> Result<D::Elem, InterpolateError> {
+        let grids: Vec<ArrayView1<D::Elem>> = data.grid.iter().map(|g| g.view()).collect();
+        Ok(spline_eval_nd_recursive(&grids, data.values.view(), point))
+    }
+
+    /// Returns `true`: the boundary cubic polynomials extend naturally.
+    fn allow_extrapolate(&self) -> bool {
+        true
+    }
+}

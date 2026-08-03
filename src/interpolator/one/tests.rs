@@ -1,6 +1,60 @@
 use super::*;
 
 #[test]
+fn test_cubic_spline() {
+    // Linear data: any spline reproduces it exactly (all second derivatives = 0)
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3.],
+        array![1., 3., 5., 7.], // f(x) = 2x + 1
+        strategy::CubicSpline::new(),
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    // Knot values
+    let x = interp.data.grid[0].clone();
+    for (i, xi) in x.iter().enumerate() {
+        assert_approx_eq!(interp.interpolate(&[*xi]).unwrap(), interp.data.values[i]);
+    }
+    // Midpoints
+    assert_approx_eq!(interp.interpolate(&[0.5]).unwrap(), 2.0);
+    assert_approx_eq!(interp.interpolate(&[1.5]).unwrap(), 4.0);
+    assert_approx_eq!(interp.interpolate(&[2.5]).unwrap(), 6.0);
+    // Extrapolation via boundary polynomials
+    assert_approx_eq!(interp.interpolate(&[-1.0]).unwrap(), -1.0);
+    assert_approx_eq!(interp.interpolate(&[4.0]).unwrap(), 9.0);
+}
+
+#[test]
+fn test_cubic_spline_knot_exactness() {
+    // Values at all knots must be reproduced exactly regardless of data shape
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0., 1., 4., 9., 16.], // f(x) = x^2
+        strategy::CubicSpline::new(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let x = interp.data.grid[0].clone();
+    for (i, xi) in x.iter().enumerate() {
+        assert_approx_eq!(interp.interpolate(&[*xi]).unwrap(), interp.data.values[i]);
+    }
+}
+
+#[test]
+fn test_cubic_spline_two_points() {
+    // Degenerate case: 2 points → degenerates to linear interpolation
+    let interp = Interp1D::new(
+        array![0., 1.],
+        array![0., 2.],
+        strategy::CubicSpline::new(),
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    assert_approx_eq!(interp.interpolate(&[0.5]).unwrap(), 1.0);
+    assert_approx_eq!(interp.interpolate(&[2.0]).unwrap(), 4.0); // extrapolation
+}
+
+#[test]
 fn test_invalid_args() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
