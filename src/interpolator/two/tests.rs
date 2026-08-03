@@ -94,6 +94,62 @@ fn test_nearest() {
 }
 
 #[test]
+fn test_step() {
+    let grid_x = array![0., 1., 2.];
+    let grid_y = array![0., 1., 2.];
+    let values = array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]];
+
+    // Uniform Lower (floor) in all dimensions
+    let interp = Interp2D::new(
+        grid_x.view(),
+        grid_y.view(),
+        values.view(),
+        strategy::Step::from(strategy::StepDirection::Lower),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let x = &interp.data.grid[0];
+    let y = &interp.data.grid[1];
+    let f = &interp.data.values;
+    for (i, xi) in x.iter().enumerate() {
+        for (j, yj) in y.iter().enumerate() {
+            assert_eq!(interp.interpolate(&[*xi, *yj]).unwrap(), f[[i, j]]);
+        }
+    }
+    assert_eq!(interp.interpolate(&[0.7, 1.4]).unwrap(), f[[0, 1]]); // floor x→0, floor y→1
+    assert_eq!(interp.interpolate(&[1.9, 0.1]).unwrap(), f[[1, 0]]); // floor x→1, floor y→0
+
+    // Per-dimension: Lower in x, Upper in y
+    let interp_mixed = Interp2D::new(
+        grid_x.view(),
+        grid_y.view(),
+        values.view(),
+        strategy::Step(vec![
+            strategy::StepDirection::Lower,
+            strategy::StepDirection::Upper,
+        ]),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(interp_mixed.interpolate(&[0.7, 1.4]).unwrap(), f[[0, 2]]); // floor x→0, ceil y→2
+    assert_eq!(interp_mixed.interpolate(&[1.3, 0.8]).unwrap(), f[[1, 1]]); // floor x→1, ceil y→1
+
+    // Invalid: 3 directions for 2-D
+    assert!(Interp2D::new(
+        grid_x.view(),
+        grid_y.view(),
+        values.view(),
+        strategy::Step(vec![
+            strategy::StepDirection::Lower,
+            strategy::StepDirection::Lower,
+            strategy::StepDirection::Lower,
+        ]),
+        Extrapolate::Error,
+    )
+    .is_err());
+}
+
+#[test]
 fn test_extrapolate_inputs() {
     // Extrapolate::Extrapolate
     assert!(matches!(

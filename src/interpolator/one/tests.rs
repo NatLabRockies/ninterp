@@ -150,6 +150,21 @@ fn test_linear_uniform_extrapolate() {
 }
 
 #[test]
+fn test_step_invalid_direction_count() {
+    // 2 directions for a 1-D interpolator → ValidateError
+    assert!(Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::Step(vec![
+            strategy::StepDirection::Lower,
+            strategy::StepDirection::Upper,
+        ]),
+        Extrapolate::Error,
+    )
+    .is_err());
+}
+
+#[test]
 fn test_extrapolate_inputs() {
     // Incorrect extrapolation selection
     assert!(matches!(
@@ -242,13 +257,13 @@ fn test_serde() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0.2, 0.4, 0.6, 0.8, 1.0],
-        strategy::LeftNearest,
+        strategy::Step::from(strategy::StepDirection::Lower),
         Extrapolate::Error,
     )
     .unwrap();
 
     let ser = serde_json::to_string(&interp).unwrap();
-    let de: Interp1DOwned<f64, strategy::LeftNearest> = serde_json::from_str(&ser).unwrap();
+    let de: Interp1DOwned<f64, strategy::Step> = serde_json::from_str(&ser).unwrap();
     assert_eq!(interp, de);
 
     let data_ser = serde_json::to_string(&interp.data).unwrap();

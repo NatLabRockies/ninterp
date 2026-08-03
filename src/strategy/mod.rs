@@ -29,7 +29,8 @@ pub struct Linear;
 ///     array![0.2, 0.4, 0.6, 0.8, 1.0],
 ///     strategy::LinearUniform,
 ///     Extrapolate::Error,
-/// ).unwrap();
+/// )
+/// .unwrap();
 /// assert_eq!(interp.interpolate(&[2.5]).unwrap(), 0.7);
 /// ```
 #[derive(Debug, Clone, PartialEq)]
@@ -68,17 +69,38 @@ pub enum StepDirection {
 ///
 /// # Examples
 /// ```
+/// use ndarray::prelude::*;
 /// use ninterp::prelude::*;
-/// use ninterp::strategy::{Step, StepDirection};
 ///
-/// // All dimensions floor (previous value)
-/// let floor = Step::from(StepDirection::Lower);
+/// // Floor (previous value): returns the value at the nearest lower grid point
+/// let interp = Interp1D::new(
+///     array![0., 1., 2., 3., 4.],
+///     array![0.2, 0.4, 0.6, 0.8, 1.0],
+///     strategy::Step::from(strategy::StepDirection::Lower),
+///     Extrapolate::Error,
+/// )
+/// .unwrap();
+/// assert_eq!(interp.interpolate(&[3.75]).unwrap(), 0.8); // floor → value at 3.0
+/// assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0); // exact grid point
 ///
-/// // Per-dimension: floor in x, ceiling in y (for a 2-D interpolator)
-/// let mixed = Step(vec![StepDirection::Lower, StepDirection::Upper]);
+/// // Ceiling (next value): returns the value at the nearest upper grid point
+/// let interp = Interp1D::new(
+///     array![0., 1., 2., 3., 4.],
+///     array![0.2, 0.4, 0.6, 0.8, 1.0],
+///     strategy::Step::from(strategy::StepDirection::Upper),
+///     Extrapolate::Error,
+/// )
+/// .unwrap();
+/// assert_eq!(interp.interpolate(&[3.25]).unwrap(), 1.0); // ceil → value at 4.0
+/// assert_eq!(interp.interpolate(&[3.00]).unwrap(), 0.8); // exact grid point
+///
+/// // Per-dimension: floor in x, ceiling in y (2-D interpolator)
+/// let mixed = strategy::Step(vec![
+///     strategy::StepDirection::Lower,
+///     strategy::StepDirection::Upper,
+/// ]);
 /// ```
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct Step(pub Vec<StepDirection>);
 
 impl From<StepDirection> for Step {
@@ -100,6 +122,37 @@ impl Step {
     }
 }
 
+#[cfg(feature = "serde")]
+mod step_serde {
+    use super::*;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    /// Helper that serializes/deserializes `Step` as `{"Step": [...directions...]}`.
+    /// This makes the strategy type explicit in the output, consistent with how
+    /// `Linear`, `Nearest`, etc. serialize to their type name.
+    #[derive(Serialize, Deserialize)]
+    struct StepHelper {
+        #[serde(rename = "Step")]
+        directions: Vec<StepDirection>,
+    }
+
+    impl Serialize for Step {
+        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            StepHelper {
+                directions: self.0.clone(),
+            }
+            .serialize(serializer)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for Step {
+        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            let helper = StepHelper::deserialize(deserializer)?;
+            Ok(Step(helper.directions))
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[allow(unused_imports)]
@@ -113,16 +166,24 @@ mod tests {
             format!("\"{}\"", stringify!(Linear))
         );
         assert_eq!(
+            serde_json::to_string(&LinearUniform).unwrap(),
+            format!("\"{}\"", stringify!(LinearUniform))
+        );
+        assert_eq!(
             serde_json::to_string(&Nearest).unwrap(),
             format!("\"{}\"", stringify!(Nearest))
         );
         assert_eq!(
-            serde_json::to_string(&LeftNearest).unwrap(),
-            format!("\"{}\"", stringify!(LeftNearest))
+            serde_json::to_string(&Step::from(StepDirection::Lower)).unwrap(),
+            r#"{"Step":["Lower"]}"#
         );
         assert_eq!(
-            serde_json::to_string(&RightNearest).unwrap(),
-            format!("\"{}\"", stringify!(RightNearest))
+            serde_json::to_string(&Step::from(StepDirection::Upper)).unwrap(),
+            r#"{"Step":["Upper"]}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&Step(vec![StepDirection::Lower, StepDirection::Upper])).unwrap(),
+            r#"{"Step":["Lower","Upper"]}"#
         );
     }
 }

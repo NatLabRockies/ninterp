@@ -92,11 +92,8 @@ An interpolation strategy (e.g.
 [`Linear`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Linear.html),
 [`LinearUniform`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.LinearUniform.html),
 [`Nearest`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Nearest.html),
-[`LeftNearest`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.LeftNearest.html),
-[`RightNearest`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.RightNearest.html))
+[`Step`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Step.html))
 must be specified.
-Not all interpolation strategies are implemented for every dimensionality.
-`Linear`, `LinearUniform`, and `Nearest` are implemented for all dimensionalities.
 
 Custom strategies can be defined. See
 [`examples/custom_strategy.rs`](examples/custom_strategy.rs)

@@ -33,6 +33,13 @@
 //! assert_eq!(interp.interpolate(&[3.00]).unwrap(), 0.8);
 //! assert_eq!(interp.interpolate(&[3.75]).unwrap(), 0.95);
 //! assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);
+//!
+//! // Piecewise-constant: return value at nearest lower grid point
+//! interp
+//!     .set_strategy(strategy::Step::from(strategy::StepDirection::Lower))
+//!     .unwrap();
+//! assert_eq!(interp.interpolate(&[3.75]).unwrap(), 0.8);
+//! assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);
 //! ```
 //! See also: `examples/dynamic_strategy.rs`
 

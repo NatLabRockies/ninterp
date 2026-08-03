@@ -101,79 +101,12 @@ where
     }
 }
 
-impl<D> StrategyND<D> for Nearest
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
-{
-    fn interpolate(
-        &self,
-        data: &InterpDataND<D>,
-        point: &[D::Elem],
-    ) -> Result<D::Elem, InterpolateError> {
-        let n = data.values.ndim();
-        // Nearest-neighbor on a rectilinear grid factorizes: select the nearest index
-        // independently per dimension, then do a single lookup. No corner extraction or
-        // dimensionality reduction needed — the distance comparison handles exact matches correctly.
-        let mut idx = vec![0usize; n];
-        for dim in 0..n {
-            let lower_idx = find_nearest_index(data.grid[dim].view(), &point[dim]);
-            idx[dim] = if point[dim] - data.grid[dim][lower_idx]
-                < data.grid[dim][lower_idx + 1] - point[dim]
-            {
-                lower_idx
-            } else {
-                lower_idx + 1
-            };
-        }
-        Ok(data.values.view()[idx.as_slice()])
-    }
-
-    /// Returns `false`.
-    fn allow_extrapolate(&self) -> bool {
-        false
-    }
-}
-
-impl<D> StrategyND<D> for Step
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
-{
-    fn init(&mut self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
-        let n = data.values.ndim();
-        if self.0.len() != 1 && self.0.len() != n {
-            return Err(ValidateError::Other(format!(
-                "Step strategy has {} directions but interpolator is {n}-D (expected 1 or {n})",
-                self.0.len()
-            )));
-        }
-        Ok(())
-    }
-
-    fn interpolate(
-        &self,
-        data: &InterpDataND<D>,
-        point: &[D::Elem],
-    ) -> Result<D::Elem, InterpolateError> {
-        let n = data.values.ndim();
-        let mut idx = vec![0usize; n];
-        for dim in 0..n {
-            idx[dim] = step_index(self.dir(dim), data.grid[dim].view(), &point[dim]);
-        }
-        Ok(data.values.view()[idx.as_slice()])
-    }
-
-    fn allow_extrapolate(&self) -> bool {
-        false
-    }
-}
-
 impl<D> StrategyND<D> for LinearUniform
 where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
 {
+    /// Ensures grid uniformity in all dimensions
     fn init(&mut self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
         for (dim, grid) in data.grid.iter().enumerate() {
             check_uniform_grid(grid.view(), dim)?;
@@ -217,7 +150,78 @@ where
         Ok(vals[0])
     }
 
+    /// Returns `true`.
     fn allow_extrapolate(&self) -> bool {
         true
+    }
+}
+
+impl<D> StrategyND<D> for Nearest
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug,
+{
+    fn interpolate(
+        &self,
+        data: &InterpDataND<D>,
+        point: &[D::Elem],
+    ) -> Result<D::Elem, InterpolateError> {
+        let n = data.values.ndim();
+        // Nearest-neighbor on a rectilinear grid factorizes: select the nearest index
+        // independently per dimension, then do a single lookup. No corner extraction or
+        // dimensionality reduction needed — the distance comparison handles exact matches correctly.
+        let mut idx = vec![0usize; n];
+        for dim in 0..n {
+            let lower_idx = find_nearest_index(data.grid[dim].view(), &point[dim]);
+            idx[dim] = if point[dim] - data.grid[dim][lower_idx]
+                < data.grid[dim][lower_idx + 1] - point[dim]
+            {
+                lower_idx
+            } else {
+                lower_idx + 1
+            };
+        }
+        Ok(data.values.view()[idx.as_slice()])
+    }
+
+    /// Returns `false`.
+    fn allow_extrapolate(&self) -> bool {
+        false
+    }
+}
+
+impl<D> StrategyND<D> for Step
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug,
+{
+    /// Ensures the number of provided step directions matches the dimensionality of the interpolator
+    fn init(&mut self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
+        let n = data.values.ndim();
+        if self.0.len() != 1 && self.0.len() != n {
+            return Err(ValidateError::Other(format!(
+                "Step strategy has {} step directions but interpolator is {n}-D (expected 1 or {n})",
+                self.0.len()
+            )));
+        }
+        Ok(())
+    }
+
+    fn interpolate(
+        &self,
+        data: &InterpDataND<D>,
+        point: &[D::Elem],
+    ) -> Result<D::Elem, InterpolateError> {
+        let n = data.values.ndim();
+        let mut idx = vec![0usize; n];
+        for dim in 0..n {
+            idx[dim] = step_index(self.dir(dim), data.grid[dim].view(), &point[dim]);
+        }
+        Ok(data.values.view()[idx.as_slice()])
+    }
+
+    /// Returns `false`.
+    fn allow_extrapolate(&self) -> bool {
+        false
     }
 }

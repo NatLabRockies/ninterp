@@ -73,6 +73,7 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
 {
+    /// Ensures all grid dimensions are uniformly spaced.
     fn init(&mut self, data: &InterpData2D<D>) -> Result<(), ValidateError> {
         check_uniform_grid(data.grid[0].view(), 0)?;
         check_uniform_grid(data.grid[1].view(), 1)
@@ -98,6 +99,7 @@ where
         Ok(f0 * (D::Elem::one() - y_diff) + f1 * y_diff)
     }
 
+    /// Returns `true`.
     fn allow_extrapolate(&self) -> bool {
         true
     }
@@ -144,6 +146,7 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
 {
+    /// Ensures the number of provided step directions matches the interpolator dimensionality.
     fn init(&mut self, _data: &InterpData2D<D>) -> Result<(), ValidateError> {
         if self.0.len() != 1 && self.0.len() != 2 {
             return Err(ValidateError::Other(format!(
@@ -164,6 +167,7 @@ where
         Ok(data.values[[i, j]])
     }
 
+    /// Returns `false`.
     fn allow_extrapolate(&self) -> bool {
         false
     }

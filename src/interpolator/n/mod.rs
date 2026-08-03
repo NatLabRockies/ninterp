@@ -223,8 +223,9 @@ where
     ///             [1.0, 1.2, 1.4, 1.6], // f(x1, y1, z0), f(x1, y1, z1), f(x1, y1, z2), f(x1, y1, z3)
     ///             [1.2, 1.4, 1.6, 1.8], // f(x1, y2, z0), f(x1, y2, z1), f(x1, y2, z2), f(x1, y2, z3)
     ///         ],
-    ///     ].into_dyn(),
-    ///     strategy::Linear, // strategy mod is exposed via `use ndarray::prelude::*;`
+    ///     ]
+    ///     .into_dyn(),
+    ///     strategy::Linear,   // strategy mod is exposed via `use ndarray::prelude::*;`
     ///     Extrapolate::Error, // return an error when point is out of bounds
     /// )
     /// .unwrap();
