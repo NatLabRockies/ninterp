@@ -40,7 +40,6 @@ pub mod strategy;
 pub mod interpolator;
 pub use interpolator::data;
 pub(crate) use interpolator::data::*;
-pub(crate) use interpolator::*;
 
 pub(crate) use error::*;
 pub(crate) use strategy::traits::*;

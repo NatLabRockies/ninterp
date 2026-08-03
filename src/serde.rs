@@ -12,6 +12,7 @@ use serde::de::{
 use serde::ser::{SerializeSeq, Serializer};
 use serde_ndim::de::MakeNDim;
 
+#[allow(dead_code)]
 #[derive(Serialize)]
 struct ArrayWrapper<'a, D>(
     #[serde(serialize_with = "serde_ndim::serialize")] &'a ArrayBase<D, Ix1>,
@@ -117,7 +118,10 @@ where
         }
 
         grid.try_into().map_err(|e: Vec<_>| {
-            Error::custom(format_args!("expected {N} array(s), found {}: {e:?}", e.len()))
+            Error::custom(format_args!(
+                "expected {N} array(s), found {}: {e:?}",
+                e.len()
+            ))
         })
     }
 }
@@ -125,6 +129,7 @@ where
 pub(crate) mod serde_arr_array {
     use super::*;
 
+    #[allow(dead_code)]
     pub fn serialize<D, const N: usize, Ser>(
         grid: &[ArrayBase<D, Ix1>; N],
         serializer: Ser,
@@ -156,6 +161,7 @@ pub(crate) mod serde_arr_array {
 pub(crate) mod serde_vec_array {
     use super::*;
 
+    #[allow(dead_code)]
     pub fn serialize<D, Ser>(
         grid: &[ArrayBase<D, Ix1>],
         serializer: Ser,
