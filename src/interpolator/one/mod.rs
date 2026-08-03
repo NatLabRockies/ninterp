@@ -78,14 +78,6 @@ where
 {
     /// Instantiate one-dimensional interpolator.
     ///
-    /// Applicable interpolation strategies:
-    /// - [`strategy::Linear`]
-    /// - [`strategy::Nearest`]
-    /// - [`strategy::LeftNearest`]
-    /// - [`strategy::RightNearest`]
-    ///
-    /// [`Extrapolate::Enable`] is valid for [`strategy::Linear`]
-    ///
     /// # Example:
     /// ```
     /// use ndarray::prelude::*;

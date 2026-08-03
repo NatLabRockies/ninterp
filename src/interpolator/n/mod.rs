@@ -189,12 +189,6 @@ where
 {
     /// Construct and validate an N-D (any dimensionality) interpolator.
     ///
-    /// Applicable interpolation strategies:
-    /// - [`strategy::Linear`]
-    /// - [`strategy::Nearest`]
-    ///
-    /// [`Extrapolate::Enable`] is valid for [`strategy::Linear`]
-    ///
     /// # Example:
     /// ```
     /// use ndarray::prelude::*;

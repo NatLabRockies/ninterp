@@ -7,13 +7,6 @@ use thiserror::Error;
 #[allow(missing_docs)]
 #[derive(Error, Clone, PartialEq)]
 pub enum ValidateError {
-    // TODO: Remove variant in next breaking release 0.8.0
-    #[deprecated(
-        since = "0.7.2",
-        note = "unused error variant, will be removed in a future version"
-    )]
-    #[error("selected `Strategy` ({0}) is unimplemented/inapplicable for interpolator")]
-    StrategySelection(&'static str),
     #[error("selected `Extrapolate` variant ({0}) is unimplemented/inapplicable for interpolator")]
     ExtrapolateSelection(String),
     #[error("supplied grid coordinates cannot be empty: dim {0}")]

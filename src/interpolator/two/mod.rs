@@ -82,12 +82,6 @@ where
 {
     /// Construct and validate a 2-D interpolator.
     ///
-    /// Applicable interpolation strategies:
-    /// - [`strategy::Linear`]
-    /// - [`strategy::Nearest`]
-    ///
-    /// [`Extrapolate::Enable`] is valid for [`strategy::Linear`]
-    ///
     /// # Example:
     /// ```
     /// use ndarray::prelude::*;
