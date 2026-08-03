@@ -57,56 +57,29 @@ where
     }
 }
 
-impl<D> Strategy1D<D> for LeftNearest
+impl<D> Strategy1D<D> for Step
 where
     D: Data + RawDataClone + Clone,
     D::Elem: Num + PartialOrd + Copy + Debug,
 {
+    fn init(&mut self, _data: &InterpData1D<D>) -> Result<(), ValidateError> {
+        if self.0.len() != 1 {
+            return Err(ValidateError::Other(format!(
+                "Step strategy has {} directions but interpolator is 1-D (expected 1)",
+                self.0.len()
+            )));
+        }
+        Ok(())
+    }
+
     fn interpolate(
         &self,
         data: &InterpData1D<D>,
         point: &[D::Elem; 1],
     ) -> Result<D::Elem, InterpolateError> {
-        // find_nearest_index returns i where grid[i] < point <= grid[i+1] for interior matches,
-        // so when point == grid[i+1] exactly we want i+1 (not i), and len-1 for the last element.
-        let x_l = find_nearest_index(data.grid[0].view(), &point[0]);
-        let i = if &point[0] == data.grid[0].last().unwrap() {
-            data.grid[0].len() - 1
-        } else if point[0] == data.grid[0][x_l + 1] {
-            x_l + 1
-        } else {
-            x_l
-        };
-        Ok(data.values[i])
+        Ok(data.values[step_index(self.dir(0), data.grid[0].view(), &point[0])])
     }
 
-    /// Returns `false`.
-    fn allow_extrapolate(&self) -> bool {
-        false
-    }
-}
-
-impl<D> Strategy1D<D> for RightNearest
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
-{
-    fn interpolate(
-        &self,
-        data: &InterpData1D<D>,
-        point: &[D::Elem; 1],
-    ) -> Result<D::Elem, InterpolateError> {
-        // find_nearest_index returns 0 when point == grid[0], so x_u = 1 would skip values[0].
-        // For all other points (including interior exact matches) x_l+1 is correct.
-        let x_u = if &point[0] == data.grid[0].first().unwrap() {
-            0
-        } else {
-            find_nearest_index(data.grid[0].view(), &point[0]) + 1
-        };
-        Ok(data.values[x_u])
-    }
-
-    /// Returns `false`.
     fn allow_extrapolate(&self) -> bool {
         false
     }

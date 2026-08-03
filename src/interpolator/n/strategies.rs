@@ -134,3 +134,38 @@ where
         false
     }
 }
+
+impl<D> StrategyND<D> for Step
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Num + PartialOrd + Copy + Debug,
+{
+    fn init(&mut self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
+        let n = data.values.ndim();
+        if self.0.len() != 1 && self.0.len() != n {
+            return Err(ValidateError::Other(format!(
+                "Step strategy has {} directions but interpolator is {n}-D (expected 1 or {n})",
+                self.0.len()
+            )));
+        }
+        Ok(())
+    }
+
+    fn interpolate(
+        &self,
+        data: &InterpDataND<D>,
+        point: &[D::Elem],
+    ) -> Result<D::Elem, InterpolateError> {
+        let n = data.values.ndim();
+        let mut idx = vec![0usize; n];
+        for dim in 0..n {
+            idx[dim] = step_index(self.dir(dim), data.grid[dim].view(), &point[dim]);
+        }
+        Ok(data.values.view()[idx.as_slice()])
+    }
+
+    /// Returns `false`.
+    fn allow_extrapolate(&self) -> bool {
+        false
+    }
+}

@@ -72,7 +72,7 @@ mod tests {
         assert_eq!(interp.interpolate(&[3.75]).unwrap(), 1.0);
         assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);
 
-        interp.set_strategy(strategy::LeftNearest).unwrap();
+        interp.set_strategy(strategy::Step::from(strategy::StepDirection::Lower)).unwrap();
         assert_eq!(interp.interpolate(&[3.00]).unwrap(), 0.8);
         assert_eq!(interp.interpolate(&[3.75]).unwrap(), 0.8);
         assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);

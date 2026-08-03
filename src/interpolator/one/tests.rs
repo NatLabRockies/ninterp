@@ -40,7 +40,7 @@ fn test_left_nearest() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0.2, 0.4, 0.6, 0.8, 1.0],
-        strategy::LeftNearest,
+        strategy::Step::from(strategy::StepDirection::Lower),
         Extrapolate::Error,
     )
     .unwrap();
@@ -60,7 +60,7 @@ fn test_right_nearest() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0.2, 0.4, 0.6, 0.8, 1.0],
-        strategy::RightNearest,
+        strategy::Step::from(strategy::StepDirection::Upper),
         Extrapolate::Error,
     )
     .unwrap();

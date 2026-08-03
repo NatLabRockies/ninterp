@@ -80,3 +80,33 @@ where
         false
     }
 }
+
+impl<D> Strategy2D<D> for Step
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Num + PartialOrd + Copy + Debug,
+{
+    fn init(&mut self, _data: &InterpData2D<D>) -> Result<(), ValidateError> {
+        if self.0.len() != 1 && self.0.len() != 2 {
+            return Err(ValidateError::Other(format!(
+                "Step strategy has {} directions but interpolator is 2-D (expected 1 or 2)",
+                self.0.len()
+            )));
+        }
+        Ok(())
+    }
+
+    fn interpolate(
+        &self,
+        data: &InterpData2D<D>,
+        point: &[D::Elem; 2],
+    ) -> Result<D::Elem, InterpolateError> {
+        let i = step_index(self.dir(0), data.grid[0].view(), &point[0]);
+        let j = step_index(self.dir(1), data.grid[1].view(), &point[1]);
+        Ok(data.values[[i, j]])
+    }
+
+    fn allow_extrapolate(&self) -> bool {
+        false
+    }
+}

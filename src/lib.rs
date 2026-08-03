@@ -14,8 +14,7 @@
 /// - The [`strategy`] mod, containing pre-defined interpolation strategies:
 ///   - [`strategy::Linear`]
 ///   - [`strategy::Nearest`]
-///   - [`strategy::LeftNearest`]
-///   - [`strategy::RightNearest`]
+///   - [`strategy::Step`] (replaces the former `LeftNearest`/`RightNearest`)
 ///   - `serde`-compatible strategy enums: [`strategy::enums::Strategy1DEnum`]/etc.
 /// - The extrapolation setting enum: [`Extrapolate`]
 pub mod prelude {

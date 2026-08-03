@@ -8,6 +8,7 @@ use super::*;
 pub enum Strategy2DEnum {
     Linear(strategy::Linear),
     Nearest(strategy::Nearest),
+    Step(strategy::Step),
 }
 
 impl From<Linear> for Strategy2DEnum {
@@ -24,6 +25,13 @@ impl From<Nearest> for Strategy2DEnum {
     }
 }
 
+impl From<Step> for Strategy2DEnum {
+    #[inline]
+    fn from(strategy: Step) -> Self {
+        Self::Step(strategy)
+    }
+}
+
 impl<D> Strategy2D<D> for Strategy2DEnum
 where
     D: Data + RawDataClone + Clone,
@@ -34,6 +42,7 @@ where
         match self {
             Strategy2DEnum::Linear(strategy) => Strategy2D::<D>::init(strategy, data),
             Strategy2DEnum::Nearest(strategy) => Strategy2D::<D>::init(strategy, data),
+            Strategy2DEnum::Step(strategy) => Strategy2D::<D>::init(strategy, data),
         }
     }
 
@@ -48,6 +57,7 @@ where
             Strategy2DEnum::Nearest(strategy) => {
                 Strategy2D::<D>::interpolate(strategy, data, point)
             }
+            Strategy2DEnum::Step(strategy) => Strategy2D::<D>::interpolate(strategy, data, point),
         }
     }
 
@@ -56,6 +66,7 @@ where
         match self {
             Strategy2DEnum::Linear(strategy) => Strategy2D::<D>::allow_extrapolate(strategy),
             Strategy2DEnum::Nearest(strategy) => Strategy2D::<D>::allow_extrapolate(strategy),
+            Strategy2DEnum::Step(strategy) => Strategy2D::<D>::allow_extrapolate(strategy),
         }
     }
 }
