@@ -130,11 +130,6 @@ An interpolation strategy (for example
 [`StepUpper`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.StepUpper.html),
 must be specified.
 
-Use `Step` when different dimensions need different directions, or when direction is selected
-at runtime (for example parsed from config).
-Use `StepLower`/`StepUpper` when the step direction is known at compile time (for example in
-hot loops) to avoid per-call direction matching and `Step` direction-vector validation.
-
 To change the interpolation strategy, supply a `Strategy1DEnum`/etc. or `Box<dyn Strategy1D>`/etc. at instantiation and call `set_strategy`.
 Custom strategies can be defined. See [`examples/custom_strategy.rs`](https://github.com/NatLabRockies/ninterp/blob/main/examples/custom_strategy.rs).
 
