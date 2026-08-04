@@ -128,6 +128,7 @@ where
         Ok(data.values[step_index(StepDirection::Lower, data.grid[0].view(), &point[0])])
     }
 
+    /// Returns `false`.
     fn allow_extrapolate(&self) -> bool {
         false
     }
@@ -146,6 +147,7 @@ where
         Ok(data.values[step_index(StepDirection::Upper, data.grid[0].view(), &point[0])])
     }
 
+    /// Returns `false`.
     fn allow_extrapolate(&self) -> bool {
         false
     }
