@@ -10,6 +10,8 @@ pub enum Strategy2DEnum {
     LinearUniform(strategy::LinearUniform),
     Nearest(strategy::Nearest),
     Step(strategy::Step),
+    StepLower(strategy::StepLower),
+    StepUpper(strategy::StepUpper),
 }
 
 impl From<Linear> for Strategy2DEnum {
@@ -40,6 +42,20 @@ impl From<Step> for Strategy2DEnum {
     }
 }
 
+impl From<StepLower> for Strategy2DEnum {
+    #[inline]
+    fn from(strategy: StepLower) -> Self {
+        Self::StepLower(strategy)
+    }
+}
+
+impl From<StepUpper> for Strategy2DEnum {
+    #[inline]
+    fn from(strategy: StepUpper) -> Self {
+        Self::StepUpper(strategy)
+    }
+}
+
 impl<D> Strategy2D<D> for Strategy2DEnum
 where
     D: Data + RawDataClone + Clone,
@@ -52,6 +68,8 @@ where
             Strategy2DEnum::LinearUniform(strategy) => Strategy2D::<D>::init(strategy, data),
             Strategy2DEnum::Nearest(strategy) => Strategy2D::<D>::init(strategy, data),
             Strategy2DEnum::Step(strategy) => Strategy2D::<D>::init(strategy, data),
+            Strategy2DEnum::StepLower(strategy) => Strategy2D::<D>::init(strategy, data),
+            Strategy2DEnum::StepUpper(strategy) => Strategy2D::<D>::init(strategy, data),
         }
     }
 
@@ -70,6 +88,12 @@ where
                 Strategy2D::<D>::interpolate(strategy, data, point)
             }
             Strategy2DEnum::Step(strategy) => Strategy2D::<D>::interpolate(strategy, data, point),
+            Strategy2DEnum::StepLower(strategy) => {
+                Strategy2D::<D>::interpolate(strategy, data, point)
+            }
+            Strategy2DEnum::StepUpper(strategy) => {
+                Strategy2D::<D>::interpolate(strategy, data, point)
+            }
         }
     }
 
@@ -80,6 +104,8 @@ where
             Strategy2DEnum::LinearUniform(strategy) => Strategy2D::<D>::allow_extrapolate(strategy),
             Strategy2DEnum::Nearest(strategy) => Strategy2D::<D>::allow_extrapolate(strategy),
             Strategy2DEnum::Step(strategy) => Strategy2D::<D>::allow_extrapolate(strategy),
+            Strategy2DEnum::StepLower(strategy) => Strategy2D::<D>::allow_extrapolate(strategy),
+            Strategy2DEnum::StepUpper(strategy) => Strategy2D::<D>::allow_extrapolate(strategy),
         }
     }
 }
@@ -99,6 +125,14 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&Strategy2DEnum::from(Nearest)).unwrap(),
             serde_json::to_string(&Nearest).unwrap(),
+        );
+        assert_eq!(
+            serde_json::to_string(&Strategy2DEnum::from(StepLower)).unwrap(),
+            serde_json::to_string(&StepLower).unwrap(),
+        );
+        assert_eq!(
+            serde_json::to_string(&Strategy2DEnum::from(StepUpper)).unwrap(),
+            serde_json::to_string(&StepUpper).unwrap(),
         );
     }
 }

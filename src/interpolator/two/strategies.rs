@@ -172,3 +172,43 @@ where
         false
     }
 }
+
+impl<D> Strategy2D<D> for StepLower
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Num + PartialOrd + Copy + Debug,
+{
+    fn interpolate(
+        &self,
+        data: &InterpData2D<D>,
+        point: &[D::Elem; 2],
+    ) -> Result<D::Elem, InterpolateError> {
+        let i = step_index(StepDirection::Lower, data.grid[0].view(), &point[0]);
+        let j = step_index(StepDirection::Lower, data.grid[1].view(), &point[1]);
+        Ok(data.values[[i, j]])
+    }
+
+    fn allow_extrapolate(&self) -> bool {
+        false
+    }
+}
+
+impl<D> Strategy2D<D> for StepUpper
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Num + PartialOrd + Copy + Debug,
+{
+    fn interpolate(
+        &self,
+        data: &InterpData2D<D>,
+        point: &[D::Elem; 2],
+    ) -> Result<D::Elem, InterpolateError> {
+        let i = step_index(StepDirection::Upper, data.grid[0].view(), &point[0]);
+        let j = step_index(StepDirection::Upper, data.grid[1].view(), &point[1]);
+        Ok(data.values[[i, j]])
+    }
+
+    fn allow_extrapolate(&self) -> bool {
+        false
+    }
+}

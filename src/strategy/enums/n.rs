@@ -10,6 +10,8 @@ pub enum StrategyNDEnum {
     LinearUniform(strategy::LinearUniform),
     Nearest(strategy::Nearest),
     Step(strategy::Step),
+    StepLower(strategy::StepLower),
+    StepUpper(strategy::StepUpper),
 }
 
 impl From<Linear> for StrategyNDEnum {
@@ -40,6 +42,20 @@ impl From<Step> for StrategyNDEnum {
     }
 }
 
+impl From<StepLower> for StrategyNDEnum {
+    #[inline]
+    fn from(strategy: StepLower) -> Self {
+        StrategyNDEnum::StepLower(strategy)
+    }
+}
+
+impl From<StepUpper> for StrategyNDEnum {
+    #[inline]
+    fn from(strategy: StepUpper) -> Self {
+        StrategyNDEnum::StepUpper(strategy)
+    }
+}
+
 impl<D> StrategyND<D> for StrategyNDEnum
 where
     D: Data + RawDataClone + Clone,
@@ -52,6 +68,8 @@ where
             StrategyNDEnum::LinearUniform(strategy) => StrategyND::<D>::init(strategy, data),
             StrategyNDEnum::Nearest(strategy) => StrategyND::<D>::init(strategy, data),
             StrategyNDEnum::Step(strategy) => StrategyND::<D>::init(strategy, data),
+            StrategyNDEnum::StepLower(strategy) => StrategyND::<D>::init(strategy, data),
+            StrategyNDEnum::StepUpper(strategy) => StrategyND::<D>::init(strategy, data),
         }
     }
 
@@ -70,6 +88,12 @@ where
                 StrategyND::<D>::interpolate(strategy, data, point)
             }
             StrategyNDEnum::Step(strategy) => StrategyND::<D>::interpolate(strategy, data, point),
+            StrategyNDEnum::StepLower(strategy) => {
+                StrategyND::<D>::interpolate(strategy, data, point)
+            }
+            StrategyNDEnum::StepUpper(strategy) => {
+                StrategyND::<D>::interpolate(strategy, data, point)
+            }
         }
     }
 
@@ -80,6 +104,8 @@ where
             StrategyNDEnum::LinearUniform(strategy) => StrategyND::<D>::allow_extrapolate(strategy),
             StrategyNDEnum::Nearest(strategy) => StrategyND::<D>::allow_extrapolate(strategy),
             StrategyNDEnum::Step(strategy) => StrategyND::<D>::allow_extrapolate(strategy),
+            StrategyNDEnum::StepLower(strategy) => StrategyND::<D>::allow_extrapolate(strategy),
+            StrategyNDEnum::StepUpper(strategy) => StrategyND::<D>::allow_extrapolate(strategy),
         }
     }
 }
@@ -99,6 +125,14 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&StrategyNDEnum::from(Nearest)).unwrap(),
             serde_json::to_string(&Nearest).unwrap(),
+        );
+        assert_eq!(
+            serde_json::to_string(&StrategyNDEnum::from(StepLower)).unwrap(),
+            serde_json::to_string(&StepLower).unwrap(),
+        );
+        assert_eq!(
+            serde_json::to_string(&StrategyNDEnum::from(StepUpper)).unwrap(),
+            serde_json::to_string(&StepUpper).unwrap(),
         );
     }
 }

@@ -10,6 +10,8 @@ pub enum Strategy3DEnum {
     LinearUniform(strategy::LinearUniform),
     Nearest(strategy::Nearest),
     Step(strategy::Step),
+    StepLower(strategy::StepLower),
+    StepUpper(strategy::StepUpper),
 }
 
 impl From<Linear> for Strategy3DEnum {
@@ -40,6 +42,20 @@ impl From<Step> for Strategy3DEnum {
     }
 }
 
+impl From<StepLower> for Strategy3DEnum {
+    #[inline]
+    fn from(strategy: StepLower) -> Self {
+        Self::StepLower(strategy)
+    }
+}
+
+impl From<StepUpper> for Strategy3DEnum {
+    #[inline]
+    fn from(strategy: StepUpper) -> Self {
+        Self::StepUpper(strategy)
+    }
+}
+
 impl<D> Strategy3D<D> for Strategy3DEnum
 where
     D: Data + RawDataClone + Clone,
@@ -52,6 +68,8 @@ where
             Strategy3DEnum::LinearUniform(strategy) => Strategy3D::<D>::init(strategy, data),
             Strategy3DEnum::Nearest(strategy) => Strategy3D::<D>::init(strategy, data),
             Strategy3DEnum::Step(strategy) => Strategy3D::<D>::init(strategy, data),
+            Strategy3DEnum::StepLower(strategy) => Strategy3D::<D>::init(strategy, data),
+            Strategy3DEnum::StepUpper(strategy) => Strategy3D::<D>::init(strategy, data),
         }
     }
 
@@ -70,6 +88,12 @@ where
                 Strategy3D::<D>::interpolate(strategy, data, point)
             }
             Strategy3DEnum::Step(strategy) => Strategy3D::<D>::interpolate(strategy, data, point),
+            Strategy3DEnum::StepLower(strategy) => {
+                Strategy3D::<D>::interpolate(strategy, data, point)
+            }
+            Strategy3DEnum::StepUpper(strategy) => {
+                Strategy3D::<D>::interpolate(strategy, data, point)
+            }
         }
     }
 
@@ -80,6 +104,8 @@ where
             Strategy3DEnum::LinearUniform(strategy) => Strategy3D::<D>::allow_extrapolate(strategy),
             Strategy3DEnum::Nearest(strategy) => Strategy3D::<D>::allow_extrapolate(strategy),
             Strategy3DEnum::Step(strategy) => Strategy3D::<D>::allow_extrapolate(strategy),
+            Strategy3DEnum::StepLower(strategy) => Strategy3D::<D>::allow_extrapolate(strategy),
+            Strategy3DEnum::StepUpper(strategy) => Strategy3D::<D>::allow_extrapolate(strategy),
         }
     }
 }
@@ -99,6 +125,14 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&Strategy3DEnum::from(Nearest)).unwrap(),
             serde_json::to_string(&Nearest).unwrap(),
+        );
+        assert_eq!(
+            serde_json::to_string(&Strategy3DEnum::from(StepLower)).unwrap(),
+            serde_json::to_string(&StepLower).unwrap(),
+        );
+        assert_eq!(
+            serde_json::to_string(&Strategy3DEnum::from(StepUpper)).unwrap(),
+            serde_json::to_string(&StepUpper).unwrap(),
         );
     }
 }

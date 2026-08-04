@@ -119,6 +119,26 @@ fn test_step() {
     assert_eq!(interp.interpolate(&[0.7, 1.4]).unwrap(), f[[0, 1]]); // floor x→0, floor y→1
     assert_eq!(interp.interpolate(&[1.9, 0.1]).unwrap(), f[[1, 0]]); // floor x→1, floor y→0
 
+    let interp_lower = Interp2D::new(
+        grid_x.view(),
+        grid_y.view(),
+        values.view(),
+        strategy::StepLower,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(interp_lower.interpolate(&[0.7, 1.4]).unwrap(), f[[0, 1]]);
+
+    let interp_upper = Interp2D::new(
+        grid_x.view(),
+        grid_y.view(),
+        values.view(),
+        strategy::StepUpper,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(interp_upper.interpolate(&[0.7, 1.4]).unwrap(), f[[1, 2]]);
+
     // Per-dimension: Lower in x, Upper in y
     let interp_mixed = Interp2D::new(
         grid_x.view(),
