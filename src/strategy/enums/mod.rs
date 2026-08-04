@@ -1,4 +1,6 @@
 //! This module provides enums that allow mutable strategy swapping.
+//! The enum variants and `From` impls here are hand-maintained per strategy type.
+//! Adding a new strategy requires explicit wiring in each of the 1-D/2-D/3-D/N-D enum modules.
 //!
 //! This is an alternative to using a `Box<dyn Strategy1D>`/etc. with a few key differences:
 //! - Better runtime performance
@@ -34,10 +36,8 @@
 //! assert_eq!(interp.interpolate(&[3.75]).unwrap(), 0.95);
 //! assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);
 //!
-//! // Piecewise-constant: return value at nearest lower grid point
-//! interp
-//!     .set_strategy(strategy::Step::from(strategy::StepDirection::Lower))
-//!     .unwrap();
+//! // Piecewise-constant: fixed lower direction (zero-allocation marker strategy)
+//! interp.set_strategy(strategy::StepLower).unwrap();
 //! assert_eq!(interp.interpolate(&[3.75]).unwrap(), 0.8);
 //! assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);
 //! ```
@@ -85,9 +85,7 @@ mod tests {
         assert_eq!(interp.interpolate(&[3.75]).unwrap(), 1.0);
         assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);
 
-        interp
-            .set_strategy(strategy::Step::from(strategy::StepDirection::Lower))
-            .unwrap();
+        interp.set_strategy(strategy::StepLower).unwrap();
         assert_eq!(interp.interpolate(&[3.00]).unwrap(), 0.8);
         assert_eq!(interp.interpolate(&[3.75]).unwrap(), 0.8);
         assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);

@@ -125,7 +125,10 @@ An interpolation strategy (for example
 [`Linear`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Linear.html),
 [`LinearUniform`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.LinearUniform.html),
 [`Nearest`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Nearest.html),
-[`Step`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Step.html)) must be specified.
+[`Step`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Step.html),
+[`StepLower`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.StepLower.html),
+[`StepUpper`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.StepUpper.html),
+must be specified.
 
 To change the interpolation strategy, supply a `Strategy1DEnum`/etc. or `Box<dyn Strategy1D>`/etc. at instantiation and call `set_strategy`.
 Custom strategies can be defined. See [`examples/custom_strategy.rs`](https://github.com/NatLabRockies/ninterp/blob/main/examples/custom_strategy.rs).

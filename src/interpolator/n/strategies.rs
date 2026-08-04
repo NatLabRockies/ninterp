@@ -225,3 +225,49 @@ where
         false
     }
 }
+
+impl<D> StrategyND<D> for StepLower
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Num + PartialOrd + Copy + Debug,
+{
+    fn interpolate(
+        &self,
+        data: &InterpDataND<D>,
+        point: &[D::Elem],
+    ) -> Result<D::Elem, InterpolateError> {
+        let n = data.values.ndim();
+        let mut idx = vec![0usize; n];
+        for dim in 0..n {
+            idx[dim] = step_index(StepDirection::Lower, data.grid[dim].view(), &point[dim]);
+        }
+        Ok(data.values.view()[idx.as_slice()])
+    }
+
+    fn allow_extrapolate(&self) -> bool {
+        false
+    }
+}
+
+impl<D> StrategyND<D> for StepUpper
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Num + PartialOrd + Copy + Debug,
+{
+    fn interpolate(
+        &self,
+        data: &InterpDataND<D>,
+        point: &[D::Elem],
+    ) -> Result<D::Elem, InterpolateError> {
+        let n = data.values.ndim();
+        let mut idx = vec![0usize; n];
+        for dim in 0..n {
+            idx[dim] = step_index(StepDirection::Upper, data.grid[dim].view(), &point[dim]);
+        }
+        Ok(data.values.view()[idx.as_slice()])
+    }
+
+    fn allow_extrapolate(&self) -> bool {
+        false
+    }
+}

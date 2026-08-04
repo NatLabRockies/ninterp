@@ -297,6 +297,15 @@ fn test_step() {
     assert_eq!(interp.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 0.); // floor→[0,0,0]
     assert_eq!(interp.interpolate(&[0.9, 0.9, 0.9]).unwrap(), 0.); // floor→[0,0,0]
 
+    let interp_lower = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::StepLower,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(interp_lower.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 0.);
+
     // Uniform Upper (ceiling)
     let interp_upper = InterpND::new(
         vec![array![0., 1.], array![0., 1.], array![0., 1.]],
@@ -306,6 +315,18 @@ fn test_step() {
     )
     .unwrap();
     assert_eq!(interp_upper.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 7.); // ceil→[1,1,1]
+
+    let interp_marker_upper = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::StepUpper,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(
+        interp_marker_upper.interpolate(&[0.3, 0.7, 0.6]).unwrap(),
+        7.
+    );
 
     // Per-dimension: Lower in x, Upper in y, Lower in z
     let interp_mixed = InterpND::new(

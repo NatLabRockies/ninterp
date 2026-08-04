@@ -241,3 +241,45 @@ where
         false
     }
 }
+
+impl<D> Strategy3D<D> for StepLower
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Num + PartialOrd + Copy + Debug,
+{
+    fn interpolate(
+        &self,
+        data: &InterpData3D<D>,
+        point: &[D::Elem; 3],
+    ) -> Result<D::Elem, InterpolateError> {
+        let i = step_index(StepDirection::Lower, data.grid[0].view(), &point[0]);
+        let j = step_index(StepDirection::Lower, data.grid[1].view(), &point[1]);
+        let k = step_index(StepDirection::Lower, data.grid[2].view(), &point[2]);
+        Ok(data.values[[i, j, k]])
+    }
+
+    fn allow_extrapolate(&self) -> bool {
+        false
+    }
+}
+
+impl<D> Strategy3D<D> for StepUpper
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Num + PartialOrd + Copy + Debug,
+{
+    fn interpolate(
+        &self,
+        data: &InterpData3D<D>,
+        point: &[D::Elem; 3],
+    ) -> Result<D::Elem, InterpolateError> {
+        let i = step_index(StepDirection::Upper, data.grid[0].view(), &point[0]);
+        let j = step_index(StepDirection::Upper, data.grid[1].view(), &point[1]);
+        let k = step_index(StepDirection::Upper, data.grid[2].view(), &point[2]);
+        Ok(data.values[[i, j, k]])
+    }
+
+    fn allow_extrapolate(&self) -> bool {
+        false
+    }
+}

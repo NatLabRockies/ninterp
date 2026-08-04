@@ -155,6 +155,17 @@ fn test_step() {
     assert_eq!(interp.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 0.); // floor→[0,0,0]
     assert_eq!(interp.interpolate(&[0.9, 0.4, 0.1]).unwrap(), 0.); // floor→[0,0,0]
 
+    let interp_lower = Interp3D::new(
+        array![0., 1.],
+        array![0., 1.],
+        array![0., 1.],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]],
+        strategy::StepLower,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(interp_lower.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 0.);
+
     // Uniform Upper (ceiling)
     let interp_upper = Interp3D::new(
         array![0., 1.],
@@ -166,6 +177,20 @@ fn test_step() {
     )
     .unwrap();
     assert_eq!(interp_upper.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 7.); // ceil→[1,1,1]
+
+    let interp_marker_upper = Interp3D::new(
+        array![0., 1.],
+        array![0., 1.],
+        array![0., 1.],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]],
+        strategy::StepUpper,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(
+        interp_marker_upper.interpolate(&[0.3, 0.7, 0.6]).unwrap(),
+        7.
+    );
 
     // Per-dimension: Lower in x, Upper in y, Lower in z
     let interp_mixed = Interp3D::new(

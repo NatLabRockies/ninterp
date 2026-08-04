@@ -114,3 +114,41 @@ where
         false
     }
 }
+
+impl<D> Strategy1D<D> for StepLower
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Num + PartialOrd + Copy + Debug,
+{
+    fn interpolate(
+        &self,
+        data: &InterpData1D<D>,
+        point: &[D::Elem; 1],
+    ) -> Result<D::Elem, InterpolateError> {
+        Ok(data.values[step_index(StepDirection::Lower, data.grid[0].view(), &point[0])])
+    }
+
+    /// Returns `false`.
+    fn allow_extrapolate(&self) -> bool {
+        false
+    }
+}
+
+impl<D> Strategy1D<D> for StepUpper
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Num + PartialOrd + Copy + Debug,
+{
+    fn interpolate(
+        &self,
+        data: &InterpData1D<D>,
+        point: &[D::Elem; 1],
+    ) -> Result<D::Elem, InterpolateError> {
+        Ok(data.values[step_index(StepDirection::Upper, data.grid[0].view(), &point[0])])
+    }
+
+    /// Returns `false`.
+    fn allow_extrapolate(&self) -> bool {
+        false
+    }
+}

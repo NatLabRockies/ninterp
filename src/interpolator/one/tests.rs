@@ -76,6 +76,29 @@ fn test_right_nearest() {
 }
 
 #[test]
+fn test_step_markers() {
+    let lower = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::StepLower,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(lower.interpolate(&[3.75]).unwrap(), 0.8);
+    assert_eq!(lower.interpolate(&[4.00]).unwrap(), 1.0);
+
+    let upper = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::StepUpper,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(upper.interpolate(&[3.25]).unwrap(), 1.0);
+    assert_eq!(upper.interpolate(&[3.00]).unwrap(), 0.8);
+}
+
+#[test]
 fn test_nearest() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
