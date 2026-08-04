@@ -98,6 +98,32 @@ fn test_nearest() {
 }
 
 #[test]
+fn test_integer_nearest_and_wrap_step() {
+    let nearest = Interp1D::new(
+        array![0, 10, 20],
+        array![100, 200, 300],
+        strategy::Nearest,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(nearest.interpolate(&[14]).unwrap(), 200);
+    // Midpoint ties resolve to the upper bracket in Nearest.
+    assert_eq!(nearest.interpolate(&[15]).unwrap(), 300);
+
+    let step_wrap = Interp1D::new(
+        array![0, 10, 20],
+        array![100, 200, 300],
+        strategy::Step::from(strategy::StepDirection::Lower),
+        Extrapolate::Wrap,
+    )
+    .unwrap();
+    // -1 wraps to 19 -> lower step bucket [10, 20].
+    assert_eq!(step_wrap.interpolate(&[-1]).unwrap(), 200);
+    // 21 wraps to 1 -> lower step bucket [0, 10].
+    assert_eq!(step_wrap.interpolate(&[21]).unwrap(), 100);
+}
+
+#[test]
 fn test_linear_uniform() {
     let grid = array![0., 1., 2., 3., 4.];
     let values = array![0.2, 0.4, 0.6, 0.8, 1.0];

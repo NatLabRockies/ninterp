@@ -156,7 +156,7 @@ where
 impl<D, S> Interpolator<D::Elem> for Interp2D<D, S>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Float + Euclid + Debug,
+    D::Elem: Num + PartialOrd + Euclid + Copy + Debug,
     S: Strategy2D<D> + Clone,
 {
     /// Returns `2`.

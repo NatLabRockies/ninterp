@@ -254,6 +254,22 @@ fn test_nearest() {
 }
 
 #[test]
+fn test_integer_nearest_with_clamp() {
+    let interp = InterpND::new(
+        vec![array![0, 10], array![0, 10]],
+        array![[0, 1], [2, 3]].into_dyn(),
+        strategy::Nearest,
+        Extrapolate::Clamp,
+    )
+    .unwrap();
+
+    // In-bounds nearest still works on integer coordinates.
+    assert_eq!(interp.interpolate(&[8, 3]).unwrap(), 2);
+    // Out-of-bounds point is clamped to [0, 10], selecting the top-left row/right column.
+    assert_eq!(interp.interpolate(&[-3, 12]).unwrap(), 1);
+}
+
+#[test]
 fn test_step() {
     // Uniform Lower (floor) — same grid as test_nearest
     let interp = InterpND::new(

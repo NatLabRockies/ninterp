@@ -51,7 +51,7 @@ pub(crate) use ndarray::prelude::*;
 pub(crate) use ndarray::{Data, Ix, OwnedRepr, RawDataClone, ViewRepr};
 
 pub use num_traits;
-pub(crate) use num_traits::{clamp, Euclid, Float, One, Zero};
+pub(crate) use num_traits::{clamp, Euclid, Float, Num, One, Zero};
 
 pub(crate) use dyn_clone::*;
 
@@ -76,7 +76,7 @@ pub(crate) use assert_approx_eq;
 
 /// Wrap value around data bounds.
 /// Assumes `min` < `max`.
-pub(crate) fn wrap<T: Float + Euclid + Copy>(input: T, min: T, max: T) -> T {
+pub(crate) fn wrap<T: Num + Euclid + Copy>(input: T, min: T, max: T) -> T {
     min + (input - min).rem_euclid(&(max - min))
 }
 

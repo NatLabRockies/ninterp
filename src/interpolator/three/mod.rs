@@ -168,7 +168,7 @@ where
 impl<D, S> Interpolator<D::Elem> for Interp3D<D, S>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Float + Euclid + Debug,
+    D::Elem: Num + PartialOrd + Euclid + Copy + Debug,
     S: Strategy3D<D> + Clone,
 {
     /// Returns `3`.

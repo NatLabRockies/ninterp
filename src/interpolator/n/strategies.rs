@@ -159,7 +159,7 @@ where
 impl<D> StrategyND<D> for Nearest
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
+    D::Elem: Num + PartialOrd + Copy + Debug,
 {
     fn interpolate(
         &self,
@@ -193,7 +193,7 @@ where
 impl<D> StrategyND<D> for Step
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
+    D::Elem: Num + PartialOrd + Copy + Debug,
 {
     /// Ensures the number of provided step directions matches the dimensionality of the interpolator
     fn init(&mut self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
