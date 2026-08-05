@@ -56,10 +56,12 @@ pub(crate) use num_traits::{clamp, Euclid, Float, Num, One, Zero};
 pub(crate) use dyn_clone::*;
 
 #[cfg(feature = "serde")]
-#[path = "serde.rs"]
+#[path = "serde/mod.rs"]
 mod serde_mod;
 #[cfg(feature = "serde")]
 pub(crate) use serde_mod::*;
+#[cfg(feature = "serde")]
+pub use serde_mod::{serialize_nested, Nested, SerializeNested};
 
 #[cfg(test)]
 /// Alias for [`approx::assert_abs_diff_eq`] with `epsilon = 1e-6`

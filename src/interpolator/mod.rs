@@ -128,3 +128,29 @@ macro_rules! partialeq_impl {
     };
 }
 pub(crate) use partialeq_impl;
+
+#[cfg(feature = "serde")]
+macro_rules! serialize_nested_impl {
+    ($InterpType:ident, $Data:ident, $Strategy:ident) => {
+        impl<D, S> SerializeNested for $InterpType<D, S>
+        where
+            D: Data + RawDataClone + Clone,
+            D::Elem: PartialEq + Debug + Serialize,
+            S: $Strategy<D> + Clone + Serialize,
+            $Data<D>: SerializeNested + Serialize,
+        {
+            fn serialize_nested<Ser>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error>
+            where
+                Ser: Serializer,
+            {
+                let mut s = serializer.serialize_struct(stringify!($InterpType), 3)?;
+                s.serialize_field("data", &Nested(&self.data))?;
+                s.serialize_field("strategy", &self.strategy)?;
+                s.serialize_field("extrapolate", &self.extrapolate)?;
+                s.end()
+            }
+        }
+    };
+}
+#[cfg(feature = "serde")]
+pub(crate) use serialize_nested_impl;

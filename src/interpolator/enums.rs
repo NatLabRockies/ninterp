@@ -91,6 +91,27 @@ pub type InterpolatorEnumViewed<T> = InterpolatorEnum<ViewRepr<T>>;
 /// [`InterpolatorEnum`] that owns data.
 pub type InterpolatorEnumOwned<T> = InterpolatorEnum<OwnedRepr<T>>;
 
+#[cfg(feature = "serde")]
+impl<D> SerializeNested for InterpolatorEnum<D>
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug + Serialize,
+{
+    /// `#[serde(untagged)]`, so each variant serializes as its inner value.
+    fn serialize_nested<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::Interp0D(interp) => Nested(interp).serialize(serializer),
+            Self::Interp1D(interp) => Nested(interp).serialize(serializer),
+            Self::Interp2D(interp) => Nested(interp).serialize(serializer),
+            Self::Interp3D(interp) => Nested(interp).serialize(serializer),
+            Self::InterpND(interp) => Nested(interp).serialize(serializer),
+        }
+    }
+}
+
 impl<D> PartialEq for InterpolatorEnum<D>
 where
     D: Data + RawDataClone + Clone,

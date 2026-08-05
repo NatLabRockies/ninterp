@@ -69,6 +69,8 @@ pub type Interp1DOwned<T, S> = Interp1D<OwnedRepr<T>, S>;
 
 extrapolate_impl!(Interp1D, Strategy1D);
 partialeq_impl!(Interp1D, InterpData1D, Strategy1D);
+#[cfg(feature = "serde")]
+serialize_nested_impl!(Interp1D, InterpData1D, Strategy1D);
 
 impl<D, S> Interp1D<D, S>
 where

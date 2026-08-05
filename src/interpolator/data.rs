@@ -39,20 +39,9 @@ where
     /// - 1-D: `[x]`
     /// - 2-D: `[x, y]`
     /// - 3-D: `[x, y, z]`
-    #[cfg_attr(
-        feature = "serde",
-        serde(deserialize_with = "serde_arr_array::deserialize")
-    )]
-    #[cfg_attr(
-        feature = "serde_ndim",
-        serde(serialize_with = "serde_arr_array::serialize")
-    )]
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_grid_arr"))]
     pub grid: [ArrayBase<D, Ix1>; N],
     /// Function values at coordinates: a single `N`-dimensional [`ArrayBase`].
-    #[cfg_attr(
-        feature = "serde_ndim",
-        serde(serialize_with = "serde_ndim::serialize")
-    )]
     #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_fixed"))]
     pub values: ArrayBase<D, Dim<[Ix; N]>>,
 }
@@ -70,6 +59,25 @@ where
 {
     fn eq(&self, other: &Self) -> bool {
         self.grid == other.grid && self.values == other.values
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<D, const N: usize> SerializeNested for InterpData<D, N>
+where
+    Dim<[Ix; N]>: Dimension,
+    D: Data + RawDataClone + Clone,
+    D::Elem: PartialEq + Debug + Serialize,
+    ArrayBase<D, Dim<[Ix; N]>>: Serialize,
+{
+    fn serialize_nested<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut s = serializer.serialize_struct("InterpData", 2)?;
+        s.serialize_field("grid", &GridArrWrapper(&self.grid))?;
+        s.serialize_field("values", &ArrayWrapper(&self.values))?;
+        s.end()
     }
 }
 

@@ -75,14 +75,45 @@ Instantiation is done by calling an interpolator's `new` method.
 For dimensionalities N >= 1, this executes a validation step that prevents runtime panics.
 
 ## Cargo Features
-- `serde`: support for [`serde`](https://crates.io/crates/serde) 1.x using ndarray's built-in array format
+- `serde`: support for [`serde`](https://crates.io/crates/serde) 1.x
   ```text
   cargo add ninterp --features serde
   ```
-- `serde_ndim`: enable `serde` feature and switch output to the column-major nested array format from [`serde-ndim`](https://crates.io/crates/serde-ndim)
-  ```text
-  cargo add ninterp --features serde_ndim
-  ```
+
+### Array Formats
+Arrays are written in ndarray's built-in format, which is compact to parse and works with every
+serialization format:
+```json
+{"grid":[{"v":1,"dim":[3],"data":[0.0,1.0,2.0]}],"values":{"v":1,"dim":[3],"data":[0.2,0.4,0.6]}}
+```
+
+Wrap a value in `Nested` to write the nested-array format from
+[`serde-ndim`](https://crates.io/crates/serde-ndim) instead, which is far easier to read and to
+hand-edit:
+```rust,ignore
+use ninterp::Nested;
+
+let json = serde_json::to_string(&Nested(&interp.data)).unwrap();
+// {"grid":[[0.0,1.0,2.0]],"values":[0.2,0.4,0.6]}
+```
+
+`Nested` also works on a field of your own type:
+```rust,ignore
+#[derive(serde::Serialize)]
+struct Config {
+    #[serde(serialize_with = "ninterp::serialize_nested")]
+    curve: Interp1DOwned<f64, strategy::Linear>,
+}
+```
+
+Deserialization accepts **either** format, so this is purely a choice about what you write. Prefer
+the default when serialization is on a hot path — nested arrays cost roughly 20% more to read,
+since ndarray's format carries the shape up front and can allocate exactly once. Prefer `Nested`
+for config files and anything a human will look at.
+
+Binary formats such as [`bincode`](https://crates.io/crates/bincode) cannot represent the nested
+format, so `Nested` is a no-op for them and the ndarray format is written instead — values always
+round-trip regardless of which you pick.
 
 ## Choosing an Interpolator
 The [`prelude`](https://docs.rs/ninterp/latest/ninterp/prelude/index.html) exposes these interpolators:

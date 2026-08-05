@@ -9,6 +9,21 @@ const N: usize = 0;
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct Interp0D<T>(pub T);
+
+#[cfg(feature = "serde")]
+impl<T> SerializeNested for Interp0D<T>
+where
+    T: Serialize,
+{
+    /// 0-D interpolators hold no arrays, so there is nothing to nest.
+    fn serialize_nested<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.serialize(serializer)
+    }
+}
+
 impl<T> Interp0D<T>
 where
     T: PartialEq + Debug,

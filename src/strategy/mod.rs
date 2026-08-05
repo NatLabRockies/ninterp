@@ -133,7 +133,7 @@ impl Step {
 #[cfg(feature = "serde")]
 mod step_serde {
     use super::*;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use ::serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     /// Helper that serializes/deserializes `Step` as `{"Step": [...directions...]}`.
     /// This makes the strategy type explicit in the output, consistent with how
