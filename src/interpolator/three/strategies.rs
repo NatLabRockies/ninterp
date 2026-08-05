@@ -168,7 +168,7 @@ where
 impl<D> Strategy3D<D> for Nearest
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: Sub<Output = D::Elem> + PartialOrd + Copy + Debug,
 {
     fn interpolate(
         &self,
@@ -212,7 +212,7 @@ where
 impl<D> Strategy3D<D> for Step
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: PartialOrd + Copy + Debug,
 {
     /// Ensures the number of provided step directions matches the interpolator dimensionality.
     fn init(&mut self, _data: &InterpData3D<D>) -> Result<(), ValidateError> {
@@ -245,7 +245,7 @@ where
 impl<D> Strategy3D<D> for StepLower
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: PartialOrd + Copy + Debug,
 {
     fn interpolate(
         &self,
@@ -266,7 +266,7 @@ where
 impl<D> Strategy3D<D> for StepUpper
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Copy + Debug,
+    D::Elem: PartialOrd + Copy + Debug,
 {
     fn interpolate(
         &self,
