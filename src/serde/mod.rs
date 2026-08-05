@@ -10,7 +10,7 @@
 //! ```
 //! Reading accepts either format, so [`Nested`](crate::Nested) only affects what is written.
 //!
-//! Split by direction: [`ser`] writes, [`de`] reads. Note that neither is the `serde` crate —
+//! Split by direction: [`ser`] writes, [`de`] reads. Note that neither is the `serde` crate;
 //! refer to that as `::serde` from inside this module.
 
 use super::*;

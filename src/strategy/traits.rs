@@ -86,7 +86,7 @@ pub(crate) fn exact_index<T: PartialOrd>(
 /// Computes the lower bracket index for a uniformly-spaced grid in O(1).
 ///
 /// Equivalent to [`find_nearest_index`] but replaces binary search with direct arithmetic.
-/// Only valid when the grid spacing is uniform — validate with [`check_uniform_grid`] first.
+/// Only valid when the grid spacing is uniform; validate with [`check_uniform_grid`] first.
 pub(crate) fn uniform_lower_index<T: Float>(grid0: T, step: T, n: usize, point: T) -> usize {
     let t = (point - grid0) / step;
     if t < T::zero() {
@@ -105,7 +105,7 @@ pub(crate) fn check_uniform_grid<T: Float>(
     dim: usize,
 ) -> Result<(), ValidateError> {
     let step = grid[1] - grid[0];
-    // 1024 * epsilon via 10 doublings — avoids numeric literal casting
+    // 1024 * epsilon via 10 doublings; avoids numeric literal casting
     let tolerance = {
         let mut tol = T::epsilon();
         for _ in 0..10 {

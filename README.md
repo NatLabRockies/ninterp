@@ -107,12 +107,12 @@ struct Config {
 ```
 
 Deserialization accepts **either** format, so this is purely a choice about what you write. Prefer
-the default when serialization is on a hot path — nested arrays cost roughly 20% more to read,
+the default when serialization is on a hot path: nested arrays cost roughly 20% more to read,
 since ndarray's format carries the shape up front and can allocate exactly once. Prefer `Nested`
 for config files and anything a human will look at.
 
 Binary formats such as [`bincode`](https://crates.io/crates/bincode) cannot represent the nested
-format, so `Nested` is a no-op for them and the ndarray format is written instead — values always
+format. `Nested` is a no-op for them and writes the ndarray format instead, so values always
 round-trip regardless of which you pick.
 
 ## Choosing an Interpolator

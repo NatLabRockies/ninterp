@@ -271,7 +271,7 @@ fn test_integer_nearest_with_clamp() {
 
 #[test]
 fn test_step() {
-    // Uniform Lower (floor) — same grid as test_nearest
+    // Uniform Lower (floor), same grid as test_nearest
     let interp = InterpND::new(
         vec![array![0., 1.], array![0., 1.], array![0., 1.]],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),

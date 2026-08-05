@@ -3,7 +3,7 @@
 //! Both array formats are accepted, whichever was written. Self-describing formats dispatch on
 //! the first token: a sequence is the nested format, a map is the [`ndarray`] format. Formats
 //! that are not self-describing cannot support [`Deserializer::deserialize_any`] at all, so for
-//! those the [`ndarray`] format is assumed — it is the only one they can produce.
+//! those the [`ndarray`] format is assumed, as it is the only one they can produce.
 
 use super::*;
 
@@ -170,7 +170,7 @@ where
     De: Deserializer<'de>,
 {
     // A fixed-size array is written as a tuple, which non-self-describing formats encode without
-    // a length prefix — reading it back as a seq would desynchronize the stream.
+    // a length prefix, so reading it back as a seq would desynchronize the stream.
     if deserializer.is_human_readable() {
         deserializer.deserialize_seq(GridVisitor::<D, N>::new())
     } else {

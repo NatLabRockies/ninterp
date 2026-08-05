@@ -212,8 +212,8 @@ fn binary_formats_round_trip() {
     );
 }
 
-/// `InterpDataND` permits zero dimensions, which has no nested representation — the values array
-/// must fall back to the `ndarray` format so the value still round-trips.
+/// `InterpDataND` permits zero dimensions, which has no nested representation, so the values
+/// array must fall back to the `ndarray` format for the value to still round-trip.
 #[test]
 fn zero_dimensional_nd_data() {
     let data = InterpDataND::new(vec![], Array0::from_elem((), 0.5).into_dyn()).unwrap();

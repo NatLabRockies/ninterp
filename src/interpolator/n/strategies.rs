@@ -169,7 +169,8 @@ where
         let n = data.values.ndim();
         // Nearest-neighbor on a rectilinear grid factorizes: select the nearest index
         // independently per dimension, then do a single lookup. No corner extraction or
-        // dimensionality reduction needed — the distance comparison handles exact matches correctly.
+        // dimensionality reduction needed, since the distance comparison handles exact matches
+        // correctly.
         let mut idx = vec![0usize; n];
         for dim in 0..n {
             let lower_idx = find_nearest_index(data.grid[dim].view(), &point[dim]);
