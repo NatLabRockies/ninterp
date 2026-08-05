@@ -20,9 +20,8 @@ pub trait SerializeNested {
 
 /// Serialize a value using the nested-array format.
 ///
-/// Reach for this when serializing a value directly. If the value is instead a field of a struct
-/// you derive `Serialize` on, [`serialize_nested`] with `serialize_with` is cleaner, since it
-/// keeps the field's declared type and needs no wrapping at the call site:
+/// Use this when serializing a value directly. For a field of your own type, use
+/// `ninterp::serialize_nested` with serde's `serialize_with` attribute:
 /// ```
 /// # use ninterp::prelude::*;
 /// #[derive(serde::Serialize)]
