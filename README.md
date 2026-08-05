@@ -82,7 +82,7 @@ For dimensionalities N >= 1, this executes a validation step that prevents runti
 
   By default, arrays are written in `ndarray`'s built-in format, which is performant to parse and works with every serialization format (text and binary):
   ```json
-  {"grid":[{"v":1,"dim":[3],"data":[0.0,1.0,2.0]}],"values":{"v":1,"dim":[3],"data":[0.2,0.4,0.6]}}
+  {"grid":[{"v":1,"dim":[2],"data":[0.0,1.0]},{"v":1,"dim":[3],"data":[0.0,1.0,2.0]}],"values":{"v":1,"dim":[2,3],"data":[0.0,1.0,2.0,3.0,4.0,5.0]}}
   ```
 
   You can also serialize interpolators using the nested-array format from
@@ -94,7 +94,7 @@ For dimensionalities N >= 1, this executes a validation step that prevents runti
     #[derive(serde::Serialize)]
     struct MyConfig {
         #[serde(serialize_with = "ninterp::serialize_nested")]
-        curve: Interp1DOwned<f64, strategy::Linear>,
+        surface: Interp2DOwned<f64, strategy::Linear>,
     }
     ```
 
@@ -104,7 +104,7 @@ For dimensionalities N >= 1, this executes a validation step that prevents runti
     use ninterp::Nested;
 
     let json = serde_json::to_string(&Nested(&interp.data)).unwrap();
-    // {"grid":[[0.0,1.0,2.0]],"values":[0.2,0.4,0.6]}
+    // {"grid":[[0.0,1.0],[0.0,1.0,2.0]],"values":[[0.0,1.0,2.0],[3.0,4.0,5.0]]}
     ```
 
   Deserialization accepts **either** format, so this is purely a choice about what you write:
