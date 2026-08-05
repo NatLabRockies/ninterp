@@ -80,40 +80,40 @@ For dimensionalities N >= 1, this executes a validation step that prevents runti
   cargo add ninterp --features serde
   ```
 
-### Array Formats
-Arrays are written in ndarray's built-in format, which is compact to parse and works with every
-serialization format:
-```json
-{"grid":[{"v":1,"dim":[3],"data":[0.0,1.0,2.0]}],"values":{"v":1,"dim":[3],"data":[0.2,0.4,0.6]}}
-```
+  By default, arrays are written in `ndarray`'s built-in format, which is performant to parse and works with every serialization format (text and binary):
+  ```json
+  {"grid":[{"v":1,"dim":[3],"data":[0.0,1.0,2.0]}],"values":{"v":1,"dim":[3],"data":[0.2,0.4,0.6]}}
+  ```
 
-Wrap a value in `Nested` to write the nested-array format from
-[`serde-ndim`](https://crates.io/crates/serde-ndim) instead, which is far easier to read and to
-hand-edit:
-```rust,ignore
-use ninterp::Nested;
+  You can also serialize interpolators using the nested-array format from
+  [`serde-ndim`](https://crates.io/crates/serde-ndim), which is far easier to read and hand-edit. This works for any `is_human_readable` serde format (binary formats will still necessarily serialize `ndarray`'s format).
 
-let json = serde_json::to_string(&Nested(&interp.data)).unwrap();
-// {"grid":[[0.0,1.0,2.0]],"values":[0.2,0.4,0.6]}
-```
+  - On fields, using the `ninterp::serialize_nested` helper function:
 
-`Nested` also works on a field of your own type:
-```rust,ignore
-#[derive(serde::Serialize)]
-struct Config {
-    #[serde(serialize_with = "ninterp::serialize_nested")]
-    curve: Interp1DOwned<f64, strategy::Linear>,
-}
-```
+    ```rust,ignore
+    #[derive(serde::Serialize)]
+    struct MyConfig {
+        #[serde(serialize_with = "ninterp::serialize_nested")]
+        curve: Interp1DOwned<f64, strategy::Linear>,
+    }
+    ```
 
-Deserialization accepts **either** format, so this is purely a choice about what you write. Prefer
-the default when serialization is on a hot path: nested arrays cost roughly 20% more to read,
-since ndarray's format carries the shape up front and can allocate exactly once. Prefer `Nested`
-for config files and anything a human will look at.
+  - Using the `ninterp::Nested` wrapper:
 
-Binary formats such as [`bincode`](https://crates.io/crates/bincode) cannot represent the nested
-format. `Nested` is a no-op for them and writes the ndarray format instead, so values always
-round-trip regardless of which you pick.
+    ```rust,ignore
+    use ninterp::Nested;
+
+    let json = serde_json::to_string(&Nested(&interp.data)).unwrap();
+    // {"grid":[[0.0,1.0,2.0]],"values":[0.2,0.4,0.6]}
+    ```
+
+  Deserialization accepts **either** format, so this is purely a choice about what you write:
+
+  - Prefer the default when deserialization is on a hot path: nested arrays cost roughly 20% more to read,
+  since `ndarray`'s format carries the shape up front and can allocate exactly once,
+  while `serde-ndim` must parse the shape from the nested array every read.
+
+  - Prefer `Nested` / `serialize_with = "ninterp::serialize_nested"` for config files and anything a human will look at.
 
 ## Choosing an Interpolator
 The [`prelude`](https://docs.rs/ninterp/latest/ninterp/prelude/index.html) exposes these interpolators:
