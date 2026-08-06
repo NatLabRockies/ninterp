@@ -236,6 +236,26 @@ fn test_dyn_strategy() {
 }
 
 #[test]
+fn test_set_strategy_runs_init() {
+    // `Step`'s `init` validates its direction count against dimensionality,
+    // so swapping in a `Step` with the wrong count via `set_strategy` must
+    // surface that error rather than silently leaving the strategy unvalidated.
+    let mut interp: Interp2D<_, strategy::enums::Strategy2DEnum> = Interp2D::new(
+        array![0., 1.],
+        array![0., 1.],
+        array![[0., 1.], [2., 3.]],
+        strategy::Linear.into(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let bad_step = strategy::Step(vec![strategy::StepDirection::Lower; 3]);
+    assert!(matches!(
+        interp.set_strategy(bad_step).unwrap_err(),
+        ValidateError::Other(_)
+    ));
+}
+
+#[test]
 fn test_extrapolate_clamp() {
     let interp = Interp2D::new(
         array![0.1, 1.1],

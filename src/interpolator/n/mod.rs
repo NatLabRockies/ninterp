@@ -284,10 +284,9 @@ where
         self.data.ndim()
     }
 
-    fn validate(&mut self) -> Result<(), ValidateError> {
+    fn validate(&self) -> Result<(), ValidateError> {
         self.check_extrapolate(&self.extrapolate)?;
         self.data.validate()?;
-        self.strategy.init(&self.data)?;
         Ok(())
     }
 
@@ -359,10 +358,15 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
 {
-    /// Update strategy dynamically.
+    /// Update strategy at runtime, calling [`StrategyND::init`] on the new strategy
+    /// against the current data.
+    ///
+    /// To swap in a strategy without re-running `init` (e.g. one whose state was
+    /// already established elsewhere), assign the `strategy` field directly instead.
     pub fn set_strategy(&mut self, strategy: Box<dyn StrategyND<D>>) -> Result<(), ValidateError> {
         self.strategy = strategy;
-        self.check_extrapolate(&self.extrapolate)
+        self.check_extrapolate(&self.extrapolate)?;
+        self.strategy.init(&self.data)
     }
 }
 
@@ -371,12 +375,17 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
 {
-    /// Update strategy dynamically.
+    /// Update strategy at runtime, calling [`StrategyND::init`] on the new strategy
+    /// against the current data.
+    ///
+    /// To swap in a strategy without re-running `init` (e.g. one whose state was
+    /// already established elsewhere), assign the `strategy` field directly instead.
     pub fn set_strategy(
         &mut self,
         strategy: impl Into<strategy::enums::StrategyNDEnum>,
     ) -> Result<(), ValidateError> {
         self.strategy = strategy.into();
-        self.check_extrapolate(&self.extrapolate)
+        self.check_extrapolate(&self.extrapolate)?;
+        self.strategy.init(&self.data)
     }
 }

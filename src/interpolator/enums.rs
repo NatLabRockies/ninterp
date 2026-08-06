@@ -233,7 +233,7 @@ where
     }
 
     #[inline]
-    fn validate(&mut self) -> Result<(), ValidateError> {
+    fn validate(&self) -> Result<(), ValidateError> {
         match self {
             InterpolatorEnum::Interp0D(_) => Ok(()),
             InterpolatorEnum::Interp1D(interp) => interp.validate(),

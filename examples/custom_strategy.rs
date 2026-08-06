@@ -22,8 +22,9 @@ where
     D: Data<Elem = f32> + RawDataClone + Clone,
 {
     // We can optionally define an initialization step, useful for strategies that need precalculation.
-    // This is called from Interpolator::validate, thus is run on construction for all interpolators.
-    // It takes a mutable reference, so you can edit any data contained in `CustomStrategy`.
+    // This is called on construction (`new`) and whenever the strategy is swapped (`set_strategy`),
+    // for all interpolators. It takes a mutable reference, so you can edit any data contained in
+    // `CustomStrategy`.
     //
     // There is a default implementation that just returns `Ok(())`, so leave this out if not needed.
     fn init(&mut self, _data: &InterpData2D<D>) -> Result<(), ninterp::error::ValidateError> {
