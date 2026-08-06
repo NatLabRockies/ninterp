@@ -135,7 +135,7 @@ where
         Ok(())
     }
 
-    /// Execute interpolation (after handling [`Extrapolate`] setting).
+    /// Execute interpolation (after handling [`Extrapolate`](`crate::interpolator::Extrapolate`) setting).
     fn interpolate(
         &self,
         data: &InterpData1D<D>,
@@ -185,7 +185,7 @@ where
         Ok(())
     }
 
-    /// Execute interpolation (after handling [`Extrapolate`] setting).
+    /// Execute interpolation (after handling [`Extrapolate`](`crate::interpolator::Extrapolate`) setting).
     fn interpolate(
         &self,
         data: &InterpData2D<D>,
@@ -235,7 +235,7 @@ where
         Ok(())
     }
 
-    /// Execute interpolation (after handling [`Extrapolate`] setting).
+    /// Execute interpolation (after handling [`Extrapolate`](`crate::interpolator::Extrapolate`) setting).
     fn interpolate(
         &self,
         data: &InterpData3D<D>,
@@ -285,7 +285,7 @@ where
         Ok(())
     }
 
-    /// Execute interpolation (after handling [`Extrapolate`] setting).
+    /// Execute interpolation (after handling [`Extrapolate`](`crate::interpolator::Extrapolate`) setting).
     fn interpolate(
         &self,
         data: &InterpDataND<D>,

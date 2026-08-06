@@ -10,7 +10,7 @@
 ///   - [`InterpND`](`interpolator::InterpND`)
 ///   - A `serde`-compatible interpolator enum [`InterpolatorEnum`](`interpolator::enums::InterpolatorEnum`)
 ///   - `Owned` and `Viewed` type aliases for all of the above
-/// - Their common trait: [`Interpolator`]
+/// - Their common trait: [`Interpolator`](`interpolator::Interpolator`)
 /// - The [`strategy`] mod, containing pre-defined interpolation strategies:
 ///   - [`strategy::Linear`]
 ///   - [`strategy::LinearUniform`]
@@ -18,7 +18,7 @@
 ///   - [`strategy::Step`] (per-dimension and/or runtime-selected step directions)
 ///   - [`strategy::StepLower`] / [`strategy::StepUpper`]
 ///   - `serde`-compatible strategy enums: [`strategy::enums::Strategy1DEnum`]/etc.
-/// - The extrapolation setting enum: [`Extrapolate`]
+/// - The extrapolation setting enum: [`Extrapolate`](`interpolator::Extrapolate`)
 pub mod prelude {
     pub use crate::strategy;
 
