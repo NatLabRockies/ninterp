@@ -256,6 +256,25 @@ fn test_set_strategy_runs_init() {
 }
 
 #[test]
+fn test_init_strategy() {
+    // `validate()` only checks data/extrapolate, not strategy-specific requirements
+    // like `LinearUniform`'s uniform grid, so directly mutating `data` to break that
+    // invariant passes `validate()`. `init_strategy()` is the way to catch it, since
+    // it re-runs the same check `new`/`set_strategy` do internally.
+    let mut interp = Interp2D::new(
+        array![0., 1., 2.],
+        array![0., 1., 2.],
+        array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+        strategy::LinearUniform,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    interp.data.grid[0] = array![0., 1., 5.]; // still monotonic, no longer uniform
+    assert!(interp.validate().is_ok());
+    assert!(interp.init_strategy().is_err());
+}
+
+#[test]
 fn test_extrapolate_clamp() {
     let interp = Interp2D::new(
         array![0.1, 1.1],

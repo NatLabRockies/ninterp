@@ -138,6 +138,16 @@ where
         Ok(interpolator)
     }
 
+    /// Re-run the strategy's [`Strategy3D::init`] against the current data.
+    ///
+    /// `new` and `set_strategy` already call this internally, so this is only needed
+    /// after bypassing them: mutating the public `data`/`strategy` fields directly, or
+    /// deserializing an interpolator with a stateful custom strategy (`Deserialize`
+    /// does not call `init`).
+    pub fn init_strategy(&mut self) -> Result<(), ValidateError> {
+        self.strategy.init(&self.data)
+    }
+
     /// Return an interpolator with viewed data.
     pub fn view(&self) -> Interp3DViewed<&D::Elem, S>
     where
