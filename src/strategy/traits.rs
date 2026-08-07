@@ -8,7 +8,19 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
 {
-    /// Initialize strategy struct, with access to interpolation data.
+    /// Validate strategy state against interpolation data. Pure check, no mutation.
+    ///
+    /// Default no-op. Override for invariant checks that don't require precomputed
+    /// state (grid uniformity, direction-count matching, etc).
+    fn validate(&self, _data: &InterpData1D<D>) -> Result<(), ValidateError> {
+        Ok(())
+    }
+
+    /// Initialize/recompute cached derived state, with access to interpolation data.
+    ///
+    /// Default no-op. Override only when the strategy caches something derived from
+    /// `data` (e.g. precomputed spline coefficients). Unlike [`Strategy1D::validate`],
+    /// this may do real, non-trivial calculation.
     fn init(&mut self, _data: &InterpData1D<D>) -> Result<(), ValidateError> {
         Ok(())
     }
@@ -38,6 +50,12 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
 {
+    /// Validate strategy state against interpolation data. Pure check, no mutation.
+    #[inline]
+    fn validate(&self, data: &InterpData1D<D>) -> Result<(), ValidateError> {
+        (**self).validate(data)
+    }
+
     /// Initialize strategy struct, with access to interpolation data.
     #[inline]
     fn init(&mut self, data: &InterpData1D<D>) -> Result<(), ValidateError> {
@@ -65,7 +83,19 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
 {
-    /// Initialize strategy struct, with access to interpolation data.
+    /// Validate strategy state against interpolation data. Pure check, no mutation.
+    ///
+    /// Default no-op. Override for invariant checks that don't require precomputed
+    /// state (grid uniformity, direction-count matching, etc).
+    fn validate(&self, _data: &InterpData2D<D>) -> Result<(), ValidateError> {
+        Ok(())
+    }
+
+    /// Initialize/recompute cached derived state, with access to interpolation data.
+    ///
+    /// Default no-op. Override only when the strategy caches something derived from
+    /// `data` (e.g. precomputed spline coefficients). Unlike [`Strategy2D::validate`],
+    /// this may do real, non-trivial calculation.
     fn init(&mut self, _data: &InterpData2D<D>) -> Result<(), ValidateError> {
         Ok(())
     }
@@ -95,6 +125,12 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
 {
+    /// Validate strategy state against interpolation data. Pure check, no mutation.
+    #[inline]
+    fn validate(&self, data: &InterpData2D<D>) -> Result<(), ValidateError> {
+        (**self).validate(data)
+    }
+
     /// Initialize strategy struct, with access to interpolation data.
     #[inline]
     fn init(&mut self, data: &InterpData2D<D>) -> Result<(), ValidateError> {
@@ -122,7 +158,19 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
 {
-    /// Initialize strategy struct, with access to interpolation data.
+    /// Validate strategy state against interpolation data. Pure check, no mutation.
+    ///
+    /// Default no-op. Override for invariant checks that don't require precomputed
+    /// state (grid uniformity, direction-count matching, etc).
+    fn validate(&self, _data: &InterpData3D<D>) -> Result<(), ValidateError> {
+        Ok(())
+    }
+
+    /// Initialize/recompute cached derived state, with access to interpolation data.
+    ///
+    /// Default no-op. Override only when the strategy caches something derived from
+    /// `data` (e.g. precomputed spline coefficients). Unlike [`Strategy3D::validate`],
+    /// this may do real, non-trivial calculation.
     fn init(&mut self, _data: &InterpData3D<D>) -> Result<(), ValidateError> {
         Ok(())
     }
@@ -152,6 +200,12 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
 {
+    /// Validate strategy state against interpolation data. Pure check, no mutation.
+    #[inline]
+    fn validate(&self, data: &InterpData3D<D>) -> Result<(), ValidateError> {
+        (**self).validate(data)
+    }
+
     /// Initialize strategy struct, with access to interpolation data.
     #[inline]
     fn init(&mut self, data: &InterpData3D<D>) -> Result<(), ValidateError> {
@@ -179,7 +233,19 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
 {
-    /// Initialize strategy struct, with access to interpolation data.
+    /// Validate strategy state against interpolation data. Pure check, no mutation.
+    ///
+    /// Default no-op. Override for invariant checks that don't require precomputed
+    /// state (grid uniformity, direction-count matching, etc).
+    fn validate(&self, _data: &InterpDataND<D>) -> Result<(), ValidateError> {
+        Ok(())
+    }
+
+    /// Initialize/recompute cached derived state, with access to interpolation data.
+    ///
+    /// Default no-op. Override only when the strategy caches something derived from
+    /// `data` (e.g. precomputed spline coefficients). Unlike [`StrategyND::validate`],
+    /// this may do real, non-trivial calculation.
     fn init(&mut self, _data: &InterpDataND<D>) -> Result<(), ValidateError> {
         Ok(())
     }
@@ -209,6 +275,12 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
 {
+    /// Validate strategy state against interpolation data. Pure check, no mutation.
+    #[inline]
+    fn validate(&self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
+        (**self).validate(data)
+    }
+
     #[inline]
     fn init(&mut self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
         (**self).init(data)

@@ -75,6 +75,32 @@ serialize_nested_impl!(Interp1D, InterpData1D, Strategy1D);
 impl<D, S> Interp1D<D, S>
 where
     D: Data + RawDataClone + Clone,
+    D::Elem: PartialEq + Debug,
+    S: Strategy1D<D> + Clone,
+{
+    /// Re-run the strategy's [`Strategy1D::validate`] against the current data.
+    ///
+    /// `new`, `set_strategy`, and [`Interpolator::validate`] already call this
+    /// internally, so this is only needed after mutating the public `data`/`strategy`
+    /// fields directly.
+    pub fn validate_strategy(&self) -> Result<(), ValidateError> {
+        self.strategy.validate(&self.data)
+    }
+
+    /// Re-run the strategy's [`Strategy1D::init`] against the current data.
+    ///
+    /// `new` and `set_strategy` already call this internally, so this is only needed
+    /// after bypassing them: mutating the public `data`/`strategy` fields directly, or
+    /// deserializing an interpolator with a stateful custom strategy (`Deserialize`
+    /// does not call `init`).
+    pub fn init_strategy(&mut self) -> Result<(), ValidateError> {
+        self.strategy.init(&self.data)
+    }
+}
+
+impl<D, S> Interp1D<D, S>
+where
+    D: Data + RawDataClone + Clone,
     D::Elem: PartialOrd + Debug,
     S: Strategy1D<D> + Clone,
 {
@@ -110,18 +136,9 @@ where
             extrapolate,
         };
         interpolator.check_extrapolate(&interpolator.extrapolate)?;
-        interpolator.strategy.init(&interpolator.data)?;
+        interpolator.validate_strategy()?;
+        interpolator.init_strategy()?;
         Ok(interpolator)
-    }
-
-    /// Re-run the strategy's [`Strategy1D::init`] against the current data.
-    ///
-    /// `new` and `set_strategy` already call this internally, so this is only needed
-    /// after bypassing them: mutating the public `data`/`strategy` fields directly, or
-    /// deserializing an interpolator with a stateful custom strategy (`Deserialize`
-    /// does not call `init`).
-    pub fn init_strategy(&mut self) -> Result<(), ValidateError> {
-        self.strategy.init(&self.data)
     }
 
     /// Return an interpolator with viewed data.
@@ -166,6 +183,7 @@ where
     fn validate(&self) -> Result<(), ValidateError> {
         self.check_extrapolate(&self.extrapolate)?;
         self.data.validate()?;
+        self.validate_strategy()?;
         Ok(())
     }
 
@@ -226,7 +244,8 @@ where
     pub fn set_strategy(&mut self, strategy: Box<dyn Strategy1D<D>>) -> Result<(), ValidateError> {
         self.strategy = strategy;
         self.check_extrapolate(&self.extrapolate)?;
-        self.strategy.init(&self.data)
+        self.validate_strategy()?;
+        self.init_strategy()
     }
 }
 
@@ -246,6 +265,7 @@ where
     ) -> Result<(), ValidateError> {
         self.strategy = strategy.into();
         self.check_extrapolate(&self.extrapolate)?;
-        self.strategy.init(&self.data)
+        self.validate_strategy()?;
+        self.init_strategy()
     }
 }

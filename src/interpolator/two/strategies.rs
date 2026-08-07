@@ -78,7 +78,7 @@ where
     D::Elem: Float + Debug,
 {
     /// Ensures all grid dimensions are uniformly spaced.
-    fn init(&mut self, data: &InterpData2D<D>) -> Result<(), ValidateError> {
+    fn validate(&self, data: &InterpData2D<D>) -> Result<(), ValidateError> {
         check_uniform_grid(data.grid[0].view(), 0)?;
         check_uniform_grid(data.grid[1].view(), 1)
     }
@@ -151,7 +151,7 @@ where
     D::Elem: PartialOrd + Copy + Debug,
 {
     /// Ensures the number of provided step directions matches the interpolator dimensionality.
-    fn init(&mut self, _data: &InterpData2D<D>) -> Result<(), ValidateError> {
+    fn validate(&self, _data: &InterpData2D<D>) -> Result<(), ValidateError> {
         if self.0.len() != 1 && self.0.len() != 2 {
             return Err(ValidateError::Other(format!(
                 "Step strategy has {} directions but interpolator is 2-D (expected 1 or 2)",

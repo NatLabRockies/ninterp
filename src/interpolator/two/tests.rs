@@ -237,7 +237,7 @@ fn test_dyn_strategy() {
 
 #[test]
 fn test_set_strategy_runs_init() {
-    // `Step`'s `init` validates its direction count against dimensionality,
+    // `Step`'s `validate` checks its direction count against dimensionality,
     // so swapping in a `Step` with the wrong count via `set_strategy` must
     // surface that error rather than silently leaving the strategy unvalidated.
     let mut interp: Interp2D<_, strategy::enums::Strategy2DEnum> = Interp2D::new(
@@ -256,11 +256,33 @@ fn test_set_strategy_runs_init() {
 }
 
 #[test]
-fn test_init_strategy() {
-    // `validate()` only checks data/extrapolate, not strategy-specific requirements
-    // like `LinearUniform`'s uniform grid, so directly mutating `data` to break that
-    // invariant passes `validate()`. `init_strategy()` is the way to catch it, since
-    // it re-runs the same check `new`/`set_strategy` do internally.
+fn test_set_strategy_runs_validate() {
+    // Same as `test_set_strategy_runs_init`, but for `LinearUniform`'s uniform-grid
+    // check: `Linear` doesn't care about grid spacing, so a non-uniform grid builds
+    // fine, but swapping to `LinearUniform` via `set_strategy` must catch it via
+    // `Strategy2D::validate` rather than silently accepting a strategy that will
+    // produce wrong results at query time.
+    let mut interp: Interp2D<_, strategy::enums::Strategy2DEnum> = Interp2D::new(
+        array![0., 1., 5.], // non-uniform
+        array![0., 1., 2.],
+        array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+        strategy::Linear.into(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert!(matches!(
+        interp.set_strategy(strategy::LinearUniform).unwrap_err(),
+        ValidateError::Other(_)
+    ));
+}
+
+#[test]
+fn test_validate_strategy() {
+    // `LinearUniform`'s uniform-grid check is a pure invariant check (`Strategy2D::validate`),
+    // not a precomputation (`Strategy2D::init`), so `Interpolator::validate` (which calls
+    // `validate_strategy` internally) catches directly mutating `data` to break that
+    // invariant, while `init_strategy` (a no-op for `LinearUniform`, since it caches
+    // nothing) does not.
     let mut interp = Interp2D::new(
         array![0., 1., 2.],
         array![0., 1., 2.],
@@ -270,8 +292,9 @@ fn test_init_strategy() {
     )
     .unwrap();
     interp.data.grid[0] = array![0., 1., 5.]; // still monotonic, no longer uniform
-    assert!(interp.validate().is_ok());
-    assert!(interp.init_strategy().is_err());
+    assert!(interp.validate().is_err());
+    assert!(interp.validate_strategy().is_err());
+    assert!(interp.init_strategy().is_ok());
 }
 
 #[test]
