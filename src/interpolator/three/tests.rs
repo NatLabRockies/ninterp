@@ -222,7 +222,7 @@ fn test_extrapolate_inputs() {
             Extrapolate::Enable,
         )
         .unwrap_err(),
-        ValidateError::ExtrapolateSelection(_)
+        ValidateError::InvalidExtrapolate(_)
     ));
     // Extrapolate::Error
     let interp = Interp3D::new(

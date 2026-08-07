@@ -17,6 +17,22 @@ fn test_invalid_args() {
 }
 
 #[test]
+fn test_insufficient_grid_points() {
+    // A single grid point can't bracket anything, regardless of `Extrapolate` setting.
+    // Previously this passed construction and panicked on the first `interpolate` call.
+    assert!(matches!(
+        Interp1D::new(
+            array![5.0],
+            array![10.0],
+            strategy::Linear,
+            Extrapolate::Error
+        )
+        .unwrap_err(),
+        ValidateError::InsufficientGridPoints(0)
+    ));
+}
+
+#[test]
 fn test_linear() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
@@ -224,7 +240,7 @@ fn test_extrapolate_inputs() {
             Extrapolate::Enable,
         )
         .unwrap_err(),
-        ValidateError::ExtrapolateSelection(_)
+        ValidateError::InvalidExtrapolate(_)
     ));
 
     // Extrapolate::Error

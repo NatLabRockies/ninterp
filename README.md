@@ -170,10 +170,10 @@ Retrieve dimensionality using [`Interpolator::ndim`](https://docs.rs/ninterp/lat
 
 ### Common Errors
 Validation-time (`new` / `validate`):
-- Empty grid coordinates (`ValidateError::EmptyGrid`)
-- Non-monotonic coordinates (`ValidateError::Monotonicity`)
+- Fewer than 2 grid coordinates in a dimension (`ValidateError::InsufficientGridPoints`)
+- Non-monotonic coordinates (`ValidateError::NonMonotonic`)
 - Grid/value shape mismatch (`ValidateError::IncompatibleShapes`)
-- Inapplicable extrapolation setting (`ValidateError::ExtrapolateSelection`)
+- Inapplicable extrapolation setting (`ValidateError::InvalidExtrapolate`)
 
 Interpolation-time (`interpolate`):
 - Query point has wrong dimensionality (`InterpolateError::PointLength`)

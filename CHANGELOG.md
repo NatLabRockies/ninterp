@@ -42,6 +42,11 @@ Everything below is merged to `main` but not yet tagged/released.
   `Num + PartialOrd`). Other strategies (`Nearest`, `Step`, etc.) keep looser numeric
   bounds after an initial, overly broad `Float` restriction across the whole strategy
   surface was narrowed back down to just the two strategies that actually need it.
+- **Breaking:** `ValidateError` variants renamed for consistency, and no longer read as
+  full sentences: `ExtrapolateSelection` -> `InvalidExtrapolate`, `Monotonicity` ->
+  `NonMonotonic`. `EmptyGrid` is removed outright; a grid dimension with 0 or 1 points
+  is now rejected by the same `InsufficientGridPoints`, since a single point can't
+  bracket a query either.
 - Significant ND performance work: `Linear`/`Nearest` no longer build coordinate
   permutation tables via `itertools::multi_cartesian_product` (removing the `itertools`
   dependency); corner values are now gathered into a flat buffer and reduced with an
@@ -64,6 +69,12 @@ Everything below is merged to `main` but not yet tagged/released.
   dimension without touching it) to `find_nearest_index`, whose binary search calls
   `.first().unwrap()` and panics on an empty dimension. Fixed by skipping empty grid
   dimensions in that loop.
+- A grid dimension with exactly 1 point passed construction and then panicked on the
+  first `interpolate` call (integer underflow in the lower-bracket search, or an
+  out-of-bounds index right after it), for every strategy except when
+  `Extrapolate::Enable` was selected, since the "at least 2 points" check only ran for
+  that one setting. It's now checked unconditionally at construction, so this is a
+  `ValidateError::InsufficientGridPoints` instead of a panic.
 
 ## [0.9.1] - 2026-08-03
 
