@@ -1,0 +1,303 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+This project is pre-1.0 and follows the common pre-1.0 convention: breaking changes
+bump the minor version (`0.x` -> `0.(x+1)`), other changes bump the patch version.
+
+## [Unreleased]
+
+Everything below is merged to `main` but not yet tagged/released.
+
+### Added
+- `strategy::LinearUniform`: an O(1)-index alternative to `Linear` for uniformly-spaced
+  grids (1D/2D/3D/ND). Validates grid uniformity at construction/`init` time (1024 * ε
+  relative tolerance) instead of silently falling back to a search.
+- `strategy::Step`: a parameterized step (piecewise-constant) strategy, replacing
+  `LeftNearest`/`RightNearest` with a single strategy that works across all
+  dimensionalities. A single `StepDirection` broadcasts to every axis, or a `Vec` gives
+  per-axis control.
+- `strategy::StepLower` / `strategy::StepUpper`: zero-sized marker strategies for the
+  common fixed-direction case, avoiding `Step`'s direction-vector allocation and
+  per-call direction matching. `Step` remains the choice for mixed per-dimension or
+  runtime-selected direction.
+- `strategy::LinearUniform`, `Step`, `StepLower`, and `StepUpper` are all available for
+  every dimensionality and included in the corresponding `Strategy*Enum` types.
+
+### Changed
+- **Breaking:** `LeftNearest` and `RightNearest` are removed. Migrate to
+  `Step::from(StepDirection::Lower)` / `Step::from(StepDirection::Upper)`, or the
+  leaner `StepLower` / `StepUpper` markers.
+- **Breaking:** `Linear` and `LinearUniform` now require `D::Elem: Float` (previously
+  `Num + PartialOrd`). Other strategies (`Nearest`, `Step`, etc.) keep looser numeric
+  bounds after an initial, overly broad `Float` restriction across the whole strategy
+  surface was narrowed back down to just the two strategies that actually need it.
+- Significant ND performance work: `Linear`/`Nearest` no longer build coordinate
+  permutation tables via `itertools::multi_cartesian_product` (removing the `itertools`
+  dependency); corner values are now gathered into a flat buffer and reduced with an
+  in-place bitmask/butterfly pass, cutting allocations from O(N * 2^N) to O(1)-O(N).
+  1D strategies no longer open with an O(M) linear scan for exact grid-point matches.
+  2D/3D `Linear` now short-circuits per-dimension when a query point lands exactly on a
+  grid coordinate. See PR #13 for benchmark numbers (roughly 50-65% faster on 1D/2D
+  hardcoded and multilinear paths).
+- Serde: `StepLower`/`StepUpper` accept the legacy `"LeftNearest"`/`"RightNearest"`
+  names on deserialization for backward compatibility; `Step`'s own wire format
+  (`{"Step": [...]}`) is unchanged and does not accept those aliases.
+- Loosened `Step`/`Nearest` strategy trait bounds back down after the `LinearUniform`
+  work had temporarily tightened them further than necessary.
+- Various documentation and README improvements; CI workflow polish.
+
+### Fixed
+- `InterpND` panicked on `n == 0` (the 0-D-via-`InterpND` case, e.g. after
+  dimensionality reduction collapses every axis). The ND `Linear` strategy's exact-match
+  scan was rewritten from `iter().position()` (which returned `None` on an empty grid
+  dimension without touching it) to `find_nearest_index`, whose binary search calls
+  `.first().unwrap()` and panics on an empty dimension. Fixed by skipping empty grid
+  dimensions in that loop.
+
+## [0.9.1] - 2026-08-03
+
+### Changed
+- **Breaking:** human-readable array output via `serde-ndim` is now opt-in through the
+  `serde_ndim` feature, rather than always enabled alongside `serde`.
+
+### Notes
+- Repository moved from the `NREL` to `NatLabRockies` GitHub organization (URLs
+  redirect automatically).
+
+## [0.9.0] - 2026-08-02
+
+### Added
+- `serde-ndim` integration under the existing `serde` feature.
+- Compatibility deserializers that accept the new simple array representation, the
+  legacy `serde-ndim` representation, or a mix of the two (simple grid + legacy values,
+  or vice versa).
+
+### Changed
+- **Breaking (serialization output only):** default serialized output for interpolator
+  grid/values now uses a simpler, sequence-style representation instead of the prior
+  `serde-ndim` format. If you snapshot-test or schema-validate the exact serialized
+  payload shape, update your fixtures.
+
+### Notes
+- Deserialization remains backward compatible with the prior payload structure, so
+  existing persisted data is still readable without migration.
+
+## [0.8.2] - 2026-02-19
+
+### Fixed
+- Misleading error message for coordinate validation ([#12], [@meredithdoan]).
+
+## [0.8.1] - 2025-11-25
+
+### Changed
+- `ndarray` dependency loosened to `^0.16` for downstream compatibility ([#11],
+  [@robfitzgerald]).
+
+## [0.8.0] - 2025-11-15
+
+### Changed
+- **Breaking (version bump only):** raised the maximum supported `ndarray` version to
+  include the 0.17.x line. Bumped as a new "major" (`0.x`) version specifically so a
+  downstream `Cargo.lock` rebuild wouldn't silently pull in the new `ndarray` major
+  version without an explicit opt-in.
+
+## [0.7.3] - 2025-05-29
+
+### Added
+- `into_owned()` methods.
+
+### Fixed
+- Bug in `InterpDataOwned`.
+
+## [0.7.2] - 2025-05-29
+
+### Added
+- `view()` method for interpolators.
+
+## [0.7.1] - 2025-05-19
+
+### Changed
+- Error types now have a hand-written `Debug` impl that delegates to the
+  `thiserror`-derived `Display`, instead of `#[derive(Debug)]`. Unwrapped errors read
+  as a message instead of a raw struct dump.
+
+### Notes
+- Documentation improvements.
+
+## [0.7.0] - 2025-05-02
+
+### Changed
+- `#[serde(untagged)]` applied to all enum types: they now (de)serialize identically to
+  their contained variant, so switching a downstream project from a concrete
+  interpolator type to `InterpolatorEnum` doesn't change the serialized shape.
+- Strategies now serialize to their stringified name instead of `null`.
+
+## [0.6.4] - 2025-04-22
+
+### Changed
+- Serde deserialize bounds changed from `DeserializeOwned` to `Deserialize<'de>`.
+- Minor syntax cleanup; removed some unnecessary allocations.
+
+## [0.6.3] - 2025-03-24
+
+### Changed
+- `set_extrapolate` moved onto the `Interpolator` trait.
+
+## [0.6.2] - 2025-03-21
+
+### Fixed
+- `PartialEq` impls: `#[derive(PartialEq)]` doesn't work for types with a `D: Data`
+  bound, since `ndarray::Data` itself doesn't implement `PartialEq` even though
+  `ArrayBase<D, _>` does. Switched to manual impls.
+
+### Changed
+- Owned and viewed type aliases now exposed in `prelude`.
+
+## [0.6.1] - 2025-03-20
+
+### Added
+- Strategy and interpolator enums (`Strategy1DEnum`/etc., `InterpolatorEnum`), enabling
+  `serde` support for runtime-swappable interpolators and strategies.
+
+## [0.6.0] - 2025-03-19
+
+### Changed
+- **Breaking:** namespace reorganized. Strategies are now accessed as `strategy::Linear`
+  etc. after `use prelude::*`, instead of being re-exported flat at the top level. This
+  makes room for more complex strategy organization (e.g. cubic strategies) without
+  polluting the downstream namespace.
+
+### Added
+- Strategy `init` step, letting a strategy mutate/precompute its own internal state
+  ahead of interpolation calls, enabling more complex strategies.
+- `Extrapolate::Wrap`: wrap around to the other end of periodic data.
+
+## [0.5.2] - 2025-03-12
+
+### Added
+- `Clone` now derived for all public types ([#4], [@kylecarow]).
+
+## [0.5.1] - 2025-03-09
+
+### Changed
+- Extrapolation handling moved into the macro-generated impls; a separate `extrapolate`
+  call is no longer necessary, and it's no longer incorrectly applicable to `Interp0D`.
+
+## [0.5.0] - 2025-03-08
+
+### Changed
+- **Breaking:** whole-crate rewrite onto generics, operating directly on `ndarray` data
+  (owned and viewed) instead of a fixed internal representation ([#3], "NDArray &
+  generics rewrite").
+
+## [0.4.0] - 2025-03-07
+
+### Changed
+- **Breaking:** full rewrite ([#2]). Introduced custom strategies via
+  `Strategy1D`/`Strategy2D`/`Strategy3D` traits (renamed from `Interp1DStrategy`/etc.),
+  added `set_strategy`, reorganized modules into per-dimensionality folders, and
+  removed the old `Interpolator` enum in favor of the concrete-type design used since.
+
+## [0.3.0] - 2025-03-03
+
+### Changed
+- **Breaking:** error types renamed for clarity: `ValidationError` -> `ValidateError`,
+  `InterpolationError` -> `InterpolateError`,
+  `InterpolationError::ExtrapolationError` -> `InterpolateError::ExtrapolateError`,
+  `Error::NoSuchField` now carries a `&'static str`.
+- **Breaking:** `Extrapolate::FillValue` renamed to `Extrapolate::Fill`.
+
+## [0.2.7] - 2025-03-03
+
+### Added
+- `Extrapolate::FillValue(f64)`.
+
+### Fixed
+- `Interp3D` clamp bug.
+
+## [0.2.6] - 2025-03-01
+
+### Added
+- `Extrapolate::Enable` support for `Linear` across all dimensionalities.
+- `Nearest` strategy available for all dimensionalities.
+
+## [0.2.5] - 2025-02-25
+
+### Changed
+- Minor internal cleanup (removed an unnecessary `return`) and documentation cleanup.
+
+## [0.2.4] - 2025-02-21
+
+### Added
+- `prelude` module to simplify downstream imports.
+
+## [0.2.3] - 2025-02-21
+
+### Changed
+- `Clone` now derived on relevant types, per a downstream request from the FASTSim
+  team.
+
+### Notes
+- Minor internal/CI polish.
+
+## [0.2.2] - 2025-02-21
+
+### Changed
+- `new_*d` constructor methods now return `crate::Error`.
+
+## [0.2.1] - 2025-01-24
+
+### Changed
+- Extrapolation error messages improved to include every out-of-bounds grid dimension,
+  not just the first.
+
+## [0.2.0] - 2025-01-23
+
+### Changed
+- **Breaking:** instantiation moved to dimensionality-specific `new_1d`/`new_2d`/
+  `new_3d`/`new_nd` methods.
+
+## [0.1.0] - 2024-11-27
+
+Initial release.
+
+[#2]: https://github.com/NatLabRockies/ninterp/pull/2
+[#3]: https://github.com/NatLabRockies/ninterp/pull/3
+[#4]: https://github.com/NatLabRockies/ninterp/pull/4
+[#11]: https://github.com/NatLabRockies/ninterp/pull/11
+[#12]: https://github.com/NatLabRockies/ninterp/pull/12
+[@kylecarow]: https://github.com/kylecarow
+[@robfitzgerald]: https://github.com/robfitzgerald
+[@meredithdoan]: https://github.com/meredithdoan
+
+[Unreleased]: https://github.com/NatLabRockies/ninterp/compare/v0.9.1...main
+[0.9.1]: https://github.com/NatLabRockies/ninterp/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/NatLabRockies/ninterp/compare/v0.8.2...v0.9.0
+[0.8.2]: https://github.com/NatLabRockies/ninterp/compare/v0.8.1...v0.8.2
+[0.8.1]: https://github.com/NatLabRockies/ninterp/compare/v0.8.0...v0.8.1
+[0.8.0]: https://github.com/NatLabRockies/ninterp/compare/v0.7.3...v0.8.0
+[0.7.3]: https://github.com/NatLabRockies/ninterp/compare/v0.7.2...v0.7.3
+[0.7.2]: https://github.com/NatLabRockies/ninterp/compare/v0.7.1...v0.7.2
+[0.7.1]: https://github.com/NatLabRockies/ninterp/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/NatLabRockies/ninterp/compare/v0.6.4...v0.7.0
+[0.6.4]: https://github.com/NatLabRockies/ninterp/compare/v0.6.3...v0.6.4
+[0.6.3]: https://github.com/NatLabRockies/ninterp/compare/v0.6.2...v0.6.3
+[0.6.2]: https://github.com/NatLabRockies/ninterp/compare/v0.6.1...v0.6.2
+[0.6.1]: https://github.com/NatLabRockies/ninterp/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/NatLabRockies/ninterp/compare/v0.5.2...v0.6.0
+[0.5.2]: https://github.com/NatLabRockies/ninterp/compare/v0.5.1...v0.5.2
+[0.5.1]: https://github.com/NatLabRockies/ninterp/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/NatLabRockies/ninterp/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/NatLabRockies/ninterp/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/NatLabRockies/ninterp/compare/v0.2.7...v0.3.0
+[0.2.7]: https://github.com/NatLabRockies/ninterp/compare/v0.2.6...v0.2.7
+[0.2.6]: https://github.com/NatLabRockies/ninterp/compare/v0.2.5...v0.2.6
+[0.2.5]: https://github.com/NatLabRockies/ninterp/compare/v0.2.4...v0.2.5
+[0.2.4]: https://github.com/NatLabRockies/ninterp/compare/v0.2.3...v0.2.4
+[0.2.3]: https://github.com/NatLabRockies/ninterp/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/NatLabRockies/ninterp/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/NatLabRockies/ninterp/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/NatLabRockies/ninterp/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/NatLabRockies/ninterp/releases/tag/v0.1.0

@@ -236,6 +236,45 @@ fn test_dyn_strategy() {
 }
 
 #[test]
+fn test_set_strategy_runs_init() {
+    // `Step`'s `init` validates its direction count against dimensionality,
+    // so swapping in a `Step` with the wrong count via `set_strategy` must
+    // surface that error rather than silently leaving the strategy unvalidated.
+    let mut interp: Interp2D<_, strategy::enums::Strategy2DEnum> = Interp2D::new(
+        array![0., 1.],
+        array![0., 1.],
+        array![[0., 1.], [2., 3.]],
+        strategy::Linear.into(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let bad_step = strategy::Step(vec![strategy::StepDirection::Lower; 3]);
+    assert!(matches!(
+        interp.set_strategy(bad_step).unwrap_err(),
+        ValidateError::Other(_)
+    ));
+}
+
+#[test]
+fn test_init_strategy() {
+    // `validate()` only checks data/extrapolate, not strategy-specific requirements
+    // like `LinearUniform`'s uniform grid, so directly mutating `data` to break that
+    // invariant passes `validate()`. `init_strategy()` is the way to catch it, since
+    // it re-runs the same check `new`/`set_strategy` do internally.
+    let mut interp = Interp2D::new(
+        array![0., 1., 2.],
+        array![0., 1., 2.],
+        array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+        strategy::LinearUniform,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    interp.data.grid[0] = array![0., 1., 5.]; // still monotonic, no longer uniform
+    assert!(interp.validate().is_ok());
+    assert!(interp.init_strategy().is_err());
+}
+
+#[test]
 fn test_extrapolate_clamp() {
     let interp = Interp2D::new(
         array![0.1, 1.1],
@@ -278,18 +317,18 @@ fn test_serde() {
 
     // simple format (new serialization output)
     let ser0 = "{\"grid\":[[0.05,0.1,0.15],[0.1,0.2,0.3]],\"values\":[[0.0,1.0,2.0],[3.0,4.0,5.0],[6.0,7.0,8.0]]}";
-    let de0: InterpData2D<_> = serde_json::from_str(&ser0).unwrap();
+    let de0: InterpData2D<_> = serde_json::from_str(ser0).unwrap();
     assert_eq!(interp.data, de0);
     // mixed format (simple grid)
     let ser1 = "{\"grid\":[[0.05,0.1,0.15],[0.1,0.2,0.3]],\"values\":{\"v\":1,\"dim\":[3,3],\"data\":[0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0]}}";
-    let de1: InterpData2D<_> = serde_json::from_str(&ser1).unwrap();
+    let de1: InterpData2D<_> = serde_json::from_str(ser1).unwrap();
     assert_eq!(interp.data, de1);
     // mixed format (simple values)
     let ser2 = "{\"grid\":[{\"v\":1,\"dim\":[3],\"data\":[0.05,0.1,0.15]},{\"v\":1,\"dim\":[3],\"data\":[0.1,0.2,0.3]}],\"values\":[[0.0,1.0,2.0],[3.0,4.0,5.0],[6.0,7.0,8.0]]}";
-    let de2: InterpData2D<_> = serde_json::from_str(&ser2).unwrap();
+    let de2: InterpData2D<_> = serde_json::from_str(ser2).unwrap();
     assert_eq!(interp.data, de2);
     // complex format (legacy serialization output)
     let ser3 = "{\"grid\":[{\"v\":1,\"dim\":[3],\"data\":[0.05,0.1,0.15]},{\"v\":1,\"dim\":[3],\"data\":[0.1,0.2,0.3]}],\"values\":{\"v\":1,\"dim\":[3,3],\"data\":[0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0,8.0]}}";
-    let de3: InterpData2D<_> = serde_json::from_str(&ser3).unwrap();
+    let de3: InterpData2D<_> = serde_json::from_str(ser3).unwrap();
     assert_eq!(interp.data, de3);
 }

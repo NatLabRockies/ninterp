@@ -107,7 +107,13 @@ Use `Interp0D` when working with heterogeneous collections such as an `Interpola
 ### Validation Lifecycle
 After editing interpolator data, call the InterpData `validate` method or
 [`Interpolator::validate`](https://docs.rs/ninterp/latest/ninterp/interpolator/trait.Interpolator.html#tymethod.validate)
-to rerun validation checks.
+to rerun data/extrapolate validation checks.
+
+`validate` only checks the data (shape, monotonicity) and extrapolate setting; it does
+not re-run a strategy's own `init`. If editing `data` directly could violate a strategy's
+own requirements (for example `LinearUniform`'s uniform-grid requirement, or `Step`'s
+per-dimension direction count), or after deserializing an interpolator with a stateful
+custom strategy, call `init_strategy` to re-run it.
 
 ### Data Shape Contract
 Grid and values shapes must match by axis order.

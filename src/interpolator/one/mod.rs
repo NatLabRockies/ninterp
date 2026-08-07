@@ -112,6 +112,16 @@ where
         Ok(interpolator)
     }
 
+    /// Re-run the strategy's [`Strategy1D::init`] against the current data.
+    ///
+    /// `new` and `set_strategy` already call this internally, so this is only needed
+    /// after bypassing them: mutating the public `data`/`strategy` fields directly, or
+    /// deserializing an interpolator with a stateful custom strategy (`Deserialize`
+    /// does not call `init`).
+    pub fn init_strategy(&mut self) -> Result<(), ValidateError> {
+        self.strategy.init(&self.data)
+    }
+
     /// Return an interpolator with viewed data.
     pub fn view(&self) -> Interp1DViewed<&D::Elem, S>
     where
@@ -151,10 +161,9 @@ where
         N
     }
 
-    fn validate(&mut self) -> Result<(), ValidateError> {
+    fn validate(&self) -> Result<(), ValidateError> {
         self.check_extrapolate(&self.extrapolate)?;
         self.data.validate()?;
-        self.strategy.init(&self.data)?;
         Ok(())
     }
 
@@ -207,10 +216,15 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
 {
-    /// Update strategy dynamically.
+    /// Update strategy at runtime, calling [`Strategy1D::init`] on the new strategy
+    /// against the current data.
+    ///
+    /// To swap in a strategy without re-running `init` (e.g. one whose state was
+    /// already established elsewhere), assign the `strategy` field directly instead.
     pub fn set_strategy(&mut self, strategy: Box<dyn Strategy1D<D>>) -> Result<(), ValidateError> {
         self.strategy = strategy;
-        self.check_extrapolate(&self.extrapolate)
+        self.check_extrapolate(&self.extrapolate)?;
+        self.strategy.init(&self.data)
     }
 }
 
@@ -219,12 +233,17 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
 {
-    /// Update strategy dynamically.
+    /// Update strategy at runtime, calling [`Strategy1D::init`] on the new strategy
+    /// against the current data.
+    ///
+    /// To swap in a strategy without re-running `init` (e.g. one whose state was
+    /// already established elsewhere), assign the `strategy` field directly instead.
     pub fn set_strategy(
         &mut self,
         strategy: impl Into<strategy::enums::Strategy1DEnum>,
     ) -> Result<(), ValidateError> {
         self.strategy = strategy.into();
-        self.check_extrapolate(&self.extrapolate)
+        self.check_extrapolate(&self.extrapolate)?;
+        self.strategy.init(&self.data)
     }
 }
