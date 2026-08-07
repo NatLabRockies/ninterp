@@ -27,15 +27,7 @@ where
             if grid[dim].is_empty() {
                 continue;
             }
-            // Binary search for an exact match: find_nearest_index returns the lower bracket,
-            // so the point can only be exactly equal to grid[lower] or grid[lower+1].
-            let lower = if &point[dim] < grid[dim].first().unwrap() {
-                0
-            } else if &point[dim] > grid[dim].last().unwrap() {
-                grid[dim].len() - 2
-            } else {
-                find_nearest_index(grid[dim].view(), &point[dim])
-            };
+            let lower = locate_lower_index(grid[dim].view(), &point[dim]);
             let pos = exact_index(grid[dim].view(), lower, &point[dim]);
             if let Some(pos) = pos {
                 point.remove(dim);
@@ -57,13 +49,7 @@ where
         for dim in 0..n {
             // Extrapolation is checked previously in Interpolator::interpolate,
             // meaning by now, point is within grid bounds or extrapolation is enabled
-            let lower_idx = if &point[dim] < grid[dim].first().unwrap() {
-                0
-            } else if &point[dim] > grid[dim].last().unwrap() {
-                grid[dim].len() - 2
-            } else {
-                find_nearest_index(grid[dim].view(), &point[dim])
-            };
+            let lower_idx = locate_lower_index(grid[dim].view(), &point[dim]);
             let interp_diff = (point[dim] - grid[dim][lower_idx])
                 / (grid[dim][lower_idx + 1] - grid[dim][lower_idx]);
             lower_idxs.push(lower_idx);
@@ -121,10 +107,15 @@ where
         let n = data.values.ndim();
         let mut lower_idxs = Vec::with_capacity(n);
         let mut interp_diffs = Vec::with_capacity(n);
-        for (grid_dim, &point_dim) in data.grid.iter().zip(point.iter()) {
-            let step = grid_dim[1] - grid_dim[0];
-            let lower_idx = uniform_lower_index(grid_dim[0], step, grid_dim.len(), point_dim);
-            let diff = (point_dim - grid_dim[lower_idx]) / step;
+        for dim in 0..n {
+            let step = data.grid[dim][1] - data.grid[dim][0];
+            let lower_idx = locate_lower_index_uniform(
+                data.grid[dim][0],
+                step,
+                data.grid[dim].len(),
+                point[dim],
+            );
+            let diff = (point[dim] - data.grid[dim][lower_idx]) / step;
             lower_idxs.push(lower_idx);
             interp_diffs.push(diff);
         }
@@ -169,7 +160,7 @@ where
         // dimensionality reduction needed — the distance comparison handles exact matches correctly.
         let mut idx = vec![0usize; n];
         for dim in 0..n {
-            let lower_idx = find_nearest_index(data.grid[dim].view(), &point[dim]);
+            let lower_idx = locate_lower_index(data.grid[dim].view(), &point[dim]);
             idx[dim] = if point[dim] - data.grid[dim][lower_idx]
                 < data.grid[dim][lower_idx + 1] - point[dim]
             {
@@ -212,7 +203,7 @@ where
         let n = data.values.ndim();
         let mut idx = vec![0usize; n];
         for dim in 0..n {
-            idx[dim] = step_index(self.dir(dim), data.grid[dim].view(), &point[dim]);
+            idx[dim] = locate_step_index(self.dir(dim), data.grid[dim].view(), &point[dim]);
         }
         Ok(data.values.view()[idx.as_slice()])
     }
@@ -236,7 +227,7 @@ where
         let n = data.values.ndim();
         let mut idx = vec![0usize; n];
         for dim in 0..n {
-            idx[dim] = step_index(StepDirection::Lower, data.grid[dim].view(), &point[dim]);
+            idx[dim] = locate_step_index(StepDirection::Lower, data.grid[dim].view(), &point[dim]);
         }
         Ok(data.values.view()[idx.as_slice()])
     }
@@ -259,7 +250,7 @@ where
         let n = data.values.ndim();
         let mut idx = vec![0usize; n];
         for dim in 0..n {
-            idx[dim] = step_index(StepDirection::Upper, data.grid[dim].view(), &point[dim]);
+            idx[dim] = locate_step_index(StepDirection::Upper, data.grid[dim].view(), &point[dim]);
         }
         Ok(data.values.view()[idx.as_slice()])
     }

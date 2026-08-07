@@ -26,6 +26,15 @@ Everything below is merged to `main` but not yet tagged/released.
   every dimensionality and included in the corresponding `Strategy*Enum` types.
 
 ### Changed
+- **Breaking:** `find_nearest_index` is renamed to `locate_lower_index` and, along with
+  the other grid/index search helpers (`step_index` -> `locate_step_index`,
+  `uniform_lower_index` -> `locate_lower_index_uniform`, `exact_index`,
+  `check_uniform_grid`), moves from `strategy::traits` to a new `strategy::utils`
+  module — `traits` now holds only the `Strategy1D`/`2D`/`3D`/`ND` trait definitions.
+  No deprecation shim, matching the other breaking renames in this release.
+  `locate_lower_index` also now clamps out-of-range points to `[0, len - 2]` itself,
+  rather than relying on each `Linear` call site to inline the same clamp before
+  calling it.
 - **Breaking:** `LeftNearest` and `RightNearest` are removed. Migrate to
   `Step::from(StepDirection::Lower)` / `Step::from(StepDirection::Upper)`, or the
   leaner `StepLower` / `StepUpper` markers.

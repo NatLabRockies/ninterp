@@ -4,6 +4,7 @@ use super::*;
 
 pub mod enums;
 pub mod traits;
+pub mod utils;
 
 /// Linear interpolation: <https://en.wikipedia.org/wiki/Linear_interpolation>
 #[derive(Debug, Clone, PartialEq)]
