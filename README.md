@@ -7,6 +7,7 @@
 The `ninterp` crate provides [multivariate interpolation](https://en.wikipedia.org/wiki/Multivariate_interpolation#Regular_grid) over rectilinear grids of any dimensionality.
 
 It is built on [`ndarray`](https://crates.io/crates/ndarray) and uses ndarray arrays/views throughout its API.
+`ndarray` is re-exposed as `ninterp::ndarray` for convenience.
 
 Hard-coded interpolators are provided for N = 1, 2, and 3, based on the observed runtime tradeoff versus a general N-D implementation.
 For higher dimensionalities (N >= 4), use `InterpND`.
@@ -75,14 +76,48 @@ Instantiation is done by calling an interpolator's `new` method.
 For dimensionalities N >= 1, this executes a validation step that prevents runtime panics.
 
 ## Cargo Features
-- `serde`: support for [`serde`](https://crates.io/crates/serde) 1.x using ndarray's built-in array format
+- `serde`: support for [`serde`](https://crates.io/crates/serde) 1.x
   ```text
   cargo add ninterp --features serde
   ```
-- `serde_ndim`: enable `serde` feature and switch output to the column-major nested array format from [`serde-ndim`](https://crates.io/crates/serde-ndim)
-  ```text
-  cargo add ninterp --features serde_ndim
+
+  By default, arrays are written in `ndarray`'s built-in format, which is performant to parse and works with every serialization format (text and binary):
+  ```json
+  {"grid":[{"v":1,"dim":[2],"data":[0.0,1.0]},{"v":1,"dim":[3],"data":[0.0,1.0,2.0]}],"values":{"v":1,"dim":[2,3],"data":[0.0,1.0,2.0,3.0,4.0,5.0]}}
   ```
+
+  You can also serialize interpolators using the nested-array format from
+  [`serde-ndim`](https://crates.io/crates/serde-ndim), which is far easier to read and hand-edit. This works for any `is_human_readable` serde format (serializing to binary formats necessarily uses the standard `ndarray` style).
+
+  - On fields, using the `serialize_nested` helper function from [`ninterp::prelude`](https://docs.rs/ninterp/latest/ninterp/prelude/index.html):
+
+    ```rust,ignore
+    use ninterp::prelude::*;
+
+    #[derive(serde::Serialize)]
+    struct MyConfig {
+        #[serde(serialize_with = "serialize_nested")]
+        surface: Interp2DOwned<f64, strategy::Linear>,
+    }
+    ```
+
+  - Directly, using the `Nested` wrapper:
+
+    ```rust,ignore
+    use ninterp::prelude::*;
+
+    let json = serde_json::to_string(&Nested(&interp.data)).unwrap();
+    // {"grid":[[0.0,1.0],[0.0,1.0,2.0]],"values":[[0.0,1.0,2.0],[3.0,4.0,5.0]]}
+    ```
+
+  Deserialization accepts **either** format, so this is purely a choice about what you write:
+
+  - Prefer the default when deserialization is on a hot path: nested arrays cost roughly 20% more to read,
+    since `ndarray`'s format carries the shape up front and can allocate exactly once,
+    while `serde-ndim` must parse the shape from the nested array every read.
+
+  - Prefer `Nested` / `serialize_with = "serialize_nested"` for config files and anything a human will look at,
+    so long as the array read cost is worth it.
 
 ## Choosing an Interpolator
 The [`prelude`](https://docs.rs/ninterp/latest/ninterp/prelude/index.html) exposes these interpolators:
@@ -94,14 +129,21 @@ The [`prelude`](https://docs.rs/ninterp/latest/ninterp/prelude/index.html) expos
 
 Use `Interp0D` when working with heterogeneous collections such as an `InterpolatorEnum` or `Box<dyn Interpolator>`.
 
-### Flexibility Model
-| Approach | Runtime swapping | `serde` | Custom strategies | Runtime cost |
+### Compiled vs. Runtime Flexibility
+
+This crate is designed to maximize both performance and runtime flexibility.
+There are multiple ways to specify interpolators and strategies;
+You can pin a concrete dimensionality and strategy at compile-time for best performance,
+or swap either via provided enums or dynamic dispatch.
+Each approach has trade-offs:
+
+| Approach | Runtime cost | Runtime swapping | Custom strategies | `serde` |
 | --- | --- | --- | --- | --- |
-| `Interp*<_, ConcreteStrategy>` | No | Yes | N/A | Lowest |
-| `Interp*<_, strategy::enums::Strategy*Enum>` | Strategy only | Yes | No | Low |
-| `Interp*<_, Box<dyn Strategy*>>` | Strategy only | No | Yes | Medium |
-| `InterpolatorEnum` | Interpolator + strategy | Yes | No | Low |
-| `Box<dyn Interpolator<_>>` | Interpolator + strategy | No | Yes | Highest |
+| `Interp*<_, ConcreteStrategy>` | Lowest | No | Yes | Yes |
+| `Interp*<_, strategy::enums::Strategy*Enum>` | Low | Strategy only | No | Yes |
+| `InterpolatorEnum` | Low | Interpolator + strategy | No | Yes |
+| `Interp*<_, Box<dyn Strategy*>>` | Medium | Strategy only | Yes | No |
+| `Box<dyn Interpolator<_>>` | Highest | Interpolator + strategy | Yes | No |
 
 ## Core Concepts
 ### Validation Lifecycle
@@ -116,28 +158,26 @@ per-dimension direction count), or after deserializing an interpolator with a st
 custom strategy, call `init_strategy` to re-run it.
 
 ### Data Shape Contract
-Grid and values shapes must match by axis order.
+Grid and values shapes must match by axis order:
+for every dimension `n`, `grid[n].len() == values.shape()[n]`.
 
-Examples:
-- 1-D: `x.len() == f_x.len()`
-- 2-D: `x.len() == f_xy.shape()[0]` and `y.len() == f_xy.shape()[1]`
-- 3-D: `x.len() == f_xyz.shape()[0]`, `y.len() == f_xyz.shape()[1]`, `z.len() == f_xyz.shape()[2]`
-- N-D: for every dimension `n`, `grid[n].len() == values.shape()[n]`
-
-Grid coordinates in each dimension must be monotonically increasing.
+Grid coordinates in each dimension must be monotonically increasing, with at least 2 points per
+dimension (`ValidateError::InsufficientGridPoints` otherwise).
 
 ### Strategies
-An interpolation strategy (for example
-[`Linear`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Linear.html),
-[`LinearUniform`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.LinearUniform.html),
-[`Nearest`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Nearest.html),
-[`Step`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Step.html),
-[`StepLower`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.StepLower.html),
-[`StepUpper`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.StepUpper.html),
-must be specified.
+An interpolation strategy must be specified. Provided strategies:
 
-To change the interpolation strategy, supply a `Strategy1DEnum`/etc. or `Box<dyn Strategy1D>`/etc. at instantiation and call `set_strategy`.
-Custom strategies can be defined. See [`examples/custom_strategy.rs`](https://github.com/NatLabRockies/ninterp/blob/main/examples/custom_strategy.rs).
+| Strategy | Description |
+| --- | --- |
+| [`Linear`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Linear.html) | Linear interpolation |
+| [`LinearUniform`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.LinearUniform.html) | Linear interpolation for uniformly spaced grids |
+| [`Nearest`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Nearest.html) | Nearest-neighbor interpolation |
+| [`Step`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Step.html) | Step interpolation with per-dimension directions or a direction chosen at runtime |
+| [`StepLower`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.StepLower.html) | Step interpolation to the previous grid value in each dimension |
+| [`StepUpper`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.StepUpper.html) | Step interpolation to the next grid value in each dimension |
+
+To change the interpolation strategy, supply a `Strategy*DEnum` or `Box<dyn Strategy*D>` at instantiation and call `set_strategy`.
+Custom strategies can be defined, see [`examples/custom_strategy.rs`](https://github.com/NatLabRockies/ninterp/blob/main/examples/custom_strategy.rs).
 
 ### Extrapolation
 An [`Extrapolate`](https://docs.rs/ninterp/latest/ninterp/interpolator/enum.Extrapolate.html)
@@ -166,25 +206,33 @@ For example:
 - N-D interpolator: `&[x0, x1, ..., x_{N-1}]`
 
 If the number of coordinates does not match dimensionality, interpolation returns an error.
-Retrieve dimensionality using [`Interpolator::ndim`](https://docs.rs/ninterp/latest/ninterp/interpolator/trait.Interpolator.html#tymethod.ndim).
+Retrieve dimensionality using
+[`Interpolator::ndim`](https://docs.rs/ninterp/latest/ninterp/interpolator/trait.Interpolator.html#tymethod.ndim)
+if necessary.
 
-### Common Errors
+### Errors
 Validation-time (`new` / `validate`):
-- Fewer than 2 grid coordinates in a dimension (`ValidateError::InsufficientGridPoints`)
-- Non-monotonic coordinates (`ValidateError::NonMonotonic`)
-- Grid/value shape mismatch (`ValidateError::IncompatibleShapes`)
-- Inapplicable extrapolation setting (`ValidateError::InvalidExtrapolate`)
+
+| Error | Meaning |
+| --- | --- |
+| `ValidateError::InsufficientGridPoints` | Fewer than 2 grid coordinates in a dimension |
+| `ValidateError::NonMonotonic` | Non-monotonic coordinates |
+| `ValidateError::IncompatibleShapes` | Grid/value shape mismatch |
+| `ValidateError::InvalidExtrapolate` | Inapplicable extrapolation setting |
 
 Interpolation-time (`interpolate`):
-- Query point has wrong dimensionality (`InterpolateError::PointLength`)
-- Query point is out of bounds while using `Extrapolate::Error` (`InterpolateError::ExtrapolateError`)
+
+| Error | Meaning |
+| --- | --- |
+| `InterpolateError::PointLength` | Query point has wrong dimensionality |
+| `InterpolateError::ExtrapolateError` | Query point is out of bounds while using `Extrapolate::Error` |
 
 ## Using Owned and Borrowed (Viewed) Data
 All interpolators support both owned and borrowed data via the generic `D` bound on
 [`ndarray::Data`](https://docs.rs/ndarray/latest/ndarray/trait.Data.html).
 
 The crate also re-exports [`ndarray`](https://docs.rs/ninterp/latest/ninterp/ndarray/index.html)
-and [`num_traits`](https://docs.rs/ninterp/latest/ninterp/num_traits/index.html),
+(and [`num_traits`](https://docs.rs/ninterp/latest/ninterp/num_traits/index.html)),
 so either of these import styles are valid:
 
 ```rust
@@ -196,8 +244,8 @@ use ndarray::prelude::*;
 Type aliases in the [`prelude`](https://docs.rs/ninterp/latest/ninterp/prelude/index.html)
 make ownership intent explicit, for example in 1-D:
 - [`Interp1DOwned`](https://docs.rs/ninterp/latest/ninterp/interpolator/type.Interp1DOwned.html)
-  - Data is owned by the interpolator object
-  - Useful for struct fields
+  - Data is owned by the interpolator
+  - Examples: struct fields, general use
   ```rust
   use ndarray::prelude::*;
   use ninterp::prelude::*;
@@ -210,8 +258,8 @@ make ownership intent explicit, for example in 1-D:
   .unwrap();
   ```
 - [`Interp1DViewed`](https://docs.rs/ninterp/latest/ninterp/interpolator/type.Interp1DViewed.html)
-  - Data is borrowed by the interpolator object
-  - Use when interpolator data should be owned by another object
+  - Data is borrowed by the interpolator
+  - Examples: data lives in a larger struct, data is shared without copying
   ```rust
   use ndarray::prelude::*;
   use ninterp::prelude::*;
