@@ -14,6 +14,11 @@ where
     }
 
     /// Execute interpolation (after handling [`Extrapolate`](`crate::interpolator::Extrapolate`) setting).
+    ///
+    /// # Note for custom strategies
+    /// Index `data.grid[i]` directly via `ArrayView` indexing; avoid `.as_slice()`, which
+    /// panics on non-contiguous storage (possible with `Interp*Viewed`). See
+    /// [`crate::strategy::utils::locate_lower_index`] for a ready-made bracket search.
     fn interpolate(
         &self,
         data: &InterpData1D<D>,
@@ -64,6 +69,11 @@ where
     }
 
     /// Execute interpolation (after handling [`Extrapolate`](`crate::interpolator::Extrapolate`) setting).
+    ///
+    /// # Note for custom strategies
+    /// Index `data.grid[i]` directly via `ArrayView` indexing; avoid `.as_slice()`, which
+    /// panics on non-contiguous storage (possible with `Interp*Viewed`). See
+    /// [`crate::strategy::utils::locate_lower_index`] for a ready-made bracket search.
     fn interpolate(
         &self,
         data: &InterpData2D<D>,
@@ -114,6 +124,11 @@ where
     }
 
     /// Execute interpolation (after handling [`Extrapolate`](`crate::interpolator::Extrapolate`) setting).
+    ///
+    /// # Note for custom strategies
+    /// Index `data.grid[i]` directly via `ArrayView` indexing; avoid `.as_slice()`, which
+    /// panics on non-contiguous storage (possible with `Interp*Viewed`). See
+    /// [`crate::strategy::utils::locate_lower_index`] for a ready-made bracket search.
     fn interpolate(
         &self,
         data: &InterpData3D<D>,
@@ -164,6 +179,11 @@ where
     }
 
     /// Execute interpolation (after handling [`Extrapolate`](`crate::interpolator::Extrapolate`) setting).
+    ///
+    /// # Note for custom strategies
+    /// Index `data.grid[i]` directly via `ArrayView` indexing; avoid `.as_slice()`, which
+    /// panics on non-contiguous storage (possible with `Interp*Viewed`). See
+    /// [`crate::strategy::utils::locate_lower_index`] for a ready-made bracket search.
     fn interpolate(
         &self,
         data: &InterpDataND<D>,

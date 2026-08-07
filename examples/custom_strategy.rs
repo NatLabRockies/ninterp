@@ -19,6 +19,11 @@ where
     // e.g. `Array2<f32>`, `ArrayView2<f32>`, `CowArray<<'a, f32>, Ix2>`, etc.
     // For a more generic bound, consider introducing a bound for D::Elem
     // e.g. D::Elem: num_traits::Num + PartialOrd
+    //
+    // Note: when reading grid coordinates in `interpolate`, index `data.grid[i]` directly
+    // via ArrayView indexing (e.g. `data.grid[i][idx]`), not `.as_slice()`, which panics
+    // on non-contiguous storage. `Interp*Viewed` can produce that from a strided slice.
+    // For a bracket-search helper, see `ninterp::strategy::utils::locate_lower_index`.
     D: Data<Elem = f32> + RawDataClone + Clone,
 {
     // We can optionally define an initialization step, useful for strategies that need precalculation.

@@ -286,10 +286,10 @@ See examples in `new` method documentation:
 - [`InterpND::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.InterpND.html#method.new)
 
 Also see the [`examples`](https://github.com/NatLabRockies/ninterp/tree/main/examples) directory for advanced examples:
-- Swapping strategies at runtime: [`dynamic_strategy.rs`](https://github.com/NatLabRockies/ninterp/blob/main/examples/dynamic_strategy.rs)
+- Swapping strategies at runtime: [`swap_strategy.rs`](https://github.com/NatLabRockies/ninterp/blob/main/examples/swap_strategy.rs)
   - Strategy enums (`strategy::enums::Strategy1DEnum`/etc.): `serde`-compatible, custom strategies not supported
   - `Box<dyn Strategy1D>`/etc. (dynamic dispatch): custom strategies supported, not `serde`-compatible, runtime cost
-- Swapping interpolators at runtime: [`dynamic_interpolator.rs`](https://github.com/NatLabRockies/ninterp/blob/main/examples/dynamic_interpolator.rs)
+- Swapping interpolators at runtime: [`swap_interpolator.rs`](https://github.com/NatLabRockies/ninterp/blob/main/examples/swap_interpolator.rs)
   - `InterpolatorEnum`: `serde`-compatible, custom strategies not supported
   - `Box<dyn Interpolator>` (dynamic dispatch): custom strategies supported, not `serde`-compatible, runtime cost
 - Defining custom strategies: [`custom_strategy.rs`](https://github.com/NatLabRockies/ninterp/blob/main/examples/custom_strategy.rs)
