@@ -41,7 +41,7 @@
 //! assert_eq!(interp.interpolate(&[3.75]).unwrap(), 0.8);
 //! assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);
 //! ```
-//! See also: `examples/dynamic_strategy.rs`
+//! See also: `examples/swap_strategy.rs`
 
 // NOTE: `enum_dispatch` does essentially what this module does, but with less boilerplate.
 // However, it does not currently support using a generic trait on a non-generic enum.

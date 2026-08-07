@@ -60,7 +60,7 @@ use strategy::enums::*;
 /// interp = InterpolatorEnum::new_0d(0.5);
 /// assert_eq!(interp.interpolate(&[]).unwrap(), 0.5);
 /// ```
-/// See also: `examples/dynamic_interpolator.rs`
+/// See also: `examples/swap_interpolator.rs`
 #[allow(missing_docs)]
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
