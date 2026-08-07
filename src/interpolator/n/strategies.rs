@@ -107,15 +107,11 @@ where
         let n = data.values.ndim();
         let mut lower_idxs = Vec::with_capacity(n);
         let mut interp_diffs = Vec::with_capacity(n);
-        for dim in 0..n {
-            let step = data.grid[dim][1] - data.grid[dim][0];
-            let lower_idx = locate_lower_index_uniform(
-                data.grid[dim][0],
-                step,
-                data.grid[dim].len(),
-                point[dim],
-            );
-            let diff = (point[dim] - data.grid[dim][lower_idx]) / step;
+        for (grid_dim, &point_dim) in data.grid.iter().zip(point.iter()) {
+            let step = grid_dim[1] - grid_dim[0];
+            let lower_idx =
+                locate_lower_index_uniform(grid_dim[0], step, grid_dim.len(), point_dim);
+            let diff = (point_dim - grid_dim[lower_idx]) / step;
             lower_idxs.push(lower_idx);
             interp_diffs.push(diff);
         }
