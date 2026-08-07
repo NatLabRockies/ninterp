@@ -1,6 +1,10 @@
 //! Single-axis primitives for locating a query point within one grid dimension.
 //! Strategies compose these per axis to get 1D/2D/3D/ND behavior; none of them
 //! iterate over dimensions themselves.
+//!
+//! These are the same building blocks [`Linear`](super::Linear), [`LinearUniform`](super::LinearUniform),
+//! [`Step`](super::Step), [`StepLower`](super::StepLower), and [`StepUpper`](super::StepUpper) are
+//! implemented with, and are public for reuse in custom strategies (see [`crate::strategy::traits`]).
 
 use super::*;
 
@@ -40,16 +44,23 @@ pub fn locate_lower_index<T: PartialOrd>(grid: ArrayView1<T>, point: &T) -> usiz
 
 /// Per-axis locate for linear-family strategies: either an exact grid hit,
 /// or an interior interpolation position.
-pub(crate) enum AxisLocation<T> {
+pub enum AxisLocation<T> {
+    /// `point` coincides exactly with `grid[_]` at this index.
     Exact(usize),
-    Interp { lower: usize, frac: T },
+    /// `point` falls strictly between two grid coordinates.
+    Interp {
+        /// Index of the lower bracketing grid coordinate.
+        lower: usize,
+        /// Fractional position of `point` between `grid[lower]` and `grid[lower + 1]`, in `[0, 1)`.
+        frac: T,
+    },
 }
 
 /// Locates `point` along `grid`, resolving to an exact grid hit or an interpolation
 /// position. Combines [`locate_lower_index`] (search + extrapolation clamp) with
 /// [`exact_index`] (exact-match short-circuit) into the single call linear-family
 /// strategies need per axis.
-pub(crate) fn locate_axis<T: Float>(grid: ArrayView1<T>, point: &T) -> AxisLocation<T> {
+pub fn locate_axis<T: Float>(grid: ArrayView1<T>, point: &T) -> AxisLocation<T> {
     let lower = locate_lower_index(grid, point);
     match exact_index(grid, lower, point) {
         Some(idx) => AxisLocation::Exact(idx),
@@ -64,7 +75,7 @@ pub(crate) fn locate_axis<T: Float>(grid: ArrayView1<T>, point: &T) -> AxisLocat
 ///
 /// Handles all exact grid-point edge cases that arise from [`locate_lower_index`]'s
 /// interval semantics (returning the lower bracket rather than the exact position).
-pub(crate) fn locate_step_index<T: PartialOrd + Copy>(
+pub fn locate_step_index<T: PartialOrd + Copy>(
     dir: StepDirection,
     grid: ArrayView1<T>,
     point: &T,
@@ -97,11 +108,7 @@ pub(crate) fn locate_step_index<T: PartialOrd + Copy>(
 /// Returns the exact grid index if `point` lies on `grid[lower]` or `grid[lower+1]`, else `None`.
 ///
 /// Used to short-circuit interpolation when a query point coincides with a grid coordinate.
-pub(crate) fn exact_index<T: PartialOrd>(
-    grid: ArrayView1<T>,
-    lower: usize,
-    point: &T,
-) -> Option<usize> {
+pub fn exact_index<T: PartialOrd>(grid: ArrayView1<T>, lower: usize, point: &T) -> Option<usize> {
     if grid[lower] == *point {
         Some(lower)
     } else if grid[lower + 1] == *point {
@@ -115,7 +122,7 @@ pub(crate) fn exact_index<T: PartialOrd>(
 ///
 /// Equivalent to [`locate_lower_index`] but replaces binary search with direct arithmetic.
 /// Only valid when the grid spacing is uniform — validate with [`check_uniform_grid`] first.
-pub(crate) fn locate_lower_index_uniform<T: Float>(grid0: T, step: T, n: usize, point: T) -> usize {
+pub fn locate_lower_index_uniform<T: Float>(grid0: T, step: T, n: usize, point: T) -> usize {
     let t = (point - grid0) / step;
     if t < T::zero() {
         0
@@ -127,11 +134,9 @@ pub(crate) fn locate_lower_index_uniform<T: Float>(grid0: T, step: T, n: usize, 
 /// Validates that `grid` is uniformly spaced within floating-point tolerance.
 ///
 /// Uses a relative tolerance of 1024 × ε to accommodate accumulated floating-point rounding
-/// error in grids constructed from repeated arithmetic.
-pub(crate) fn check_uniform_grid<T: Float>(
-    grid: ArrayView1<T>,
-    dim: usize,
-) -> Result<(), ValidateError> {
+/// error in grids constructed from repeated arithmetic. Pair with [`locate_lower_index_uniform`]
+/// for the matching O(1) lookup.
+pub fn check_uniform_grid<T: Float>(grid: ArrayView1<T>, dim: usize) -> Result<(), ValidateError> {
     let step = grid[1] - grid[0];
     // 1024 * epsilon via 10 doublings — avoids numeric literal casting
     let tolerance = {
@@ -145,7 +150,7 @@ pub(crate) fn check_uniform_grid<T: Float>(
         let gap = grid[i + 1] - grid[i];
         if (gap - step).abs() > tolerance {
             return Err(ValidateError::Other(format!(
-                "LinearUniform: grid[{dim}] is not uniformly spaced (gap at index {i})"
+                "grid[{dim}] is not uniformly spaced (gap at index {i})"
             )));
         }
     }

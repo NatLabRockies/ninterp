@@ -23,7 +23,9 @@ where
     // Note: when reading grid coordinates in `interpolate`, index `data.grid[i]` directly
     // via ArrayView indexing (e.g. `data.grid[i][idx]`), not `.as_slice()`, which panics
     // on non-contiguous storage. `Interp*Viewed` can produce that from a strided slice.
-    // For a bracket-search helper, see `ninterp::strategy::utils::locate_lower_index`.
+    // `ninterp::strategy::utils` has ready-made per-axis search helpers (bracket search,
+    // exact-match short-circuit, step-direction lookup, uniform-grid fast path) built from
+    // the same primitives the built-in strategies use.
     D: Data<Elem = f32> + RawDataClone + Clone,
 {
     // We can optionally define an initialization step, useful for strategies that need precalculation.
