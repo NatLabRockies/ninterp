@@ -96,14 +96,13 @@ where
         }
         for i in 0..n {
             let i_grid_len = self.grid[i].len();
-            // Check that each grid dimension has elements
-            // Indexing `grid` directly is okay because empty dimensions are caught at compilation
-            if i_grid_len == 0 {
-                return Err(ValidateError::EmptyGrid(i));
+            // Every strategy needs at least 2 points per dimension to bracket a query point
+            if i_grid_len < 2 {
+                return Err(ValidateError::InsufficientGridPoints(i));
             }
             // Check that grid points are monotonically increasing
             if !self.grid[i].windows(2).into_iter().all(|w| w[0] <= w[1]) {
-                return Err(ValidateError::Monotonicity(i));
+                return Err(ValidateError::NonMonotonic(i));
             }
             // Check that grid and values are compatible shapes
             if i_grid_len != self.values.shape()[i] {

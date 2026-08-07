@@ -87,21 +87,10 @@ macro_rules! extrapolate_impl {
                 // Check applicability of strategy and extrapolate setting
                 if matches!(extrapolate, Extrapolate::Enable) && !self.strategy.allow_extrapolate()
                 {
-                    return Err(ValidateError::ExtrapolateSelection(format!(
+                    return Err(ValidateError::InvalidExtrapolate(format!(
                         "{:?}",
                         self.extrapolate
                     )));
-                }
-                // If using Extrapolate::Enable,
-                // check that each grid dimension has at least two elements
-                if matches!(self.extrapolate, Extrapolate::Enable) {
-                    for (i, g) in self.data.grid.iter().enumerate() {
-                        if g.len() < 2 {
-                            return Err(ValidateError::Other(format!(
-                                "at least 2 data points are required for extrapolation: dim {i}",
-                            )));
-                        }
-                    }
                 }
                 Ok(())
             }

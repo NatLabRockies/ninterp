@@ -8,11 +8,11 @@ use thiserror::Error;
 #[derive(Error, Clone, PartialEq)]
 pub enum ValidateError {
     #[error("selected `Extrapolate` variant ({0}) is unimplemented/inapplicable for interpolator")]
-    ExtrapolateSelection(String),
-    #[error("supplied grid coordinates cannot be empty: dim {0}")]
-    EmptyGrid(usize),
+    InvalidExtrapolate(String),
+    #[error("at least 2 grid points are required per dimension: dim {0}")]
+    InsufficientGridPoints(usize),
     #[error("supplied coordinates must be monotonically increasing: dim {0}")]
-    Monotonicity(usize),
+    NonMonotonic(usize),
     #[error("supplied grid and values are not compatible shapes: dim {0}")]
     IncompatibleShapes(usize),
     #[error("{0}")]
