@@ -92,7 +92,7 @@ where
     D::Elem: Float + Debug,
 {
     /// Ensures grid uniformity in all dimensions
-    fn init(&mut self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
+    fn validate(&self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
         for (dim, grid) in data.grid.iter().enumerate() {
             check_uniform_grid(grid.view(), dim)?;
         }
@@ -180,7 +180,7 @@ where
     D::Elem: PartialOrd + Copy + Debug,
 {
     /// Ensures the number of provided step directions matches the dimensionality of the interpolator
-    fn init(&mut self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
+    fn validate(&self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
         let n = data.values.ndim();
         if self.0.len() != 1 && self.0.len() != n {
             return Err(ValidateError::Other(format!(

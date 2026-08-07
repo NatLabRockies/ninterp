@@ -62,6 +62,18 @@ where
     D::Elem: Float + Debug,
 {
     #[inline]
+    fn validate(&self, data: &InterpData3D<D>) -> Result<(), ValidateError> {
+        match self {
+            Strategy3DEnum::Linear(strategy) => Strategy3D::<D>::validate(strategy, data),
+            Strategy3DEnum::LinearUniform(strategy) => Strategy3D::<D>::validate(strategy, data),
+            Strategy3DEnum::Nearest(strategy) => Strategy3D::<D>::validate(strategy, data),
+            Strategy3DEnum::Step(strategy) => Strategy3D::<D>::validate(strategy, data),
+            Strategy3DEnum::StepLower(strategy) => Strategy3D::<D>::validate(strategy, data),
+            Strategy3DEnum::StepUpper(strategy) => Strategy3D::<D>::validate(strategy, data),
+        }
+    }
+
+    #[inline]
     fn init(&mut self, data: &InterpData3D<D>) -> Result<(), ValidateError> {
         match self {
             Strategy3DEnum::Linear(strategy) => Strategy3D::<D>::init(strategy, data),
