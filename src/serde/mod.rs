@@ -20,8 +20,10 @@ use super::*;
 pub(crate) mod de;
 pub(crate) mod ser;
 
-pub(crate) use de::*;
-pub(crate) use ser::*;
+pub(crate) use de::{
+    deserialize_dyn, deserialize_fixed, deserialize_grid_arr, deserialize_grid_vec,
+};
+pub(crate) use ser::{ArrayWrapper, GridArrWrapper, GridVecWrapper};
 
 /// The public surface, re-exported from [`crate::prelude`].
 pub use ser::{serialize_nested, Nested, SerializeNested};
