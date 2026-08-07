@@ -18,7 +18,9 @@ where
     /// # Note for custom strategies
     /// Index `data.grid[i]` directly via `ArrayView` indexing; avoid `.as_slice()`, which
     /// panics on non-contiguous storage (possible with `Interp*Viewed`). See
-    /// [`crate::strategy::utils::locate_lower_index`] for a ready-made bracket search.
+    /// [`crate::strategy::utils`] for ready-made per-axis search helpers (bracket search,
+    /// exact-match short-circuit, step-direction lookup, uniform-grid fast path) built from
+    /// the same primitives the built-in strategies use.
     fn interpolate(
         &self,
         data: &InterpData1D<D>,
@@ -73,7 +75,9 @@ where
     /// # Note for custom strategies
     /// Index `data.grid[i]` directly via `ArrayView` indexing; avoid `.as_slice()`, which
     /// panics on non-contiguous storage (possible with `Interp*Viewed`). See
-    /// [`crate::strategy::utils::locate_lower_index`] for a ready-made bracket search.
+    /// [`crate::strategy::utils`] for ready-made per-axis search helpers (bracket search,
+    /// exact-match short-circuit, step-direction lookup, uniform-grid fast path) built from
+    /// the same primitives the built-in strategies use.
     fn interpolate(
         &self,
         data: &InterpData2D<D>,
@@ -128,7 +132,9 @@ where
     /// # Note for custom strategies
     /// Index `data.grid[i]` directly via `ArrayView` indexing; avoid `.as_slice()`, which
     /// panics on non-contiguous storage (possible with `Interp*Viewed`). See
-    /// [`crate::strategy::utils::locate_lower_index`] for a ready-made bracket search.
+    /// [`crate::strategy::utils`] for ready-made per-axis search helpers (bracket search,
+    /// exact-match short-circuit, step-direction lookup, uniform-grid fast path) built from
+    /// the same primitives the built-in strategies use.
     fn interpolate(
         &self,
         data: &InterpData3D<D>,
@@ -183,7 +189,9 @@ where
     /// # Note for custom strategies
     /// Index `data.grid[i]` directly via `ArrayView` indexing; avoid `.as_slice()`, which
     /// panics on non-contiguous storage (possible with `Interp*Viewed`). See
-    /// [`crate::strategy::utils::locate_lower_index`] for a ready-made bracket search.
+    /// [`crate::strategy::utils`] for ready-made per-axis search helpers (bracket search,
+    /// exact-match short-circuit, step-direction lookup, uniform-grid fast path) built from
+    /// the same primitives the built-in strategies use.
     fn interpolate(
         &self,
         data: &InterpDataND<D>,

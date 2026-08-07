@@ -30,6 +30,12 @@ Everything below is merged to `main` but not yet tagged/released.
   `#[serde(serialize_with = "serialize_nested")]` on a field. Falls back to the `ndarray`
   format on non-`is_human_readable` (binary) serializers, since there's nothing to nest
   there and those formats can't read it back anyway.
+- `strategy::utils::exact_index`, `locate_step_index`, `locate_lower_index_uniform`,
+  `check_uniform_grid`, and `AxisLocation`/`locate_axis` are now `pub` (previously
+  `pub(crate)`). They're the same per-axis primitives `Linear`/`LinearUniform`/`Step`/
+  `StepLower`/`StepUpper` are built from, now reusable from custom strategies instead of
+  needing to be reimplemented. `check_uniform_grid`'s error message no longer hardcodes
+  `"LinearUniform:"`, since other strategies can call it directly now too.
 
 ### Changed
 - **Breaking:** `find_nearest_index` is renamed to `locate_lower_index` and, along with
