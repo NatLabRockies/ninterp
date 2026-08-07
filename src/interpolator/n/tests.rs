@@ -520,17 +520,23 @@ fn test_serde() {
     let de: InterpNDOwned<f64, strategy::Nearest> = serde_json::from_str(&ser).unwrap();
     assert_eq!(interp, de);
 
+    // `ndarray` format by default
     let data_ser = serde_json::to_string(&interp.data).unwrap();
-    #[cfg(feature = "serde_ndim")]
-    assert_eq!(
-        data_ser,
-        "{\"grid\":[[0.1,1.1],[0.2,1.2],[0.3,1.3]],\"values\":[[[0.0,1.0],[2.0,3.0]],[[4.0,5.0],[6.0,7.0]]]}"
-    );
-    #[cfg(not(feature = "serde_ndim"))]
     assert_eq!(
         data_ser,
         "{\"grid\":[{\"v\":1,\"dim\":[2],\"data\":[0.1,1.1]},{\"v\":1,\"dim\":[2],\"data\":[0.2,1.2]},{\"v\":1,\"dim\":[2],\"data\":[0.3,1.3]}],\"values\":{\"v\":1,\"dim\":[2,2,2],\"data\":[0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0]}}"
     );
+    // nested-array format on request
+    let data_ser_nested = serde_json::to_string(&crate::prelude::Nested(&interp.data)).unwrap();
+    assert_eq!(
+        data_ser_nested,
+        "{\"grid\":[[0.1,1.1],[0.2,1.2],[0.3,1.3]],\"values\":[[[0.0,1.0],[2.0,3.0]],[[4.0,5.0],[6.0,7.0]]]}"
+    );
+    // ...and the whole interpolator nests too
+    let interp_ser_nested = serde_json::to_string(&crate::prelude::Nested(&interp)).unwrap();
+    let de_nested: InterpNDOwned<f64, strategy::Nearest> =
+        serde_json::from_str(&interp_ser_nested).unwrap();
+    assert_eq!(interp, de_nested);
 
     // simple format (new serialization output)
     let ser0 = "{\"grid\":[[0.1,1.1],[0.2,1.2],[0.3,1.3]],\"values\":[[[0.0,1.0],[2.0,3.0]],[[4.0,5.0],[6.0,7.0]]]}";

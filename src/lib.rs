@@ -19,6 +19,8 @@
 ///   - [`strategy::StepLower`] / [`strategy::StepUpper`]
 ///   - `serde`-compatible strategy enums: [`strategy::enums::Strategy1DEnum`]/etc.
 /// - The extrapolation setting enum: [`Extrapolate`](`interpolator::Extrapolate`)
+/// - With the `serde` feature: `Nested`, `serialize_nested`, and `SerializeNested`, for opting
+///   into the nested-array serialization format at a specific call site
 pub mod prelude {
     pub use crate::strategy;
 
@@ -33,6 +35,9 @@ pub mod prelude {
     pub use crate::interpolator::enums::{
         InterpolatorEnum, InterpolatorEnumOwned, InterpolatorEnumViewed,
     };
+
+    #[cfg(feature = "serde")]
+    pub use crate::serde_support::{serialize_nested, Nested, SerializeNested};
 }
 
 pub mod error;
@@ -60,10 +65,10 @@ pub(crate) use core::ops::Sub;
 pub(crate) use dyn_clone::*;
 
 #[cfg(feature = "serde")]
-#[path = "serde.rs"]
-mod serde_mod;
+#[path = "serde/mod.rs"]
+mod serde_support;
 #[cfg(feature = "serde")]
-pub(crate) use serde_mod::*;
+pub(crate) use serde_support::*;
 
 #[cfg(test)]
 /// Alias for [`approx::assert_abs_diff_eq`] with `epsilon = 1e-6`

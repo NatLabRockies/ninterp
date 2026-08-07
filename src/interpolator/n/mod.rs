@@ -29,20 +29,9 @@ where
     D::Elem: PartialEq + Debug,
 {
     /// Coordinate grid: a vector of 1-dimensional [`ArrayBase<D, Ix1>`].
-    #[cfg_attr(
-        feature = "serde",
-        serde(deserialize_with = "serde_vec_array::deserialize")
-    )]
-    #[cfg_attr(
-        feature = "serde_ndim",
-        serde(serialize_with = "serde_vec_array::serialize")
-    )]
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_grid_vec"))]
     pub grid: Vec<ArrayBase<D, Ix1>>,
     /// Function values at coordinates: a single dynamic-dimensional [`ArrayBase`].
-    #[cfg_attr(
-        feature = "serde_ndim",
-        serde(serialize_with = "serde_ndim::serialize")
-    )]
     #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_dyn"))]
     pub values: ArrayBase<D, IxDyn>,
 }
@@ -50,6 +39,23 @@ where
 pub type InterpDataNDViewed<T> = InterpDataND<ViewRepr<T>>;
 /// [`InterpDataND`] that owns data.
 pub type InterpDataNDOwned<T> = InterpDataND<OwnedRepr<T>>;
+
+#[cfg(feature = "serde")]
+impl<D> SerializeNested for InterpDataND<D>
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: PartialEq + Debug + Serialize,
+{
+    fn serialize_nested<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut s = serializer.serialize_struct("InterpDataND", 2)?;
+        s.serialize_field("grid", &GridVecWrapper(&self.grid))?;
+        s.serialize_field("values", &ArrayWrapper(&self.values))?;
+        s.end()
+    }
+}
 
 impl<D> PartialEq for InterpDataND<D>
 where
@@ -179,6 +185,8 @@ pub type InterpNDOwned<T, S> = InterpND<OwnedRepr<T>, S>;
 
 extrapolate_impl!(InterpND, StrategyND);
 partialeq_impl!(InterpND, InterpDataND, StrategyND);
+#[cfg(feature = "serde")]
+serialize_nested_impl!(InterpND, InterpDataND, StrategyND);
 
 impl<D, S> InterpND<D, S>
 where

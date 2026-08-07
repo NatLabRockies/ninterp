@@ -24,6 +24,12 @@ Everything below is merged to `main` but not yet tagged/released.
   runtime-selected direction.
 - `strategy::LinearUniform`, `Step`, `StepLower`, and `StepUpper` are all available for
   every dimensionality and included in the corresponding `Strategy*Enum` types.
+- `Nested` wrapper / `serialize_nested` helper / `SerializeNested` trait (`prelude`, behind
+  the `serde` feature): opt into the nested-array format at a specific serialization call
+  site, e.g. `serde_json::to_string(&Nested(&interp))` or
+  `#[serde(serialize_with = "serialize_nested")]` on a field. Falls back to the `ndarray`
+  format on non-`is_human_readable` (binary) serializers, since there's nothing to nest
+  there and those formats can't read it back anyway.
 
 ### Changed
 - **Breaking:** `find_nearest_index` is renamed to `locate_lower_index` and, along with
@@ -47,6 +53,13 @@ Everything below is merged to `main` but not yet tagged/released.
   `NonMonotonic`. `EmptyGrid` is removed outright; a grid dimension with 0 or 1 points
   is now rejected by the same `InsufficientGridPoints`, since a single point can't
   bracket a query either.
+- **Breaking:** the `serde_ndim` Cargo feature is removed. It switched the nested-array
+  write format on for every array field crate-wide, and because Cargo features are
+  additive and unify across the dependency graph, enabling it anywhere in a binary
+  silently flipped the wire format for every other `ninterp` consumer in that binary too.
+  Migrate to wrapping values in `Nested` (or `serialize_with = "serialize_nested"` on a
+  field) at the specific call site that wants it. Reading already accepted either format
+  and continues to, so data written by prior versions still loads fine.
 - Significant ND performance work: `Linear`/`Nearest` no longer build coordinate
   permutation tables via `itertools::multi_cartesian_product` (removing the `itertools`
   dependency); corner values are now gathered into a flat buffer and reduced with an
@@ -75,6 +88,14 @@ Everything below is merged to `main` but not yet tagged/released.
   `Extrapolate::Enable` was selected, since the "at least 2 points" check only ran for
   that one setting. It's now checked unconditionally at construction, so this is a
   `ValidateError::InsufficientGridPoints` instead of a panic.
+- Serde: non-self-describing formats (bincode, postcard, ...) could never actually read
+  back an interpolator they had just written, in either feature configuration.
+  `deserialize_any` was called unconditionally, which those formats don't support at all
+  (`Bincode does not support the serde::Deserializer::deserialize_any method`); separately,
+  a fixed-size grid (`[ArrayBase<D, Ix1>; N]`) serializes as a tuple, which those formats
+  encode without a length prefix, so reading it back as a seq desynchronized the byte
+  stream (`unknown array version: 0`). Both are now gated on `is_human_readable()`, falling
+  back to `ndarray`'s own (de)serialization for non-human-readable formats.
 
 ## [0.9.1] - 2026-08-03
 
