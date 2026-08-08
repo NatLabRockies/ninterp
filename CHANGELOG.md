@@ -49,6 +49,10 @@ Everything below is merged to `main` but not yet tagged/released.
   expose as public inherent methods.
 
 ### Changed
+- **Breaking:** `Strategy1DEnum`/`Strategy2DEnum`/`Strategy3DEnum`/`StrategyNDEnum` are
+  now `#[non_exhaustive]`, since every new built-in strategy adds a variant. Any
+  existing exhaustive `match` over one without a `_` arm now needs one; construction
+  (`strategy::Linear.into()`, `set_strategy(...)`, etc.) is unaffected.
 - **Breaking:** `Strategy1D`/`Strategy2D`/`Strategy3D`/`StrategyND::init` is split into
   a pure `validate(&self, data)` and a mutating `init(&mut self, data)`, both
   default-no-op (non-breaking for existing custom strategy implementations, which keep
@@ -58,10 +62,6 @@ Everything below is merged to `main` but not yet tagged/released.
   `new` and `set_strategy` call both; `Interpolator::validate` now also calls
   `validate_strategy` (see below), so invariant violations like a non-uniform
   `LinearUniform` grid are caught there too, not just via `init_strategy`.
-- Each `Interp1D`/`Interp2D`/`Interp3D`/`InterpND` gains a public `validate_strategy()`,
-  mirroring the existing `init_strategy()`: re-runs the strategy's `validate` against
-  the current data, for use after mutating the public `data`/`strategy` fields
-  directly.
 - **Breaking:** `find_nearest_index` is renamed to `locate_lower_index` and, along with
   the other grid/index search helpers (`step_index` -> `locate_step_index`,
   `uniform_lower_index` -> `locate_lower_index_uniform`, `exact_index`,
@@ -90,6 +90,15 @@ Everything below is merged to `main` but not yet tagged/released.
   Migrate to wrapping values in `Nested` (or `serialize_with = "serialize_nested"` on a
   field) at the specific call site that wants it. Reading already accepted either format
   and continues to, so data written by prior versions still loads fine.
+- **Breaking:** `extrapolate` is now a required field on deserialize instead of silently
+  defaulting to `Extrapolate::Error` when omitted. `data` and `strategy` were already
+  required; this was the only field with that leniency, and nothing pinned the behavior
+  down, so a missing field now fails loudly (`missing field "extrapolate"`) instead of
+  risking a silently different interpolator than intended.
+- Each `Interp1D`/`Interp2D`/`Interp3D`/`InterpND` gains a public `validate_strategy()`,
+  mirroring the existing `init_strategy()`: re-runs the strategy's `validate` against
+  the current data, for use after mutating the public `data`/`strategy` fields
+  directly.
 - Significant ND performance work: `Linear`/`Nearest` no longer build coordinate
   permutation tables via `itertools::multi_cartesian_product` (removing the `itertools`
   dependency); corner values are now gathered into a flat buffer and reduced with an
@@ -107,11 +116,6 @@ Everything below is merged to `main` but not yet tagged/released.
   down to `PartialEq + Debug` (`+ Serialize`), matching what those impls actually need:
   they only compare/serialize fields and never touch the strategy trait. Construction and
   interpolation still require `Float`, unchanged.
-- **Breaking:** `extrapolate` is now a required field on deserialize instead of silently
-  defaulting to `Extrapolate::Error` when omitted. `data` and `strategy` were already
-  required; this was the only field with that leniency, and nothing pinned the behavior
-  down, so a missing field now fails loudly (`missing field "extrapolate"`) instead of
-  risking a silently different interpolator than intended.
 - Various documentation and README improvements; CI workflow polish.
 
 ### Fixed
