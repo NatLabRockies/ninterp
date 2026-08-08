@@ -34,16 +34,19 @@ pub trait Interpolator<T>: DynClone {
     /// Interpolate without bounds/extrapolation checks, for use in hot loops where the
     /// caller has already checked bounds and knows that extrapolation is not needed.
     ///
-    /// Default just unwraps [`Interpolator::interpolate`] — non-breaking for existing
+    /// Default just unwraps [`Interpolator::interpolate`], non-breaking for existing
     /// implementors. `Interp1D`/`2D`/`3D`/`ND` override this to actually skip the checks
     /// instead of just discarding the `Result`; through `Box<dyn Interpolator<T>>` this
     /// still pays vtable dispatch either way, so the win is smaller than calling a
     /// concrete `InterpXD<D, S>::interpolate_fast` directly.
     ///
     /// # Panics
-    /// Panics if `point.len()` doesn't match [`Interpolator::ndim`], or if `point` is out
-    /// of bounds and the strategy's checked path would have errored for a reason beyond
-    /// bounds (e.g. `CubicSpline`'s boundary-condition validation).
+    /// Panics if `point.len()` doesn't match [`Interpolator::ndim`], or if the strategy's
+    /// checked `interpolate` would have returned `Err` for a reason other than length or
+    /// the outer bounds/extrapolation check. No strategy shipped in this crate does that
+    /// today; it would only apply to a strategy with real per-point fallible work inside
+    /// its own `interpolate`, distinct from anything already catchable once via
+    /// `validate`/`init` at construction time.
     fn interpolate_fast(&self, point: &[T]) -> T {
         self.interpolate(point)
             .expect("interpolate_fast: invalid point or data")
