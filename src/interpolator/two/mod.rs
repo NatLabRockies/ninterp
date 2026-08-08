@@ -63,7 +63,6 @@ where
     /// Interpolation strategy.
     pub strategy: S,
     /// Extrapolation setting.
-    #[cfg_attr(feature = "serde", serde(default))]
     pub extrapolate: Extrapolate<D::Elem>,
 }
 /// [`Interp2D`] that views data.
