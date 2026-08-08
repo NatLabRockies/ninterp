@@ -282,7 +282,7 @@ where
     }
 
     /// Interpolate without bounds/extrapolation checks, for use in hot loops where the
-    /// caller has already checked bounds and knows that extrapolation handling is not needed.
+    /// caller has already checked bounds or knows that extrapolation handling is not needed.
     ///
     /// # Panics
     /// Panics if `point.len()` does not match [`InterpolatorEnum::ndim`].
