@@ -460,6 +460,47 @@ fn test_extrapolate_wrap() {
 }
 
 #[test]
+fn test_interpolate_fast() {
+    let interp = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(
+        interp.interpolate_fast(&[0.25, 0.65, 0.9]),
+        interp.interpolate(&[0.25, 0.65, 0.9]).unwrap()
+    );
+}
+
+#[test]
+#[should_panic(expected = "interpolate_fast: point length mismatch")]
+fn test_interpolate_fast_point_too_short() {
+    let interp = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    interp.interpolate_fast(&[0.5, 0.5]);
+}
+
+#[test]
+#[should_panic(expected = "interpolate_fast: point length mismatch")]
+fn test_interpolate_fast_point_too_long() {
+    let interp = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    interp.interpolate_fast(&[0.5, 0.5, 0.5, 0.5]);
+}
+
+#[test]
 fn test_mismatched_grid() {
     assert!(matches!(
         InterpND::new(

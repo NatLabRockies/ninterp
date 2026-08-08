@@ -39,6 +39,18 @@ where
         point: &[D::Elem; 1],
     ) -> Result<D::Elem, InterpolateError>;
 
+    /// Interpolate without the `Result` wrapper, assuming `point` and `data` are
+    /// already valid.
+    ///
+    /// Default just unwraps [`Strategy1D::interpolate`]. Override only if this
+    /// strategy's checked path does real internal fallible work beyond producing
+    /// the final `Ok(...)`; otherwise the default already compiles to the same thing.
+    #[inline]
+    fn interpolate_fast(&self, data: &InterpData1D<D>, point: &[D::Elem; 1]) -> D::Elem {
+        self.interpolate(data, point)
+            .expect("interpolate_fast: invalid point or data")
+    }
+
     /// Does this type's [`Strategy1D::interpolate`] provision for extrapolation?
     fn allow_extrapolate(&self) -> bool;
 }
@@ -69,6 +81,11 @@ where
         point: &[D::Elem; 1],
     ) -> Result<D::Elem, InterpolateError> {
         (**self).interpolate(data, point)
+    }
+
+    #[inline]
+    fn interpolate_fast(&self, data: &InterpData1D<D>, point: &[D::Elem; 1]) -> D::Elem {
+        (**self).interpolate_fast(data, point)
     }
 
     #[inline]
@@ -114,6 +131,18 @@ where
         point: &[D::Elem; 2],
     ) -> Result<D::Elem, InterpolateError>;
 
+    /// Interpolate without the `Result` wrapper, assuming `point` and `data` are
+    /// already valid.
+    ///
+    /// Default just unwraps [`Strategy2D::interpolate`]. Override only if this
+    /// strategy's checked path does real internal fallible work beyond producing
+    /// the final `Ok(...)`; otherwise the default already compiles to the same thing.
+    #[inline]
+    fn interpolate_fast(&self, data: &InterpData2D<D>, point: &[D::Elem; 2]) -> D::Elem {
+        self.interpolate(data, point)
+            .expect("interpolate_fast: invalid point or data")
+    }
+
     /// Does this type's [`Strategy2D::interpolate`] provision for extrapolation?
     fn allow_extrapolate(&self) -> bool;
 }
@@ -144,6 +173,11 @@ where
         point: &[D::Elem; 2],
     ) -> Result<D::Elem, InterpolateError> {
         (**self).interpolate(data, point)
+    }
+
+    #[inline]
+    fn interpolate_fast(&self, data: &InterpData2D<D>, point: &[D::Elem; 2]) -> D::Elem {
+        (**self).interpolate_fast(data, point)
     }
 
     #[inline]
@@ -189,6 +223,18 @@ where
         point: &[D::Elem; 3],
     ) -> Result<D::Elem, InterpolateError>;
 
+    /// Interpolate without the `Result` wrapper, assuming `point` and `data` are
+    /// already valid.
+    ///
+    /// Default just unwraps [`Strategy3D::interpolate`]. Override only if this
+    /// strategy's checked path does real internal fallible work beyond producing
+    /// the final `Ok(...)`; otherwise the default already compiles to the same thing.
+    #[inline]
+    fn interpolate_fast(&self, data: &InterpData3D<D>, point: &[D::Elem; 3]) -> D::Elem {
+        self.interpolate(data, point)
+            .expect("interpolate_fast: invalid point or data")
+    }
+
     /// Does this type's [`Strategy3D::interpolate`] provision for extrapolation?
     fn allow_extrapolate(&self) -> bool;
 }
@@ -219,6 +265,11 @@ where
         point: &[D::Elem; 3],
     ) -> Result<D::Elem, InterpolateError> {
         (**self).interpolate(data, point)
+    }
+
+    #[inline]
+    fn interpolate_fast(&self, data: &InterpData3D<D>, point: &[D::Elem; 3]) -> D::Elem {
+        (**self).interpolate_fast(data, point)
     }
 
     #[inline]
@@ -264,6 +315,18 @@ where
         point: &[D::Elem],
     ) -> Result<D::Elem, InterpolateError>;
 
+    /// Interpolate without the `Result` wrapper, assuming `point` and `data` are
+    /// already valid.
+    ///
+    /// Default just unwraps [`StrategyND::interpolate`]. Override only if this
+    /// strategy's checked path does real internal fallible work beyond producing
+    /// the final `Ok(...)`; otherwise the default already compiles to the same thing.
+    #[inline]
+    fn interpolate_fast(&self, data: &InterpDataND<D>, point: &[D::Elem]) -> D::Elem {
+        self.interpolate(data, point)
+            .expect("interpolate_fast: invalid point or data")
+    }
+
     /// Does this type's [`StrategyND::interpolate`] provision for extrapolation?
     fn allow_extrapolate(&self) -> bool;
 }
@@ -298,5 +361,10 @@ where
     #[inline]
     fn allow_extrapolate(&self) -> bool {
         (**self).allow_extrapolate()
+    }
+
+    #[inline]
+    fn interpolate_fast(&self, data: &InterpDataND<D>, point: &[D::Elem]) -> D::Elem {
+        (**self).interpolate_fast(data, point)
     }
 }

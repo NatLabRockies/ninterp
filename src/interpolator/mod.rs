@@ -31,6 +31,26 @@ pub trait Interpolator<T>: DynClone {
     fn interpolate(&self, point: &[T]) -> Result<T, InterpolateError>;
     /// Set [`Extrapolate`] variant, checking validity.
     fn set_extrapolate(&mut self, extrapolate: Extrapolate<T>) -> Result<(), ValidateError>;
+    /// Interpolate without bounds/extrapolation checks, for use in hot loops where the
+    /// caller has already checked bounds and knows that extrapolation is not needed.
+    ///
+    /// Default just unwraps [`Interpolator::interpolate`], non-breaking for existing
+    /// implementors. `Interp1D`/`2D`/`3D`/`ND` override this to actually skip the checks
+    /// instead of just discarding the `Result`; through `Box<dyn Interpolator<T>>` this
+    /// still pays vtable dispatch either way, so the win is smaller than calling a
+    /// concrete `InterpXD<D, S>::interpolate_fast` directly.
+    ///
+    /// # Panics
+    /// Panics if `point.len()` doesn't match [`Interpolator::ndim`], or if the strategy's
+    /// checked `interpolate` would have returned `Err` for a reason other than length or
+    /// the outer bounds/extrapolation check. No strategy shipped in this crate does that
+    /// today; it would only apply to a strategy with real per-point fallible work inside
+    /// its own `interpolate`, distinct from anything already catchable once via
+    /// `validate`/`init` at construction time.
+    fn interpolate_fast(&self, point: &[T]) -> T {
+        self.interpolate(point)
+            .expect("interpolate_fast: invalid point or data")
+    }
 }
 
 clone_trait_object!(<T> Interpolator<T>);
@@ -47,6 +67,9 @@ impl<T> Interpolator<T> for Box<dyn Interpolator<T>> {
     }
     fn set_extrapolate(&mut self, extrapolate: Extrapolate<T>) -> Result<(), ValidateError> {
         (**self).set_extrapolate(extrapolate)
+    }
+    fn interpolate_fast(&self, point: &[T]) -> T {
+        (**self).interpolate_fast(point)
     }
 }
 
@@ -105,7 +128,7 @@ macro_rules! partialeq_impl {
         where
             D: Data + RawDataClone + Clone,
             D::Elem: PartialEq + Debug,
-            S: $Strategy<D> + Clone + PartialEq,
+            S: Clone + PartialEq,
             $Data<D>: PartialEq,
         {
             fn eq(&self, other: &Self) -> bool {
@@ -125,7 +148,7 @@ macro_rules! serialize_nested_impl {
         where
             D: Data + RawDataClone + Clone,
             D::Elem: PartialEq + Debug + Serialize,
-            S: $Strategy<D> + Clone + Serialize,
+            S: Clone + Serialize,
             $Data<D>: SerializeNested + Serialize,
         {
             fn serialize_nested<Ser>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error>

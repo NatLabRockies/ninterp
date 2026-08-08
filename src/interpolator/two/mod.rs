@@ -56,14 +56,13 @@ pub struct Interp2D<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
-    S: Strategy2D<D> + Clone,
+    S: Clone,
 {
     /// Interpolator data.
     pub data: InterpData2D<D>,
     /// Interpolation strategy.
     pub strategy: S,
     /// Extrapolation setting.
-    #[cfg_attr(feature = "serde", serde(default))]
     pub extrapolate: Extrapolate<D::Elem>,
 }
 /// [`Interp2D`] that views data.
@@ -99,6 +98,12 @@ where
     /// does not call `init`).
     pub fn init_strategy(&mut self) -> Result<(), ValidateError> {
         self.strategy.init(&self.data)
+    }
+
+    /// Interpolate without bounds/extrapolation checks, for use in hot loops where the
+    /// caller has already checked bounds or knows that extrapolation handling is not needed.
+    pub fn interpolate_fast(&self, point: &[D::Elem; 2]) -> D::Elem {
+        self.strategy.interpolate_fast(&self.data, point)
     }
 }
 
@@ -252,6 +257,13 @@ where
         self.check_extrapolate(&extrapolate)?;
         self.extrapolate = extrapolate;
         Ok(())
+    }
+
+    fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
+        let point: &[D::Elem; N] = point
+            .try_into()
+            .expect("interpolate_fast: point length mismatch");
+        self.interpolate_fast(point)
     }
 }
 

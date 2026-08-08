@@ -75,6 +75,12 @@ where
     fn set_extrapolate(&mut self, _extrapolate: Extrapolate<T>) -> Result<(), ValidateError> {
         Ok(())
     }
+
+    /// Returns the contained value [`Interp0D::0`].
+    #[inline]
+    fn interpolate_fast(&self, _point: &[T]) -> T {
+        self.0.clone()
+    }
 }
 #[cfg(test)]
 mod tests {

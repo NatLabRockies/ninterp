@@ -168,14 +168,13 @@ pub struct InterpND<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
-    S: StrategyND<D> + Clone,
+    S: Clone,
 {
     /// Interpolator data.
     pub data: InterpDataND<D>,
     /// Interpolation strategy.
     pub strategy: S,
     /// Extrapolation setting.
-    #[cfg_attr(feature = "serde", serde(default))]
     pub extrapolate: Extrapolate<D::Elem>,
 }
 /// [`InterpND`] that views data.
@@ -385,6 +384,15 @@ where
         self.check_extrapolate(&extrapolate)?;
         self.extrapolate = extrapolate;
         Ok(())
+    }
+
+    fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
+        assert_eq!(
+            point.len(),
+            self.ndim(),
+            "interpolate_fast: point length mismatch"
+        );
+        self.strategy.interpolate_fast(&self.data, point)
     }
 }
 

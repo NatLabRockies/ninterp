@@ -78,7 +78,7 @@ use strategy::enums::*;
 pub enum InterpolatorEnum<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
+    D::Elem: PartialEq + Debug,
 {
     Interp0D(Interp0D<D::Elem>),
     Interp1D(Interp1D<D, Strategy1DEnum>),
@@ -95,7 +95,7 @@ pub type InterpolatorEnumOwned<T> = InterpolatorEnum<OwnedRepr<T>>;
 impl<D> SerializeNested for InterpolatorEnum<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug + Serialize,
+    D::Elem: PartialEq + Debug + Serialize,
 {
     /// `#[serde(untagged)]`, so each variant serializes as its inner value.
     fn serialize_nested<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -115,7 +115,7 @@ where
 impl<D> PartialEq for InterpolatorEnum<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
+    D::Elem: PartialEq + Debug,
     ArrayBase<D, Ix1>: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
@@ -235,6 +235,81 @@ where
             InterpolatorEnum::InterpND(interp) => InterpolatorEnum::InterpND(interp.into_owned()),
         }
     }
+
+    /// Check applicability of the current variant's strategy, data, and extrapolate
+    /// setting.
+    pub fn check_extrapolate(
+        &self,
+        extrapolate: &Extrapolate<D::Elem>,
+    ) -> Result<(), ValidateError> {
+        match self {
+            InterpolatorEnum::Interp0D(_) => Ok(()),
+            InterpolatorEnum::Interp1D(interp) => interp.check_extrapolate(extrapolate),
+            InterpolatorEnum::Interp2D(interp) => interp.check_extrapolate(extrapolate),
+            InterpolatorEnum::Interp3D(interp) => interp.check_extrapolate(extrapolate),
+            InterpolatorEnum::InterpND(interp) => interp.check_extrapolate(extrapolate),
+        }
+    }
+
+    /// Re-run the current variant's strategy `validate` against its data.
+    ///
+    /// `new_0d`/`new_1d`/etc. already call this internally, so this is only needed
+    /// after mutating a variant's `data`/`strategy` fields directly (via `match`).
+    pub fn validate_strategy(&self) -> Result<(), ValidateError> {
+        match self {
+            InterpolatorEnum::Interp0D(_) => Ok(()),
+            InterpolatorEnum::Interp1D(interp) => interp.validate_strategy(),
+            InterpolatorEnum::Interp2D(interp) => interp.validate_strategy(),
+            InterpolatorEnum::Interp3D(interp) => interp.validate_strategy(),
+            InterpolatorEnum::InterpND(interp) => interp.validate_strategy(),
+        }
+    }
+
+    /// Re-run the current variant's strategy `init` against its data.
+    ///
+    /// `new_0d`/`new_1d`/etc. already call this internally, so this is only needed
+    /// after bypassing them: mutating a variant's `data`/`strategy` fields directly
+    /// (via `match`), or deserializing an interpolator with a stateful custom strategy
+    /// (`Deserialize` does not call `init`).
+    pub fn init_strategy(&mut self) -> Result<(), ValidateError> {
+        match self {
+            InterpolatorEnum::Interp0D(_) => Ok(()),
+            InterpolatorEnum::Interp1D(interp) => interp.init_strategy(),
+            InterpolatorEnum::Interp2D(interp) => interp.init_strategy(),
+            InterpolatorEnum::Interp3D(interp) => interp.init_strategy(),
+            InterpolatorEnum::InterpND(interp) => interp.init_strategy(),
+        }
+    }
+
+    /// Interpolate without bounds/extrapolation checks, for use in hot loops where the
+    /// caller has already checked bounds or knows that extrapolation handling is not needed.
+    ///
+    /// # Panics
+    /// Panics if `point.len()` does not match [`InterpolatorEnum::ndim`].
+    pub fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem
+    where
+        D::Elem: Euclid,
+    {
+        match self {
+            InterpolatorEnum::Interp0D(interp) => interp.0,
+            InterpolatorEnum::Interp1D(interp) => interp.interpolate_fast(
+                point
+                    .try_into()
+                    .expect("interpolate_fast: point length mismatch"),
+            ),
+            InterpolatorEnum::Interp2D(interp) => interp.interpolate_fast(
+                point
+                    .try_into()
+                    .expect("interpolate_fast: point length mismatch"),
+            ),
+            InterpolatorEnum::Interp3D(interp) => interp.interpolate_fast(
+                point
+                    .try_into()
+                    .expect("interpolate_fast: point length mismatch"),
+            ),
+            InterpolatorEnum::InterpND(interp) => interp.interpolate_fast(point),
+        }
+    }
 }
 
 impl<D> Interpolator<D::Elem> for InterpolatorEnum<D>
@@ -284,6 +359,16 @@ where
             InterpolatorEnum::Interp3D(interp) => interp.set_extrapolate(extrapolate),
             InterpolatorEnum::InterpND(interp) => interp.set_extrapolate(extrapolate),
         }
+    }
+
+    /// Forwards to the inherent [`InterpolatorEnum::interpolate_fast`]. Without this
+    /// override, code reaching `InterpolatorEnum` only through the `Interpolator` trait
+    /// (generic code, or `Box<dyn Interpolator<T>>`) would silently fall back to this
+    /// trait's default (the checked `interpolate` path) instead of the real fast path,
+    /// since the inherent method is invisible once the concrete type is erased.
+    #[inline]
+    fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
+        self.interpolate_fast(point)
     }
 }
 

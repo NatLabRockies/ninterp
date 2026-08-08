@@ -36,6 +36,17 @@ Everything below is merged to `main` but not yet tagged/released.
   `StepLower`/`StepUpper` are built from, now reusable from custom strategies instead of
   needing to be reimplemented. `check_uniform_grid`'s error message no longer hardcodes
   `"LinearUniform:"`, since other strategies can call it directly now too.
+- `interpolate_fast` on `Strategy1D`/`2D`/`3D`/`ND` and `Interpolator<T>` (both
+  default-provided, non-breaking): a `Result`-free interpolation path for hot loops
+  where the caller has already checked the point is in-bounds and knows extrapolation
+  isn't needed. `Interp0D`/`1D`/`2D`/`3D`/`ND`, `InterpolatorEnum`, and
+  `Box<dyn Interpolator<T>>` all override it with the real skip-checks path;
+  `Interp1D`/`2D`/`3D` additionally get an inherent `interpolate_fast(&self, &[D::Elem; N])`
+  taking the point as a fixed-size array, so the point length is guaranteed by the type
+  system instead of checked at runtime.
+- `InterpolatorEnum` gains `check_extrapolate`/`validate_strategy`/`init_strategy`
+  forwarding to the current variant, matching what `Interp1D`/`2D`/`3D`/`ND` already
+  expose as public inherent methods.
 
 ### Changed
 - **Breaking:** `Strategy1D`/`Strategy2D`/`Strategy3D`/`StrategyND::init` is split into
@@ -92,6 +103,15 @@ Everything below is merged to `main` but not yet tagged/released.
   (`{"Step": [...]}`) is unchanged and does not accept those aliases.
 - Loosened `Step`/`Nearest` strategy trait bounds back down after the `LinearUniform`
   work had temporarily tightened them further than necessary.
+- Loosened `InterpolatorEnum`'s `PartialEq`/`SerializeNested` impls off `D::Elem: Float`
+  down to `PartialEq + Debug` (`+ Serialize`), matching what those impls actually need:
+  they only compare/serialize fields and never touch the strategy trait. Construction and
+  interpolation still require `Float`, unchanged.
+- **Breaking:** `extrapolate` is now a required field on deserialize instead of silently
+  defaulting to `Extrapolate::Error` when omitted. `data` and `strategy` were already
+  required; this was the only field with that leniency, and nothing pinned the behavior
+  down, so a missing field now fails loudly (`missing field "extrapolate"`) instead of
+  risking a silently different interpolator than intended.
 - Various documentation and README improvements; CI workflow polish.
 
 ### Fixed
