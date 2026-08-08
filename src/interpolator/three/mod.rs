@@ -102,7 +102,7 @@ where
     }
 
     /// Interpolate without bounds/extrapolation checks, for use in hot loops where the
-    /// caller has already checked bounds and knows that extrapolation is not needed.
+    /// caller has already checked bounds and knows that extrapolation handling is not needed.
     pub fn interpolate_fast(&self, point: &[D::Elem; 3]) -> D::Elem {
         self.strategy.interpolate_fast(&self.data, point)
     }
