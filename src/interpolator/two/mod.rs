@@ -56,7 +56,7 @@ pub struct Interp2D<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
-    S: Strategy2D<D> + Clone,
+    S: Clone,
 {
     /// Interpolator data.
     pub data: InterpData2D<D>,

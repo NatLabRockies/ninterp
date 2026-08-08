@@ -105,7 +105,7 @@ macro_rules! partialeq_impl {
         where
             D: Data + RawDataClone + Clone,
             D::Elem: PartialEq + Debug,
-            S: $Strategy<D> + Clone + PartialEq,
+            S: Clone + PartialEq,
             $Data<D>: PartialEq,
         {
             fn eq(&self, other: &Self) -> bool {
@@ -125,7 +125,7 @@ macro_rules! serialize_nested_impl {
         where
             D: Data + RawDataClone + Clone,
             D::Elem: PartialEq + Debug + Serialize,
-            S: $Strategy<D> + Clone + Serialize,
+            S: Clone + Serialize,
             $Data<D>: SerializeNested + Serialize,
         {
             fn serialize_nested<Ser>(&self, serializer: Ser) -> Result<Ser::Ok, Ser::Error>

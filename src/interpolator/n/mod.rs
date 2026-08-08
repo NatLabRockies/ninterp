@@ -168,7 +168,7 @@ pub struct InterpND<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
-    S: StrategyND<D> + Clone,
+    S: Clone,
 {
     /// Interpolator data.
     pub data: InterpDataND<D>,

@@ -78,7 +78,7 @@ use strategy::enums::*;
 pub enum InterpolatorEnum<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
+    D::Elem: PartialEq + Debug,
 {
     Interp0D(Interp0D<D::Elem>),
     Interp1D(Interp1D<D, Strategy1DEnum>),
@@ -95,7 +95,7 @@ pub type InterpolatorEnumOwned<T> = InterpolatorEnum<OwnedRepr<T>>;
 impl<D> SerializeNested for InterpolatorEnum<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug + Serialize,
+    D::Elem: PartialEq + Debug + Serialize,
 {
     /// `#[serde(untagged)]`, so each variant serializes as its inner value.
     fn serialize_nested<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -115,7 +115,7 @@ where
 impl<D> PartialEq for InterpolatorEnum<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
+    D::Elem: PartialEq + Debug,
     ArrayBase<D, Ix1>: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
