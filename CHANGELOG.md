@@ -66,7 +66,7 @@ Everything below is merged to `main` but not yet tagged/released.
   the other grid/index search helpers (`step_index` -> `locate_step_index`,
   `uniform_lower_index` -> `locate_lower_index_uniform`, `exact_index`,
   `check_uniform_grid`), moves from `strategy::traits` to a new `strategy::utils`
-  module — `traits` now holds only the `Strategy1D`/`2D`/`3D`/`ND` trait definitions.
+  module; `traits` now holds only the `Strategy1D`/`2D`/`3D`/`ND` trait definitions.
   No deprecation shim, matching the other breaking renames in this release.
   `locate_lower_index` also now clamps out-of-range points to `[0, len - 2]` itself,
   rather than relying on each `Linear` call site to inline the same clamp before
