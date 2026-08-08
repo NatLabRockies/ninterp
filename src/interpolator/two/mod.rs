@@ -258,6 +258,13 @@ where
         self.extrapolate = extrapolate;
         Ok(())
     }
+
+    fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
+        let point: &[D::Elem; N] = point
+            .try_into()
+            .expect("interpolate_fast: point length mismatch");
+        self.interpolate_fast(point)
+    }
 }
 
 impl<D> Interp2D<D, Box<dyn Strategy2D<D>>>

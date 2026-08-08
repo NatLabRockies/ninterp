@@ -286,7 +286,10 @@ where
     ///
     /// # Panics
     /// Panics if `point.len()` does not match [`InterpolatorEnum::ndim`].
-    pub fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
+    pub fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem
+    where
+        D::Elem: Euclid,
+    {
         match self {
             InterpolatorEnum::Interp0D(interp) => interp.0,
             InterpolatorEnum::Interp1D(interp) => interp.interpolate_fast(
@@ -356,6 +359,16 @@ where
             InterpolatorEnum::Interp3D(interp) => interp.set_extrapolate(extrapolate),
             InterpolatorEnum::InterpND(interp) => interp.set_extrapolate(extrapolate),
         }
+    }
+
+    /// Forwards to the inherent [`InterpolatorEnum::interpolate_fast`]. Without this
+    /// override, code reaching `InterpolatorEnum` only through the `Interpolator` trait
+    /// (generic code, or `Box<dyn Interpolator<T>>`) would silently fall back to this
+    /// trait's default (the checked `interpolate` path) instead of the real fast path,
+    /// since the inherent method is invisible once the concrete type is erased.
+    #[inline]
+    fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
+        self.interpolate_fast(point)
     }
 }
 
