@@ -387,6 +387,11 @@ where
     }
 
     fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
+        assert_eq!(
+            point.len(),
+            self.ndim(),
+            "interpolate_fast: point length mismatch"
+        );
         self.strategy.interpolate_fast(&self.data, point)
     }
 }
