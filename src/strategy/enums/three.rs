@@ -5,6 +5,7 @@ use super::*;
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
+#[non_exhaustive]
 pub enum Strategy3DEnum {
     Linear(strategy::Linear),
     LinearUniform(strategy::LinearUniform),

@@ -121,7 +121,7 @@ pub fn exact_index<T: PartialOrd>(grid: ArrayView1<T>, lower: usize, point: &T) 
 /// Computes the lower bracket index for a uniformly-spaced grid in O(1).
 ///
 /// Equivalent to [`locate_lower_index`] but replaces binary search with direct arithmetic.
-/// Only valid when the grid spacing is uniform — validate with [`check_uniform_grid`] first.
+/// Only valid when the grid spacing is uniform; validate with [`check_uniform_grid`] first.
 pub fn locate_lower_index_uniform<T: Float>(grid0: T, step: T, n: usize, point: T) -> usize {
     let t = (point - grid0) / step;
     if t < T::zero() {
@@ -138,7 +138,7 @@ pub fn locate_lower_index_uniform<T: Float>(grid0: T, step: T, n: usize, point: 
 /// for the matching O(1) lookup.
 pub fn check_uniform_grid<T: Float>(grid: ArrayView1<T>, dim: usize) -> Result<(), ValidateError> {
     let step = grid[1] - grid[0];
-    // 1024 * epsilon via 10 doublings — avoids numeric literal casting
+    // 1024 * epsilon via 10 doublings, avoids numeric literal casting
     let tolerance = {
         let mut tol = T::epsilon();
         for _ in 0..10 {
