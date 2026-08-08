@@ -236,6 +236,51 @@ where
         }
     }
 
+    /// Check applicability of the current variant's strategy, data, and extrapolate
+    /// setting.
+    pub fn check_extrapolate(
+        &self,
+        extrapolate: &Extrapolate<D::Elem>,
+    ) -> Result<(), ValidateError> {
+        match self {
+            InterpolatorEnum::Interp0D(_) => Ok(()),
+            InterpolatorEnum::Interp1D(interp) => interp.check_extrapolate(extrapolate),
+            InterpolatorEnum::Interp2D(interp) => interp.check_extrapolate(extrapolate),
+            InterpolatorEnum::Interp3D(interp) => interp.check_extrapolate(extrapolate),
+            InterpolatorEnum::InterpND(interp) => interp.check_extrapolate(extrapolate),
+        }
+    }
+
+    /// Re-run the current variant's strategy `validate` against its data.
+    ///
+    /// `new_0d`/`new_1d`/etc. already call this internally, so this is only needed
+    /// after mutating a variant's `data`/`strategy` fields directly (via `match`).
+    pub fn validate_strategy(&self) -> Result<(), ValidateError> {
+        match self {
+            InterpolatorEnum::Interp0D(_) => Ok(()),
+            InterpolatorEnum::Interp1D(interp) => interp.validate_strategy(),
+            InterpolatorEnum::Interp2D(interp) => interp.validate_strategy(),
+            InterpolatorEnum::Interp3D(interp) => interp.validate_strategy(),
+            InterpolatorEnum::InterpND(interp) => interp.validate_strategy(),
+        }
+    }
+
+    /// Re-run the current variant's strategy `init` against its data.
+    ///
+    /// `new_0d`/`new_1d`/etc. already call this internally, so this is only needed
+    /// after bypassing them: mutating a variant's `data`/`strategy` fields directly
+    /// (via `match`), or deserializing an interpolator with a stateful custom strategy
+    /// (`Deserialize` does not call `init`).
+    pub fn init_strategy(&mut self) -> Result<(), ValidateError> {
+        match self {
+            InterpolatorEnum::Interp0D(_) => Ok(()),
+            InterpolatorEnum::Interp1D(interp) => interp.init_strategy(),
+            InterpolatorEnum::Interp2D(interp) => interp.init_strategy(),
+            InterpolatorEnum::Interp3D(interp) => interp.init_strategy(),
+            InterpolatorEnum::InterpND(interp) => interp.init_strategy(),
+        }
+    }
+
     /// Interpolate without bounds/extrapolation checks, for use in hot loops where the
     /// caller has already checked bounds and knows that extrapolation is not needed.
     ///
