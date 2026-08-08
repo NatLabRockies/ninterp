@@ -235,6 +235,33 @@ where
             InterpolatorEnum::InterpND(interp) => InterpolatorEnum::InterpND(interp.into_owned()),
         }
     }
+
+    /// Interpolate without bounds/extrapolation checks, for use in hot loops where the
+    /// caller has already checked bounds and knows that extrapolation is not needed.
+    ///
+    /// # Panics
+    /// Panics if `point.len()` does not match [`InterpolatorEnum::ndim`].
+    pub fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
+        match self {
+            InterpolatorEnum::Interp0D(interp) => interp.0,
+            InterpolatorEnum::Interp1D(interp) => interp.interpolate_fast(
+                point
+                    .try_into()
+                    .expect("interpolate_fast: point length mismatch"),
+            ),
+            InterpolatorEnum::Interp2D(interp) => interp.interpolate_fast(
+                point
+                    .try_into()
+                    .expect("interpolate_fast: point length mismatch"),
+            ),
+            InterpolatorEnum::Interp3D(interp) => interp.interpolate_fast(
+                point
+                    .try_into()
+                    .expect("interpolate_fast: point length mismatch"),
+            ),
+            InterpolatorEnum::InterpND(interp) => interp.interpolate_fast(point),
+        }
+    }
 }
 
 impl<D> Interpolator<D::Elem> for InterpolatorEnum<D>

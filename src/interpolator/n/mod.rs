@@ -212,6 +212,12 @@ where
     pub fn init_strategy(&mut self) -> Result<(), ValidateError> {
         self.strategy.init(&self.data)
     }
+
+    /// Interpolate without bounds/extrapolation checks, for use in hot loops where the
+    /// caller has already checked bounds and knows that extrapolation is not needed.
+    pub fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
+        self.strategy.interpolate_fast(&self.data, point)
+    }
 }
 
 impl<D, S> InterpND<D, S>
