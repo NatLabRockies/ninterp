@@ -343,9 +343,21 @@ where
     fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
         match self {
             InterpolatorEnum::Interp0D(interp) => interp.interpolate(point),
-            InterpolatorEnum::Interp1D(interp) => interp.interpolate(point),
-            InterpolatorEnum::Interp2D(interp) => interp.interpolate(point),
-            InterpolatorEnum::Interp3D(interp) => interp.interpolate(point),
+            InterpolatorEnum::Interp1D(interp) => interp.interpolate(
+                point
+                    .try_into()
+                    .map_err(|_| InterpolateError::PointLength(1))?,
+            ),
+            InterpolatorEnum::Interp2D(interp) => interp.interpolate(
+                point
+                    .try_into()
+                    .map_err(|_| InterpolateError::PointLength(2))?,
+            ),
+            InterpolatorEnum::Interp3D(interp) => interp.interpolate(
+                point
+                    .try_into()
+                    .map_err(|_| InterpolateError::PointLength(3))?,
+            ),
             InterpolatorEnum::InterpND(interp) => interp.interpolate(point),
         }
     }
@@ -436,6 +448,51 @@ mod tests {
         #[derive(PartialEq)]
         #[allow(unused)]
         struct MyStruct(InterpolatorEnumOwned<f64>);
+    }
+
+    #[test]
+    fn test_point_length() {
+        // `InterpolatorEnum::interpolate` takes a real slice (not an inherent
+        // fixed-size array), so a wrong-length point is still a runtime `Err` here,
+        // for every variant with a fixed `N`.
+        let interp_1d = InterpolatorEnum::new_1d(
+            array![0., 1., 2., 3., 4.],
+            array![0.2, 0.4, 0.6, 0.8, 1.0],
+            strategy::Linear,
+            Extrapolate::Error,
+        )
+        .unwrap();
+        assert!(matches!(
+            interp_1d.interpolate(&[]).unwrap_err(),
+            InterpolateError::PointLength(1)
+        ));
+
+        let interp_2d = InterpolatorEnum::new_2d(
+            array![0.05, 0.10, 0.15],
+            array![0.10, 0.20, 0.30],
+            array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+            strategy::Linear,
+            Extrapolate::Error,
+        )
+        .unwrap();
+        assert!(matches!(
+            interp_2d.interpolate(&[]).unwrap_err(),
+            InterpolateError::PointLength(2)
+        ));
+
+        let interp_3d = InterpolatorEnum::new_3d(
+            array![0.05, 0.10],
+            array![0.10, 0.20],
+            array![0.20, 0.40],
+            array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]],
+            strategy::Linear,
+            Extrapolate::Error,
+        )
+        .unwrap();
+        assert!(matches!(
+            interp_3d.interpolate(&[]).unwrap_err(),
+            InterpolateError::PointLength(3)
+        ));
     }
 
     #[test]

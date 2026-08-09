@@ -1,6 +1,26 @@
 use super::*;
 
 #[test]
+fn test_invalid_args() {
+    let interp = Interp2D::new(
+        array![0.05, 0.10, 0.15],
+        array![0.10, 0.20, 0.30],
+        array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    // Wrong-length points on a concretely-typed `Interp2D` are caught at compile time
+    // via the inherent `interpolate(&[D::Elem; N])`; the trait's checked path (used by
+    // generic/`dyn` callers passing a real slice) still catches it at runtime.
+    assert!(matches!(
+        Interpolator::interpolate(&interp, &[]).unwrap_err(),
+        InterpolateError::PointLength(_)
+    ));
+    assert_eq!(interp.interpolate(&[0.075, 0.25]).unwrap(), 3.);
+}
+
+#[test]
 fn test_linear() {
     let interp = Interp2D::new(
         array![0.05, 0.10, 0.15],

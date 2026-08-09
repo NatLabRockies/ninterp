@@ -173,29 +173,17 @@ where
     }
 }
 
-impl<D, S> Interpolator<D::Elem> for Interp1D<D, S>
+impl<D, S> Interp1D<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: Num + PartialOrd + Euclid + Copy + Debug,
     S: Strategy1D<D> + Clone,
 {
-    /// Returns `1`.
-    #[inline]
-    fn ndim(&self) -> usize {
-        N
-    }
-
-    fn validate(&self) -> Result<(), ValidateError> {
-        self.check_extrapolate(&self.extrapolate)?;
-        self.data.validate()?;
-        self.validate_strategy()?;
-        Ok(())
-    }
-
-    fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
-        let point: &[D::Elem; N] = point
-            .try_into()
-            .map_err(|_| InterpolateError::PointLength(N))?;
+    /// Interpolate at the supplied point.
+    ///
+    /// Unlike [`Interpolator::interpolate`], the point length is checked at compile
+    /// time via `N`, so this cannot fail with [`InterpolateError::PointLength`].
+    pub fn interpolate(&self, point: &[D::Elem; N]) -> Result<D::Elem, InterpolateError> {
         if !(self.data.grid[0].first().unwrap()..=self.data.grid[0].last().unwrap())
             .contains(&&point[0])
         {
@@ -228,18 +216,33 @@ where
         };
         self.strategy.interpolate(&self.data, point)
     }
+}
+
+impl<D, S> Interpolator<D::Elem> for Interp1D<D, S>
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Num + PartialOrd + Euclid + Copy + Debug,
+    S: Strategy1D<D> + Clone,
+{
+    /// Returns `1`.
+    #[inline]
+    fn ndim(&self) -> usize {
+        N
+    }
+
+    fn validate(&self) -> Result<(), ValidateError> {
+        self.check_extrapolate(&self.extrapolate)?;
+        self.data.validate()?;
+        self.validate_strategy()?;
+        Ok(())
+    }
+
+    checked_interpolate_impl!();
 
     fn set_extrapolate(&mut self, extrapolate: Extrapolate<D::Elem>) -> Result<(), ValidateError> {
         self.check_extrapolate(&extrapolate)?;
         self.extrapolate = extrapolate;
         Ok(())
-    }
-
-    fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
-        let point: &[D::Elem; N] = point
-            .try_into()
-            .expect("interpolate_fast: point length mismatch");
-        self.interpolate_fast(point)
     }
 }
 

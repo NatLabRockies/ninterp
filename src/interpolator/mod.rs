@@ -122,6 +122,31 @@ macro_rules! extrapolate_impl {
 }
 pub(crate) use extrapolate_impl;
 
+/// Generates the [`Interpolator::interpolate`]/[`Interpolator::interpolate_fast`]
+/// bodies shared by `Interp1D`/`2D`/`3D`'s trait impls: convert the incoming slice to
+/// the fixed-size `[D::Elem; N]` the type's own inherent method of the same name
+/// expects (a length-checked `?` for `interpolate`, a length-asserting `.expect(...)`
+/// for `interpolate_fast`), then call it. `InterpND` has no fixed `N`, so it can't use
+/// this and implements both methods by hand instead.
+macro_rules! checked_interpolate_impl {
+    () => {
+        fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
+            let point: &[D::Elem; N] = point
+                .try_into()
+                .map_err(|_| InterpolateError::PointLength(N))?;
+            self.interpolate(point)
+        }
+
+        fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
+            let point: &[D::Elem; N] = point
+                .try_into()
+                .expect("interpolate_fast: point length mismatch");
+            self.interpolate_fast(point)
+        }
+    };
+}
+pub(crate) use checked_interpolate_impl;
+
 macro_rules! partialeq_impl {
     ($InterpType:ident, $Data:ident, $Strategy:ident) => {
         impl<D, S> PartialEq for $InterpType<D, S>
