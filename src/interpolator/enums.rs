@@ -369,11 +369,6 @@ where
         }
     }
 
-    /// Forwards to the inherent [`InterpolatorEnum::interpolate`]. Without this
-    /// override, this would try to call each variant's `interpolate` with the raw
-    /// `&[D::Elem]` slice, which no longer compiles for `Interp1D`/`2D`/`3D` once they
-    /// have an inherent `interpolate(&self, point: &[D::Elem; N])` (inherent methods
-    /// unconditionally shadow trait methods of the same name).
     #[inline]
     fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
         self.interpolate(point)
