@@ -307,6 +307,78 @@ fn test_extrapolate_clamp() {
 }
 
 #[test]
+fn test_batch_interpolate_matches_interpolate() {
+    let interp = Interp3D::new(
+        array![0.05, 0.10, 0.15],
+        array![0.10, 0.20, 0.30],
+        array![0.20, 0.40, 0.60],
+        array![
+            [[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+            [[9., 10., 11.], [12., 13., 14.], [15., 16., 17.]],
+            [[18., 19., 20.], [21., 22., 23.], [24., 25., 26.],],
+        ],
+        strategy::Linear,
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    let points = [[0.075, 0.25, 0.3], [0.05, 0.10, 0.20], [0.2, 0.4, 0.8]];
+    let batched = interp.batch_interpolate(&points).unwrap();
+    let looped: Vec<_> = points
+        .iter()
+        .map(|point| interp.interpolate(point).unwrap())
+        .collect();
+    assert_eq!(batched, looped);
+
+    let batched_fast = interp.batch_interpolate_fast(&points);
+    let looped_fast: Vec<_> = points
+        .iter()
+        .map(|point| interp.interpolate_fast(point))
+        .collect();
+    assert_eq!(batched_fast, looped_fast);
+}
+
+#[test]
+fn test_batch_interpolate_clamp() {
+    let interp = Interp3D::new(
+        array![0.1, 1.1],
+        array![0.2, 1.2],
+        array![0.3, 1.3],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],],
+        strategy::Linear,
+        Extrapolate::Clamp,
+    )
+    .unwrap();
+    assert_eq!(
+        interp
+            .batch_interpolate(&[[-1., -1., -1.], [2., 2., 2.]])
+            .unwrap(),
+        vec![0., 7.]
+    );
+}
+
+#[test]
+fn test_batch_interpolate_error_aggregates_all_points() {
+    let interp = Interp3D::new(
+        array![0.1, 1.1],
+        array![0.2, 1.2],
+        array![0.3, 1.3],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],],
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let err = interp
+        .batch_interpolate(&[[0.4, 0.4, 0.4], [-1., -1., -1.], [2., 2., 2.]])
+        .unwrap_err();
+    let InterpolateError::ExtrapolateError(message) = err else {
+        panic!("expected ExtrapolateError");
+    };
+    assert!(message.contains("point[1]"));
+    assert!(message.contains("point[2]"));
+    assert!(!message.contains("point[0]"));
+}
+
+#[test]
 fn test_partialeq() {
     #[derive(PartialEq)]
     #[allow(unused)]

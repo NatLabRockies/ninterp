@@ -397,6 +397,121 @@ where
         );
         self.strategy.interpolate_fast(&self.data, point)
     }
+
+    fn batch_interpolate(&self, points: &[&[D::Elem]]) -> Result<Vec<D::Elem>, InterpolateError> {
+        let n = self.ndim();
+        for point in points {
+            if point.len() != n {
+                return Err(InterpolateError::PointLength(n));
+            }
+        }
+        match &self.extrapolate {
+            Extrapolate::Enable => self.strategy.batch_interpolate(&self.data, points),
+            Extrapolate::Clamp => {
+                // Clamping an in-bounds point is already identity, so every point
+                // can be clamped unconditionally.
+                let clamped: Vec<Vec<D::Elem>> = points
+                    .iter()
+                    .map(|&point| {
+                        point
+                            .iter()
+                            .enumerate()
+                            .map(|(dim, pt)| {
+                                *clamp(
+                                    pt,
+                                    self.data.grid[dim].first().unwrap(),
+                                    self.data.grid[dim].last().unwrap(),
+                                )
+                            })
+                            .collect()
+                    })
+                    .collect();
+                let clamped: Vec<&[D::Elem]> = clamped.iter().map(Vec::as_slice).collect();
+                self.strategy.batch_interpolate(&self.data, &clamped)
+            }
+            Extrapolate::Wrap => {
+                // Unlike `Clamp`, `wrap()` isn't identity exactly at the boundary,
+                // so only out-of-bounds points get wrapped.
+                let wrapped: Vec<Vec<D::Elem>> = points
+                    .iter()
+                    .map(|&point| {
+                        if out_of_bounds(&self.data.grid, point) {
+                            point
+                                .iter()
+                                .enumerate()
+                                .map(|(dim, pt)| {
+                                    wrap(
+                                        *pt,
+                                        *self.data.grid[dim].first().unwrap(),
+                                        *self.data.grid[dim].last().unwrap(),
+                                    )
+                                })
+                                .collect()
+                        } else {
+                            point.to_vec()
+                        }
+                    })
+                    .collect();
+                let wrapped: Vec<&[D::Elem]> = wrapped.iter().map(Vec::as_slice).collect();
+                self.strategy.batch_interpolate(&self.data, &wrapped)
+            }
+            Extrapolate::Fill(value) => {
+                let mut results = vec![*value; points.len()];
+                let mut in_bounds_indices = Vec::new();
+                let mut in_bounds_points: Vec<&[D::Elem]> = Vec::new();
+                for (i, &point) in points.iter().enumerate() {
+                    if !out_of_bounds(&self.data.grid, point) {
+                        in_bounds_indices.push(i);
+                        in_bounds_points.push(point);
+                    }
+                }
+                let interpolated = self
+                    .strategy
+                    .batch_interpolate(&self.data, &in_bounds_points)?;
+                for (i, value) in in_bounds_indices.into_iter().zip(interpolated) {
+                    results[i] = value;
+                }
+                Ok(results)
+            }
+            Extrapolate::Error => {
+                let mut errors = Vec::new();
+                let mut in_bounds_points: Vec<&[D::Elem]> = Vec::new();
+                for (i, &point) in points.iter().enumerate() {
+                    let mut point_errors = Vec::new();
+                    for (dim, (axis, &coord)) in self.data.grid.iter().zip(point.iter()).enumerate()
+                    {
+                        if !(axis.first().unwrap()..=axis.last().unwrap()).contains(&&coord) {
+                            point_errors.push(format!(
+                                "\n    point[{i}][{dim}] = {coord:?} is out of bounds for grid[{dim}] = {axis:?}",
+                            ));
+                        }
+                    }
+                    if point_errors.is_empty() {
+                        in_bounds_points.push(point);
+                    } else {
+                        errors.extend(point_errors);
+                    }
+                }
+                if !errors.is_empty() {
+                    return Err(InterpolateError::ExtrapolateError(errors.join("")));
+                }
+                self.strategy
+                    .batch_interpolate(&self.data, &in_bounds_points)
+            }
+        }
+    }
+
+    fn batch_interpolate_fast(&self, points: &[&[D::Elem]]) -> Vec<D::Elem> {
+        let n = self.ndim();
+        for point in points {
+            assert_eq!(
+                point.len(),
+                n,
+                "batch_interpolate_fast: point length mismatch"
+            );
+        }
+        self.strategy.batch_interpolate_fast(&self.data, points)
+    }
 }
 
 impl<D> InterpND<D, Box<dyn StrategyND<D>>>

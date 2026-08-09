@@ -280,36 +280,6 @@ where
             InterpolatorEnum::InterpND(interp) => interp.init_strategy(),
         }
     }
-
-    /// Interpolate without bounds/extrapolation checks, for use in hot loops where the
-    /// caller has already checked bounds or knows that extrapolation handling is not needed.
-    ///
-    /// # Panics
-    /// Panics if `point.len()` does not match [`InterpolatorEnum::ndim`].
-    pub fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem
-    where
-        D::Elem: Euclid,
-    {
-        match self {
-            InterpolatorEnum::Interp0D(interp) => interp.0,
-            InterpolatorEnum::Interp1D(interp) => interp.interpolate_fast(
-                point
-                    .try_into()
-                    .expect("interpolate_fast: point length mismatch"),
-            ),
-            InterpolatorEnum::Interp2D(interp) => interp.interpolate_fast(
-                point
-                    .try_into()
-                    .expect("interpolate_fast: point length mismatch"),
-            ),
-            InterpolatorEnum::Interp3D(interp) => interp.interpolate_fast(
-                point
-                    .try_into()
-                    .expect("interpolate_fast: point length mismatch"),
-            ),
-            InterpolatorEnum::InterpND(interp) => interp.interpolate_fast(point),
-        }
-    }
 }
 
 impl<D> Interpolator<D::Elem> for InterpolatorEnum<D>
@@ -373,14 +343,107 @@ where
         }
     }
 
-    /// Forwards to the inherent [`InterpolatorEnum::interpolate_fast`]. Without this
-    /// override, code reaching `InterpolatorEnum` only through the `Interpolator` trait
-    /// (generic code, or `Box<dyn Interpolator<T>>`) would silently fall back to this
-    /// trait's default (the checked `interpolate` path) instead of the real fast path,
-    /// since the inherent method is invisible once the concrete type is erased.
     #[inline]
     fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
-        self.interpolate_fast(point)
+        match self {
+            InterpolatorEnum::Interp0D(interp) => interp.0,
+            InterpolatorEnum::Interp1D(interp) => interp.interpolate_fast(
+                point
+                    .try_into()
+                    .expect("interpolate_fast: point length mismatch"),
+            ),
+            InterpolatorEnum::Interp2D(interp) => interp.interpolate_fast(
+                point
+                    .try_into()
+                    .expect("interpolate_fast: point length mismatch"),
+            ),
+            InterpolatorEnum::Interp3D(interp) => interp.interpolate_fast(
+                point
+                    .try_into()
+                    .expect("interpolate_fast: point length mismatch"),
+            ),
+            InterpolatorEnum::InterpND(interp) => interp.interpolate_fast(point),
+        }
+    }
+
+    fn batch_interpolate(&self, points: &[&[D::Elem]]) -> Result<Vec<D::Elem>, InterpolateError> {
+        match self {
+            InterpolatorEnum::Interp0D(interp) => Interpolator::batch_interpolate(interp, points),
+            InterpolatorEnum::Interp1D(interp) => {
+                let points: Vec<[D::Elem; 1]> = points
+                    .iter()
+                    .map(|&point| {
+                        point
+                            .try_into()
+                            .map_err(|_| InterpolateError::PointLength(1))
+                    })
+                    .collect::<Result<_, _>>()?;
+                interp.batch_interpolate(&points)
+            }
+            InterpolatorEnum::Interp2D(interp) => {
+                let points: Vec<[D::Elem; 2]> = points
+                    .iter()
+                    .map(|&point| {
+                        point
+                            .try_into()
+                            .map_err(|_| InterpolateError::PointLength(2))
+                    })
+                    .collect::<Result<_, _>>()?;
+                interp.batch_interpolate(&points)
+            }
+            InterpolatorEnum::Interp3D(interp) => {
+                let points: Vec<[D::Elem; 3]> = points
+                    .iter()
+                    .map(|&point| {
+                        point
+                            .try_into()
+                            .map_err(|_| InterpolateError::PointLength(3))
+                    })
+                    .collect::<Result<_, _>>()?;
+                interp.batch_interpolate(&points)
+            }
+            InterpolatorEnum::InterpND(interp) => interp.batch_interpolate(points),
+        }
+    }
+
+    fn batch_interpolate_fast(&self, points: &[&[D::Elem]]) -> Vec<D::Elem> {
+        match self {
+            InterpolatorEnum::Interp0D(interp) => vec![interp.0; points.len()],
+            InterpolatorEnum::Interp1D(interp) => {
+                let points: Vec<[D::Elem; 1]> = points
+                    .iter()
+                    .map(|&point| {
+                        point
+                            .try_into()
+                            .expect("batch_interpolate_fast: point length mismatch")
+                    })
+                    .collect();
+                interp.batch_interpolate_fast(&points)
+            }
+            InterpolatorEnum::Interp2D(interp) => {
+                let points: Vec<[D::Elem; 2]> = points
+                    .iter()
+                    .map(|&point| {
+                        point
+                            .try_into()
+                            .expect("batch_interpolate_fast: point length mismatch")
+                    })
+                    .collect();
+                interp.batch_interpolate_fast(&points)
+            }
+            InterpolatorEnum::Interp3D(interp) => {
+                let points: Vec<[D::Elem; 3]> = points
+                    .iter()
+                    .map(|&point| {
+                        point
+                            .try_into()
+                            .expect("batch_interpolate_fast: point length mismatch")
+                    })
+                    .collect();
+                interp.batch_interpolate_fast(&points)
+            }
+            InterpolatorEnum::InterpND(interp) => interp.batch_interpolate_fast(points),
+        }
     }
 }
 
@@ -492,6 +555,66 @@ mod tests {
         assert!(matches!(
             interp_3d.interpolate(&[]).unwrap_err(),
             InterpolateError::PointLength(3)
+        ));
+    }
+
+    #[test]
+    fn test_batch_interpolate() {
+        let interp = InterpolatorEnum::new_1d(
+            array![0., 1., 2., 3., 4.],
+            array![0.2, 0.4, 0.6, 0.8, 1.0],
+            strategy::Linear,
+            Extrapolate::Error,
+        )
+        .unwrap();
+        let points: [&[f64]; 2] = [&[1.0], &[3.0]];
+        assert_eq!(interp.batch_interpolate(&points).unwrap(), vec![0.4, 0.8]);
+        assert_eq!(interp.batch_interpolate_fast(&points), vec![0.4, 0.8]);
+    }
+
+    #[test]
+    fn test_batch_interpolate_0d() {
+        let interp: InterpolatorEnumOwned<f64> = InterpolatorEnum::new_0d(0.5);
+        let points: [&[f64]; 3] = [&[], &[], &[]];
+        assert_eq!(
+            interp.batch_interpolate(&points).unwrap(),
+            vec![0.5, 0.5, 0.5]
+        );
+        assert_eq!(interp.batch_interpolate_fast(&points), vec![0.5, 0.5, 0.5]);
+    }
+
+    #[test]
+    fn test_batch_interpolate_nd() {
+        let interp = InterpolatorEnum::new_nd(
+            vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+            array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]].into_dyn(),
+            strategy::Linear,
+            Extrapolate::Error,
+        )
+        .unwrap();
+        let points: [&[f64]; 2] = [&[0.25, 0.65, 0.9], &[0.5, 0.5, 0.5]];
+        let batched = interp.batch_interpolate(&points).unwrap();
+        let looped: Vec<_> = points
+            .iter()
+            .map(|point| interp.interpolate(point).unwrap())
+            .collect();
+        assert_eq!(batched, looped);
+    }
+
+    #[test]
+    fn test_batch_interpolate_point_length_mismatch() {
+        let interp = InterpolatorEnum::new_2d(
+            array![0.05, 0.10, 0.15],
+            array![0.10, 0.20, 0.30],
+            array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+            strategy::Linear,
+            Extrapolate::Error,
+        )
+        .unwrap();
+        let points: [&[f64]; 1] = [&[0.075]];
+        assert!(matches!(
+            interp.batch_interpolate(&points).unwrap_err(),
+            InterpolateError::PointLength(2)
         ));
     }
 

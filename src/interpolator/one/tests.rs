@@ -329,6 +329,119 @@ fn test_extrapolate() {
 }
 
 #[test]
+fn test_batch_interpolate_matches_interpolate() {
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::Linear,
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    let points = [[-1.], [0.5], [1.5], [3.75], [5.]];
+    let batched = interp.batch_interpolate(&points).unwrap();
+    let looped: Vec<_> = points
+        .iter()
+        .map(|point| interp.interpolate(point).unwrap())
+        .collect();
+    assert_eq!(batched, looped);
+
+    let batched_fast = interp.batch_interpolate_fast(&points);
+    let looped_fast: Vec<_> = points
+        .iter()
+        .map(|point| interp.interpolate_fast(point))
+        .collect();
+    assert_eq!(batched_fast, looped_fast);
+}
+
+#[test]
+fn test_batch_interpolate_clamp() {
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::Linear,
+        Extrapolate::Clamp,
+    )
+    .unwrap();
+    assert_eq!(
+        interp.batch_interpolate(&[[-1.], [2.], [5.]]).unwrap(),
+        vec![0.2, 0.6, 1.0]
+    );
+}
+
+#[test]
+fn test_batch_interpolate_fill() {
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::Linear,
+        Extrapolate::Fill(f64::NAN),
+    )
+    .unwrap();
+    let results = interp.batch_interpolate(&[[-1.], [2.], [5.]]).unwrap();
+    assert!(results[0].is_nan());
+    assert_eq!(results[1], 0.6);
+    assert!(results[2].is_nan());
+}
+
+#[test]
+fn test_batch_interpolate_wrap_boundary() {
+    // `wrap()` isn't identity exactly at the boundary (`wrap(max, min, max) == min`),
+    // so an in-bounds point sitting exactly on the upper edge must not get wrapped,
+    // while a genuinely out-of-bounds point still does.
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::Linear,
+        Extrapolate::Wrap,
+    )
+    .unwrap();
+    let results = interp.batch_interpolate(&[[4.], [5.]]).unwrap();
+    assert_eq!(results[0], interp.interpolate(&[4.]).unwrap());
+    assert_eq!(results[1], interp.interpolate(&[5.]).unwrap());
+    assert_eq!(results[0], 1.0); // untouched boundary point
+    assert_eq!(results[1], 0.4); // wrap(5, 0, 4) == 1 -> f(1) == 0.4
+}
+
+#[test]
+fn test_batch_interpolate_error_aggregates_all_points() {
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    // Two bad points among good ones: the batch error must mention both, not just
+    // the first one it finds.
+    let err = interp
+        .batch_interpolate(&[[1.], [-1.], [2.], [5.]])
+        .unwrap_err();
+    let InterpolateError::ExtrapolateError(message) = err else {
+        panic!("expected ExtrapolateError");
+    };
+    assert!(message.contains("point[1]"));
+    assert!(message.contains("point[3]"));
+    assert!(!message.contains("point[0]"));
+    assert!(!message.contains("point[2]"));
+}
+
+#[test]
+fn test_batch_interpolate_dyn() {
+    let interp: Box<dyn Interpolator<f64>> = Box::new(
+        Interp1D::new(
+            array![0., 1., 2., 3., 4.],
+            array![0.2, 0.4, 0.6, 0.8, 1.0],
+            strategy::Linear,
+            Extrapolate::Error,
+        )
+        .unwrap(),
+    );
+    let points: [&[f64]; 2] = [&[1.0], &[3.0]];
+    assert_eq!(interp.batch_interpolate(&points).unwrap(), vec![0.4, 0.8]);
+    assert_eq!(interp.batch_interpolate_fast(&points), vec![0.4, 0.8]);
+}
+
+#[test]
 fn test_partialeq() {
     #[derive(PartialEq)]
     #[allow(unused)]

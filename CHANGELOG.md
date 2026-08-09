@@ -47,6 +47,39 @@ Everything below is merged to `main` but not yet tagged/released.
 - `InterpolatorEnum` gains `check_extrapolate`/`validate_strategy`/`init_strategy`
   forwarding to the current variant, matching what `Interp1D`/`2D`/`3D`/`ND` already
   expose as public inherent methods.
+- `batch_interpolate`/`batch_interpolate_fast` on `Interpolator<T>` and
+  `Strategy1D`/`2D`/`3D`/`ND` (both default-provided, non-breaking, mirroring
+  `interpolate_fast`'s own default): interpolate at several points in one call. A
+  big motivator is `Box<dyn Interpolator<T>>`/`Box<dyn Strategy1D/2D/3D/ND<D>>`:
+  interpolating `m` points against a type-erased interpolator previously cost `m`
+  virtual dispatches, one per `.interpolate()` call; `batch_interpolate` collapses
+  that to a single dispatch that reaches the concrete type once, which then loops
+  internally via ordinary static calls: this holds independently at both erasure
+  points, a boxed interpolator reaches its concrete type in one hop, and (for an
+  interpolator holding a boxed strategy, e.g. `Interp2D<D, Box<dyn Strategy2D<D>>>`)
+  the strategy call inside it reaches its own concrete type in a separate one hop.
+  `Box<dyn Interpolator<T>>` and `Box<dyn Strategy1D/2D/3D/ND<D>>` forward both
+  methods to the wrapped concrete type (the same way `interpolate_fast` already is)
+  specifically so this collapse actually happens: without the forward, the boxed
+  type would inherit the trait's own default loop operating on the box itself, one
+  dispatch per point again. No
+  strategy overrides the default per-point loop yet either, so the same seam is
+  also ready for a future strategy that amortizes its own locate step across a
+  batch (sorting points once, SIMD-packing the blend step, etc.), independent of
+  the dispatch-collapsing benefit above. `Interp1D`/`2D`/`3D` gain inherent
+  versions taking `&[[D::Elem; N]]`, the same fixed-size-array split as
+  `interpolate`/`interpolate_fast`. `InterpND` and `InterpolatorEnum` implement
+  both directly in their `Interpolator` impls instead (no separate inherent
+  versions): `InterpND` has no fixed `N` to give an inherent version a distinct,
+  more specific signature, matching how its own `interpolate`/`interpolate_fast`
+  already work; `InterpolatorEnum`'s `interpolate_fast` override is simplified the
+  same way in this release, since its inherent signature was never more specific
+  than the trait's either. The checked `batch_interpolate` resolves
+  `self.extrapolate` once for the whole batch and funnels every point into at most
+  one call to the strategy; under `Extrapolate::Error`, it now reports every
+  out-of-range point in one `ExtrapolateError`, not just the first one found.
+- `ExtrapolateError`'s message now reads "point(s)" instead of "point", since a batch
+  error can name more than one offending point.
 
 ### Changed
 - **Breaking:** `Strategy1DEnum`/`Strategy2DEnum`/`Strategy3DEnum`/`StrategyNDEnum` are

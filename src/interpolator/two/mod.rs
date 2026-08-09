@@ -108,6 +108,8 @@ where
     pub fn interpolate_fast(&self, point: &[D::Elem; 2]) -> D::Elem {
         self.strategy.interpolate_fast(&self.data, point)
     }
+
+    batch_interpolate_fast_impl!();
 }
 
 impl<D, S> Interp2D<D, S>
@@ -243,6 +245,8 @@ where
         }
         self.strategy.interpolate(&self.data, point)
     }
+
+    batch_interpolate_impl!();
 }
 
 impl<D, S> Interpolator<D::Elem> for Interp2D<D, S>
@@ -264,7 +268,7 @@ where
         Ok(())
     }
 
-    checked_interpolate_impl!();
+    sized_interpolate_impl!();
 
     fn set_extrapolate(&mut self, extrapolate: Extrapolate<D::Elem>) -> Result<(), ValidateError> {
         self.check_extrapolate(&extrapolate)?;

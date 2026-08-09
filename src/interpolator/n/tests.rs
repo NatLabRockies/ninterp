@@ -501,6 +501,96 @@ fn test_interpolate_fast_point_too_long() {
 }
 
 #[test]
+fn test_batch_interpolate_matches_interpolate() {
+    let interp = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Linear,
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    let points: [&[f64]; 3] = [&[0.25, 0.65, 0.9], &[0., 0., 0.], &[2., 2., 2.]];
+    let batched = interp.batch_interpolate(&points).unwrap();
+    let looped: Vec<_> = points
+        .iter()
+        .map(|point| interp.interpolate(point).unwrap())
+        .collect();
+    assert_eq!(batched, looped);
+
+    let batched_fast = interp.batch_interpolate_fast(&points);
+    let looped_fast: Vec<_> = points
+        .iter()
+        .map(|point| interp.interpolate_fast(point))
+        .collect();
+    assert_eq!(batched_fast, looped_fast);
+}
+
+#[test]
+fn test_batch_interpolate_clamp() {
+    let interp = InterpND::new(
+        vec![array![0.1, 1.1], array![0.2, 1.2], array![0.3, 1.3]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Linear,
+        Extrapolate::Clamp,
+    )
+    .unwrap();
+    let points: [&[f64]; 2] = [&[-1., -1., -1.], &[2., 2., 2.]];
+    assert_eq!(
+        interp.batch_interpolate(&points).unwrap(),
+        vec![interp.data.values[[0, 0, 0]], interp.data.values[[1, 1, 1]]]
+    );
+}
+
+#[test]
+fn test_batch_interpolate_error_aggregates_all_points() {
+    let interp = InterpND::new(
+        vec![array![0.1, 1.1], array![0.2, 1.2], array![0.3, 1.3]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let points: [&[f64]; 3] = [&[0.4, 0.4, 0.4], &[-1., -1., -1.], &[2., 2., 2.]];
+    let err = interp.batch_interpolate(&points).unwrap_err();
+    let InterpolateError::ExtrapolateError(message) = err else {
+        panic!("expected ExtrapolateError");
+    };
+    assert!(message.contains("point[1]"));
+    assert!(message.contains("point[2]"));
+    assert!(!message.contains("point[0]"));
+}
+
+#[test]
+fn test_batch_interpolate_point_length_mismatch() {
+    let interp = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let points: [&[f64]; 2] = [&[0.25, 0.65, 0.9], &[0.5, 0.5]];
+    assert!(matches!(
+        interp.batch_interpolate(&points).unwrap_err(),
+        InterpolateError::PointLength(3)
+    ));
+}
+
+#[test]
+#[should_panic(expected = "batch_interpolate_fast: point length mismatch")]
+fn test_batch_interpolate_fast_point_length_mismatch() {
+    let interp = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let points: [&[f64]; 2] = [&[0.25, 0.65, 0.9], &[0.5, 0.5]];
+    interp.batch_interpolate_fast(&points);
+}
+
+#[test]
 fn test_mismatched_grid() {
     assert!(matches!(
         InterpND::new(
