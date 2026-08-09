@@ -261,24 +261,12 @@ where
         Ok(())
     }
 
-    fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
-        let point: &[D::Elem; N] = point
-            .try_into()
-            .map_err(|_| InterpolateError::PointLength(N))?;
-        self.interpolate(point)
-    }
+    checked_interpolate_impl!();
 
     fn set_extrapolate(&mut self, extrapolate: Extrapolate<D::Elem>) -> Result<(), ValidateError> {
         self.check_extrapolate(&extrapolate)?;
         self.extrapolate = extrapolate;
         Ok(())
-    }
-
-    fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
-        let point: &[D::Elem; N] = point
-            .try_into()
-            .expect("interpolate_fast: point length mismatch");
-        self.interpolate_fast(point)
     }
 }
 
