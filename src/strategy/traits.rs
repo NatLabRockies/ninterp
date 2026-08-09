@@ -51,6 +51,39 @@ where
             .expect("interpolate_fast: invalid point or data")
     }
 
+    /// Interpolate at each of several points, sharing one grid across all of them.
+    ///
+    /// Default just loops [`Strategy1D::interpolate`]. Override only if locating a
+    /// point in the grid can be amortized across the batch (e.g. sorting points once
+    /// for a locate sweep instead of one binary search per point); no strategy
+    /// shipped in this crate does that today.
+    fn batch_interpolate(
+        &self,
+        data: &InterpData1D<D>,
+        points: &[[D::Elem; 1]],
+    ) -> Result<Vec<D::Elem>, InterpolateError> {
+        points
+            .iter()
+            .map(|point| self.interpolate(data, point))
+            .collect()
+    }
+
+    /// Batched [`Strategy1D::interpolate_fast`], assuming every point and `data` are
+    /// already valid.
+    ///
+    /// Default just loops [`Strategy1D::interpolate_fast`]. Override under the same
+    /// condition as [`Strategy1D::batch_interpolate`].
+    fn batch_interpolate_fast(
+        &self,
+        data: &InterpData1D<D>,
+        points: &[[D::Elem; 1]],
+    ) -> Vec<D::Elem> {
+        points
+            .iter()
+            .map(|point| self.interpolate_fast(data, point))
+            .collect()
+    }
+
     /// Does this type's [`Strategy1D::interpolate`] provision for extrapolation?
     fn allow_extrapolate(&self) -> bool;
 }
@@ -86,6 +119,24 @@ where
     #[inline]
     fn interpolate_fast(&self, data: &InterpData1D<D>, point: &[D::Elem; 1]) -> D::Elem {
         (**self).interpolate_fast(data, point)
+    }
+
+    #[inline]
+    fn batch_interpolate(
+        &self,
+        data: &InterpData1D<D>,
+        points: &[[D::Elem; 1]],
+    ) -> Result<Vec<D::Elem>, InterpolateError> {
+        (**self).batch_interpolate(data, points)
+    }
+
+    #[inline]
+    fn batch_interpolate_fast(
+        &self,
+        data: &InterpData1D<D>,
+        points: &[[D::Elem; 1]],
+    ) -> Vec<D::Elem> {
+        (**self).batch_interpolate_fast(data, points)
     }
 
     #[inline]
@@ -143,6 +194,39 @@ where
             .expect("interpolate_fast: invalid point or data")
     }
 
+    /// Interpolate at each of several points, sharing one grid across all of them.
+    ///
+    /// Default just loops [`Strategy2D::interpolate`]. Override only if locating a
+    /// point in the grid can be amortized across the batch (e.g. sorting points once
+    /// for a locate sweep instead of one binary search per point); no strategy
+    /// shipped in this crate does that today.
+    fn batch_interpolate(
+        &self,
+        data: &InterpData2D<D>,
+        points: &[[D::Elem; 2]],
+    ) -> Result<Vec<D::Elem>, InterpolateError> {
+        points
+            .iter()
+            .map(|point| self.interpolate(data, point))
+            .collect()
+    }
+
+    /// Batched [`Strategy2D::interpolate_fast`], assuming every point and `data` are
+    /// already valid.
+    ///
+    /// Default just loops [`Strategy2D::interpolate_fast`]. Override under the same
+    /// condition as [`Strategy2D::batch_interpolate`].
+    fn batch_interpolate_fast(
+        &self,
+        data: &InterpData2D<D>,
+        points: &[[D::Elem; 2]],
+    ) -> Vec<D::Elem> {
+        points
+            .iter()
+            .map(|point| self.interpolate_fast(data, point))
+            .collect()
+    }
+
     /// Does this type's [`Strategy2D::interpolate`] provision for extrapolation?
     fn allow_extrapolate(&self) -> bool;
 }
@@ -178,6 +262,24 @@ where
     #[inline]
     fn interpolate_fast(&self, data: &InterpData2D<D>, point: &[D::Elem; 2]) -> D::Elem {
         (**self).interpolate_fast(data, point)
+    }
+
+    #[inline]
+    fn batch_interpolate(
+        &self,
+        data: &InterpData2D<D>,
+        points: &[[D::Elem; 2]],
+    ) -> Result<Vec<D::Elem>, InterpolateError> {
+        (**self).batch_interpolate(data, points)
+    }
+
+    #[inline]
+    fn batch_interpolate_fast(
+        &self,
+        data: &InterpData2D<D>,
+        points: &[[D::Elem; 2]],
+    ) -> Vec<D::Elem> {
+        (**self).batch_interpolate_fast(data, points)
     }
 
     #[inline]
@@ -235,6 +337,39 @@ where
             .expect("interpolate_fast: invalid point or data")
     }
 
+    /// Interpolate at each of several points, sharing one grid across all of them.
+    ///
+    /// Default just loops [`Strategy3D::interpolate`]. Override only if locating a
+    /// point in the grid can be amortized across the batch (e.g. sorting points once
+    /// for a locate sweep instead of one binary search per point); no strategy
+    /// shipped in this crate does that today.
+    fn batch_interpolate(
+        &self,
+        data: &InterpData3D<D>,
+        points: &[[D::Elem; 3]],
+    ) -> Result<Vec<D::Elem>, InterpolateError> {
+        points
+            .iter()
+            .map(|point| self.interpolate(data, point))
+            .collect()
+    }
+
+    /// Batched [`Strategy3D::interpolate_fast`], assuming every point and `data` are
+    /// already valid.
+    ///
+    /// Default just loops [`Strategy3D::interpolate_fast`]. Override under the same
+    /// condition as [`Strategy3D::batch_interpolate`].
+    fn batch_interpolate_fast(
+        &self,
+        data: &InterpData3D<D>,
+        points: &[[D::Elem; 3]],
+    ) -> Vec<D::Elem> {
+        points
+            .iter()
+            .map(|point| self.interpolate_fast(data, point))
+            .collect()
+    }
+
     /// Does this type's [`Strategy3D::interpolate`] provision for extrapolation?
     fn allow_extrapolate(&self) -> bool;
 }
@@ -270,6 +405,24 @@ where
     #[inline]
     fn interpolate_fast(&self, data: &InterpData3D<D>, point: &[D::Elem; 3]) -> D::Elem {
         (**self).interpolate_fast(data, point)
+    }
+
+    #[inline]
+    fn batch_interpolate(
+        &self,
+        data: &InterpData3D<D>,
+        points: &[[D::Elem; 3]],
+    ) -> Result<Vec<D::Elem>, InterpolateError> {
+        (**self).batch_interpolate(data, points)
+    }
+
+    #[inline]
+    fn batch_interpolate_fast(
+        &self,
+        data: &InterpData3D<D>,
+        points: &[[D::Elem; 3]],
+    ) -> Vec<D::Elem> {
+        (**self).batch_interpolate_fast(data, points)
     }
 
     #[inline]
@@ -327,6 +480,39 @@ where
             .expect("interpolate_fast: invalid point or data")
     }
 
+    /// Interpolate at each of several points, sharing one grid across all of them.
+    ///
+    /// Default just loops [`StrategyND::interpolate`]. Override only if locating a
+    /// point in the grid can be amortized across the batch (e.g. sorting points once
+    /// for a locate sweep instead of one binary search per point); no strategy
+    /// shipped in this crate does that today.
+    fn batch_interpolate(
+        &self,
+        data: &InterpDataND<D>,
+        points: &[&[D::Elem]],
+    ) -> Result<Vec<D::Elem>, InterpolateError> {
+        points
+            .iter()
+            .map(|point| self.interpolate(data, point))
+            .collect()
+    }
+
+    /// Batched [`StrategyND::interpolate_fast`], assuming every point and `data` are
+    /// already valid.
+    ///
+    /// Default just loops [`StrategyND::interpolate_fast`]. Override under the same
+    /// condition as [`StrategyND::batch_interpolate`].
+    fn batch_interpolate_fast(
+        &self,
+        data: &InterpDataND<D>,
+        points: &[&[D::Elem]],
+    ) -> Vec<D::Elem> {
+        points
+            .iter()
+            .map(|point| self.interpolate_fast(data, point))
+            .collect()
+    }
+
     /// Does this type's [`StrategyND::interpolate`] provision for extrapolation?
     fn allow_extrapolate(&self) -> bool;
 }
@@ -366,5 +552,23 @@ where
     #[inline]
     fn interpolate_fast(&self, data: &InterpDataND<D>, point: &[D::Elem]) -> D::Elem {
         (**self).interpolate_fast(data, point)
+    }
+
+    #[inline]
+    fn batch_interpolate(
+        &self,
+        data: &InterpDataND<D>,
+        points: &[&[D::Elem]],
+    ) -> Result<Vec<D::Elem>, InterpolateError> {
+        (**self).batch_interpolate(data, points)
+    }
+
+    #[inline]
+    fn batch_interpolate_fast(
+        &self,
+        data: &InterpDataND<D>,
+        points: &[&[D::Elem]],
+    ) -> Vec<D::Elem> {
+        (**self).batch_interpolate_fast(data, points)
     }
 }

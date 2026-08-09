@@ -51,6 +51,27 @@ pub trait Interpolator<T>: DynClone {
         self.interpolate(point)
             .expect("interpolate_fast: invalid point or data")
     }
+
+    /// Interpolate at each of several points, sharing one grid across all of them.
+    ///
+    /// Default just loops [`Interpolator::interpolate`]. `Interp1D`/`2D`/`3D`/`ND`
+    /// override this to funnel the whole batch into a single call to the strategy,
+    /// rather than repeating a per-point grid search for every point.
+    fn batch_interpolate(&self, points: &[&[T]]) -> Result<Vec<T>, InterpolateError> {
+        points.iter().map(|point| self.interpolate(point)).collect()
+    }
+
+    /// Batched [`Interpolator::interpolate_fast`], assuming every point is already
+    /// valid.
+    ///
+    /// Default just loops [`Interpolator::interpolate_fast`]. `Interp1D`/`2D`/`3D`/
+    /// `ND` override this the same way as [`Interpolator::batch_interpolate`].
+    fn batch_interpolate_fast(&self, points: &[&[T]]) -> Vec<T> {
+        points
+            .iter()
+            .map(|point| self.interpolate_fast(point))
+            .collect()
+    }
 }
 
 clone_trait_object!(<T> Interpolator<T>);
@@ -70,6 +91,12 @@ impl<T> Interpolator<T> for Box<dyn Interpolator<T>> {
     }
     fn interpolate_fast(&self, point: &[T]) -> T {
         (**self).interpolate_fast(point)
+    }
+    fn batch_interpolate(&self, points: &[&[T]]) -> Result<Vec<T>, InterpolateError> {
+        (**self).batch_interpolate(points)
+    }
+    fn batch_interpolate_fast(&self, points: &[&[T]]) -> Vec<T> {
+        (**self).batch_interpolate_fast(points)
     }
 }
 
@@ -122,13 +149,33 @@ macro_rules! extrapolate_impl {
 }
 pub(crate) use extrapolate_impl;
 
-/// Generates the [`Interpolator::interpolate`]/[`Interpolator::interpolate_fast`]
-/// bodies shared by `Interp1D`/`2D`/`3D`'s trait impls: convert the incoming slice to
-/// the fixed-size `[D::Elem; N]` the type's own inherent method of the same name
-/// expects (a length-checked `?` for `interpolate`, a length-asserting `.expect(...)`
-/// for `interpolate_fast`), then call it. `InterpND` has no fixed `N`, so it can't use
-/// this and implements both methods by hand instead.
-macro_rules! checked_interpolate_impl {
+/// Is `point` out of `grid`'s bounds in any dimension?
+///
+/// Shared by `Interp1D`/`2D`/`3D`/`ND`'s `batch_interpolate`: both `grid` and `point`
+/// are taken as slices, so one function covers `Interp1D`/`2D`/`3D`'s fixed-size
+/// `[ArrayBase<D, Ix1>; N]` grid (via array-to-slice coercion) and `InterpND`'s
+/// `Vec<ArrayBase<D, Ix1>>` alike.
+pub(crate) fn out_of_bounds<D>(grid: &[ArrayBase<D, Ix1>], point: &[D::Elem]) -> bool
+where
+    D: Data,
+    D::Elem: PartialOrd,
+{
+    grid.iter()
+        .zip(point)
+        .any(|(axis, coord)| !(axis.first().unwrap()..=axis.last().unwrap()).contains(&coord))
+}
+
+/// Generates the [`Interpolator::interpolate`]/[`Interpolator::interpolate_fast`]/
+/// [`Interpolator::batch_interpolate`]/[`Interpolator::batch_interpolate_fast`]
+/// bodies shared by `Interp1D`/`2D`/`3D`'s trait impls. The trait's slice-based
+/// signature can't fix the point length at compile time the way the type's own
+/// inherent `[D::Elem; N]`-based method can, so each body converts the incoming
+/// slice(s) to that fixed size first, via `?` for the two `Result`-returning
+/// methods, via `.expect(...)` for their `_fast` counterparts, then calls straight
+/// through to the inherent method, which owns all bounds/extrapolation handling from
+/// there. `InterpND` has no fixed `N`, so it can't use this and implements all four
+/// methods by hand instead.
+macro_rules! sized_interpolate_impl {
     () => {
         fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
             let point: &[D::Elem; N] = point
@@ -143,9 +190,156 @@ macro_rules! checked_interpolate_impl {
                 .expect("interpolate_fast: point length mismatch");
             self.interpolate_fast(point)
         }
+
+        fn batch_interpolate(
+            &self,
+            points: &[&[D::Elem]],
+        ) -> Result<Vec<D::Elem>, InterpolateError> {
+            let points: Vec<[D::Elem; N]> = points
+                .iter()
+                .map(|&point| {
+                    <&[D::Elem; N]>::try_from(point)
+                        .map(|arr| *arr)
+                        .map_err(|_| InterpolateError::PointLength(N))
+                })
+                .collect::<Result<_, _>>()?;
+            self.batch_interpolate(&points)
+        }
+
+        fn batch_interpolate_fast(&self, points: &[&[D::Elem]]) -> Vec<D::Elem> {
+            let points: Vec<[D::Elem; N]> = points
+                .iter()
+                .map(|&point| {
+                    *<&[D::Elem; N]>::try_from(point)
+                        .expect("batch_interpolate_fast: point length mismatch")
+                })
+                .collect();
+            self.batch_interpolate_fast(&points)
+        }
     };
 }
-pub(crate) use checked_interpolate_impl;
+pub(crate) use sized_interpolate_impl;
+
+/// Generates the inherent `batch_interpolate_fast` shared by `Interp1D`/`2D`/`3D`:
+/// forwards straight to the strategy, same as the existing hand-written
+/// `interpolate_fast` does.
+macro_rules! batch_interpolate_fast_impl {
+    () => {
+        /// Batched [`Self::interpolate_fast`], for use in hot loops where the caller
+        /// has already checked bounds or knows that extrapolation handling is not
+        /// needed.
+        pub fn batch_interpolate_fast(&self, points: &[[D::Elem; N]]) -> Vec<D::Elem> {
+            self.strategy.batch_interpolate_fast(&self.data, points)
+        }
+    };
+}
+pub(crate) use batch_interpolate_fast_impl;
+
+/// Generates the inherent `batch_interpolate` shared by `Interp1D`/`2D`/`3D`:
+/// resolves `self.extrapolate` once for the whole batch (see the extrapolate-mode
+/// partitioning table in issue #21), then funnels every point into at most one call
+/// to the strategy, rather than calling the existing hand-written `interpolate` once
+/// per point.
+macro_rules! batch_interpolate_impl {
+    () => {
+        /// Interpolate at each of several points, sharing one grid across all of
+        /// them.
+        ///
+        /// `self.extrapolate` is one setting for the whole call, not resolved per
+        /// point: every point still funnels into at most one call to the strategy,
+        /// rather than calling [`Self::interpolate`] once per point.
+        pub fn batch_interpolate(
+            &self,
+            points: &[[D::Elem; N]],
+        ) -> Result<Vec<D::Elem>, InterpolateError> {
+            match &self.extrapolate {
+                Extrapolate::Enable => self.strategy.batch_interpolate(&self.data, points),
+                Extrapolate::Clamp => {
+                    // Clamping an in-bounds point is already identity, so every point
+                    // can be clamped unconditionally.
+                    let clamped: Vec<[D::Elem; N]> = points
+                        .iter()
+                        .map(|point| {
+                            std::array::from_fn(|i| {
+                                *clamp(
+                                    &point[i],
+                                    self.data.grid[i].first().unwrap(),
+                                    self.data.grid[i].last().unwrap(),
+                                )
+                            })
+                        })
+                        .collect();
+                    self.strategy.batch_interpolate(&self.data, &clamped)
+                }
+                Extrapolate::Wrap => {
+                    // Unlike `Clamp`, `wrap()` isn't identity exactly at the
+                    // boundary, so only out-of-bounds points get wrapped.
+                    let wrapped: Vec<[D::Elem; N]> = points
+                        .iter()
+                        .map(|point| {
+                            if out_of_bounds(&self.data.grid, point) {
+                                std::array::from_fn(|i| {
+                                    wrap(
+                                        point[i],
+                                        *self.data.grid[i].first().unwrap(),
+                                        *self.data.grid[i].last().unwrap(),
+                                    )
+                                })
+                            } else {
+                                *point
+                            }
+                        })
+                        .collect();
+                    self.strategy.batch_interpolate(&self.data, &wrapped)
+                }
+                Extrapolate::Fill(value) => {
+                    let mut results = vec![*value; points.len()];
+                    let (in_bounds_indices, in_bounds_points): (Vec<usize>, Vec<[D::Elem; N]>) =
+                        points
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, point)| !out_of_bounds(&self.data.grid, *point))
+                            .map(|(i, point)| (i, *point))
+                            .unzip();
+                    let interpolated =
+                        self.strategy.batch_interpolate(&self.data, &in_bounds_points)?;
+                    for (i, value) in in_bounds_indices.into_iter().zip(interpolated) {
+                        results[i] = value;
+                    }
+                    Ok(results)
+                }
+                Extrapolate::Error => {
+                    let mut errors = Vec::new();
+                    let mut in_bounds_points = Vec::new();
+                    for (i, point) in points.iter().enumerate() {
+                        let mut point_errors = Vec::new();
+                        for dim in 0..N {
+                            if !(self.data.grid[dim].first().unwrap()
+                                ..=self.data.grid[dim].last().unwrap())
+                                .contains(&&point[dim])
+                            {
+                                point_errors.push(format!(
+                                    "\n    point[{i}][{dim}] = {:?} is out of bounds for grid[{dim}] = {:?}",
+                                    point[dim], self.data.grid[dim],
+                                ));
+                            }
+                        }
+                        if point_errors.is_empty() {
+                            in_bounds_points.push(*point);
+                        } else {
+                            errors.extend(point_errors);
+                        }
+                    }
+                    if !errors.is_empty() {
+                        return Err(InterpolateError::ExtrapolateError(errors.join("")));
+                    }
+                    self.strategy.batch_interpolate(&self.data, &in_bounds_points)
+                }
+            }
+        }
+    };
+}
+pub(crate) use batch_interpolate_impl;
 
 macro_rules! partialeq_impl {
     ($InterpType:ident, $Data:ident, $Strategy:ident) => {

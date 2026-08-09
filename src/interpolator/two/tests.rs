@@ -332,6 +332,86 @@ fn test_extrapolate_clamp() {
 }
 
 #[test]
+fn test_batch_interpolate_matches_interpolate() {
+    let interp = Interp2D::new(
+        array![0.05, 0.10, 0.15],
+        array![0.10, 0.20, 0.30],
+        array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+        strategy::Linear,
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    let points = [[0.075, 0.25], [0.05, 0.10], [0.2, 0.4]];
+    let batched = interp.batch_interpolate(&points).unwrap();
+    let looped: Vec<_> = points
+        .iter()
+        .map(|point| interp.interpolate(point).unwrap())
+        .collect();
+    assert_eq!(batched, looped);
+
+    let batched_fast = interp.batch_interpolate_fast(&points);
+    let looped_fast: Vec<_> = points
+        .iter()
+        .map(|point| interp.interpolate_fast(point))
+        .collect();
+    assert_eq!(batched_fast, looped_fast);
+}
+
+#[test]
+fn test_batch_interpolate_clamp() {
+    let interp = Interp2D::new(
+        array![0.1, 1.1],
+        array![0.2, 1.2],
+        array![[0., 1.], [2., 3.]],
+        strategy::Linear,
+        Extrapolate::Clamp,
+    )
+    .unwrap();
+    assert_eq!(
+        interp.batch_interpolate(&[[-1., -1.], [2., 2.]]).unwrap(),
+        vec![0., 3.]
+    );
+}
+
+#[test]
+fn test_batch_interpolate_error_aggregates_all_points() {
+    let interp = Interp2D::new(
+        array![0.1, 1.1],
+        array![0.2, 1.2],
+        array![[0., 1.], [2., 3.]],
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let err = interp
+        .batch_interpolate(&[[0.5, 0.5], [-1., -1.], [2., 2.]])
+        .unwrap_err();
+    let InterpolateError::ExtrapolateError(message) = err else {
+        panic!("expected ExtrapolateError");
+    };
+    assert!(message.contains("point[1]"));
+    assert!(message.contains("point[2]"));
+    assert!(!message.contains("point[0]"));
+}
+
+#[test]
+fn test_batch_interpolate_dyn() {
+    let interp: Box<dyn Interpolator<f64>> = Box::new(
+        Interp2D::new(
+            array![0.05, 0.10, 0.15],
+            array![0.10, 0.20, 0.30],
+            array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+            strategy::Linear,
+            Extrapolate::Error,
+        )
+        .unwrap(),
+    );
+    let points: [&[f64]; 2] = [&[0.075, 0.25], &[0.05, 0.10]];
+    assert_eq!(interp.batch_interpolate(&points).unwrap(), vec![3., 0.]);
+    assert_eq!(interp.batch_interpolate_fast(&points), vec![3., 0.]);
+}
+
+#[test]
 fn test_partialeq() {
     #[derive(PartialEq)]
     #[allow(unused)]

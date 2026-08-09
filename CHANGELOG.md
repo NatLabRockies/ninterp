@@ -47,6 +47,28 @@ Everything below is merged to `main` but not yet tagged/released.
 - `InterpolatorEnum` gains `check_extrapolate`/`validate_strategy`/`init_strategy`
   forwarding to the current variant, matching what `Interp1D`/`2D`/`3D`/`ND` already
   expose as public inherent methods.
+- `batch_interpolate`/`batch_interpolate_fast` on `Interpolator<T>` and
+  `Strategy1D`/`2D`/`3D`/`ND` (both default-provided, non-breaking, mirroring
+  `interpolate_fast`'s own default): interpolate at several points while sharing one
+  grid, instead of re-locating the grid once per point. `Interp1D`/`2D`/`3D` gain
+  inherent versions taking `&[[D::Elem; N]]`, the same fixed-size-array split as
+  `interpolate`/`interpolate_fast`. `InterpND` and `InterpolatorEnum` implement both
+  directly in their `Interpolator` impls instead (no separate inherent versions):
+  `InterpND` has no fixed `N` to give an inherent version a distinct, more specific
+  signature, matching how its own `interpolate`/`interpolate_fast` already work;
+  `InterpolatorEnum`'s `interpolate_fast` override is simplified the same way in this
+  release, since its inherent signature was never more specific than the trait's
+  either. The checked `batch_interpolate` resolves `self.extrapolate` once for the
+  whole batch and funnels every point into at most one call to the strategy; under
+  `Extrapolate::Error`, it now reports every out-of-range point in one
+  `ExtrapolateError`, not just the first one found. No strategy overrides the
+  default per-point loop yet, so the seam is ready for a future strategy that
+  amortizes its locate step across a batch. `Box<dyn Interpolator<T>>` and
+  `Box<dyn Strategy1D/2D/3D/ND<D>>` forward both methods to the wrapped concrete
+  type, the same way `interpolate_fast` already is, so a future batching strategy's
+  real implementation isn't silently lost behind type erasure.
+- `ExtrapolateError`'s message now reads "point(s)" instead of "point", since a batch
+  error can name more than one offending point.
 
 ### Changed
 - **Breaking:** `Strategy1DEnum`/`Strategy2DEnum`/`Strategy3DEnum`/`StrategyNDEnum` are
