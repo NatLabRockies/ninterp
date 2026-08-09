@@ -28,10 +28,28 @@ where
     // the same primitives the built-in strategies use.
     D: Data<Elem = f32> + RawDataClone + Clone,
 {
-    // We can optionally define an initialization step, useful for strategies that need precalculation.
-    // This is called on construction (`new`) and whenever the strategy is swapped (`set_strategy`),
-    // for all interpolators. It takes a mutable reference, so you can edit any data contained in
-    // `CustomStrategy`.
+    // We can optionally define a validation step for invariants that don't require
+    // precomputed state (e.g. grid uniformity, direction-count matching). It's a pure
+    // `&self` check, no mutation allowed, and runs before `init` below: on construction
+    // (`new`), whenever the strategy is swapped (`set_strategy`), and whenever
+    // `Interpolator::validate` is called on the interpolator directly.
+    //
+    // There is a default implementation that just returns `Ok(())`, so leave this out if not needed.
+    fn validate(&self, data: &InterpData2D<D>) -> Result<(), ninterp::error::ValidateError> {
+        // Dummy invariant: reject non-uniformly-spaced grids. `strategy::utils` has a
+        // ready-made helper for exactly this, used by the built-in `LinearUniform` strategy.
+        ninterp::strategy::utils::check_uniform_grid(data.grid[0].view(), 0)?;
+        ninterp::strategy::utils::check_uniform_grid(data.grid[1].view(), 1)?;
+        println!("validated!");
+        Ok(())
+    }
+
+    // We can also optionally define an initialization step, useful for strategies that need
+    // precalculation. It takes a mutable reference, so unlike `validate`, you can edit any
+    // data contained in `CustomStrategy` (e.g. cache something derived from `data`, such as
+    // spline coefficients). It runs after `validate` above, at the same two points: on
+    // construction (`new`) and whenever the strategy is swapped (`set_strategy`). Unlike
+    // `validate`, it is not re-run by a standalone `Interpolator::validate` call.
     //
     // There is a default implementation that just returns `Ok(())`, so leave this out if not needed.
     fn init(&mut self, _data: &InterpData2D<D>) -> Result<(), ninterp::error::ValidateError> {
@@ -60,7 +78,9 @@ where
     // Only set this to `true` if the `interpolate` implementation provisions for extrapolation.
     //
     // All extrapolation settings besides `Extrapolate::Enable` are handled before the strategy `interpolate` call.
-    // If you need different options for extrapolation beyond 'Enable', use an enum in your `CustomStrategy`.
+    // `Extrapolate::Enable` itself carries no configuration, so if your strategy needs multiple
+    // extrapolation behaviors, model them as a field on `CustomStrategy` (e.g. an enum) and
+    // branch on it inside `interpolate`.
     fn allow_extrapolate(&self) -> bool {
         false
     }
