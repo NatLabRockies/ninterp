@@ -398,14 +398,6 @@ where
         self.strategy.interpolate_fast(&self.data, point)
     }
 
-    /// Interpolate at each of several points, sharing one grid across all of them.
-    ///
-    /// `self.extrapolate` is one setting for the whole call, not resolved per point:
-    /// every point still funnels into at most one call to the strategy, rather than
-    /// calling [`Interpolator::interpolate`] once per point. Unlike `Interp1D`/`2D`/
-    /// `3D`, there's no fixed-size array to route this through: the partitioning
-    /// below is hand-written here, the same way [`InterpND`]'s own `interpolate`
-    /// (above) is hand-written instead of using `sized_interpolate_impl!`.
     fn batch_interpolate(&self, points: &[&[D::Elem]]) -> Result<Vec<D::Elem>, InterpolateError> {
         let n = self.ndim();
         for point in points {

@@ -54,9 +54,10 @@ pub trait Interpolator<T>: DynClone {
 
     /// Interpolate at each of several points, sharing one grid across all of them.
     ///
-    /// Default just loops [`Interpolator::interpolate`]. `Interp1D`/`2D`/`3D`/`ND`
-    /// override this to funnel the whole batch into a single call to the strategy,
-    /// rather than repeating a per-point grid search for every point.
+    /// `self.extrapolate` is one setting for the whole call, not resolved per
+    /// point. Default just loops [`Interpolator::interpolate`]; `Interp1D`/`2D`/
+    /// `3D`/`ND` override this to funnel every point into at most one call to the
+    /// strategy instead.
     fn batch_interpolate(&self, points: &[&[T]]) -> Result<Vec<T>, InterpolateError> {
         points.iter().map(|point| self.interpolate(point)).collect()
     }
