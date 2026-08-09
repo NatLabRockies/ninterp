@@ -281,36 +281,6 @@ where
         }
     }
 
-    /// Interpolate at the supplied point.
-    ///
-    /// # Errors
-    /// Returns [`InterpolateError::PointLength`] if `point.len()` does not match
-    /// [`InterpolatorEnum::ndim`].
-    pub fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError>
-    where
-        D::Elem: Euclid,
-    {
-        match self {
-            InterpolatorEnum::Interp0D(interp) => interp.interpolate(point),
-            InterpolatorEnum::Interp1D(interp) => interp.interpolate(
-                point
-                    .try_into()
-                    .map_err(|_| InterpolateError::PointLength(1))?,
-            ),
-            InterpolatorEnum::Interp2D(interp) => interp.interpolate(
-                point
-                    .try_into()
-                    .map_err(|_| InterpolateError::PointLength(2))?,
-            ),
-            InterpolatorEnum::Interp3D(interp) => interp.interpolate(
-                point
-                    .try_into()
-                    .map_err(|_| InterpolateError::PointLength(3))?,
-            ),
-            InterpolatorEnum::InterpND(interp) => interp.interpolate(point),
-        }
-    }
-
     /// Interpolate without bounds/extrapolation checks, for use in hot loops where the
     /// caller has already checked bounds or knows that extrapolation handling is not needed.
     ///
@@ -371,7 +341,25 @@ where
 
     #[inline]
     fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
-        self.interpolate(point)
+        match self {
+            InterpolatorEnum::Interp0D(interp) => interp.interpolate(point),
+            InterpolatorEnum::Interp1D(interp) => interp.interpolate(
+                point
+                    .try_into()
+                    .map_err(|_| InterpolateError::PointLength(1))?,
+            ),
+            InterpolatorEnum::Interp2D(interp) => interp.interpolate(
+                point
+                    .try_into()
+                    .map_err(|_| InterpolateError::PointLength(2))?,
+            ),
+            InterpolatorEnum::Interp3D(interp) => interp.interpolate(
+                point
+                    .try_into()
+                    .map_err(|_| InterpolateError::PointLength(3))?,
+            ),
+            InterpolatorEnum::InterpND(interp) => interp.interpolate(point),
+        }
     }
 
     #[inline]
