@@ -146,17 +146,6 @@ Each approach has trade-offs:
 | `Box<dyn Interpolator<_>>` | Highest | Interpolator + strategy | Yes | No |
 
 ## Core Concepts
-### Validation Lifecycle
-After editing interpolator data, call the InterpData `validate` method or
-[`Interpolator::validate`](https://docs.rs/ninterp/latest/ninterp/interpolator/trait.Interpolator.html#tymethod.validate)
-to rerun data/extrapolate validation checks.
-
-`validate` only checks the data (shape, monotonicity) and extrapolate setting; it does
-not re-run a strategy's own `init`. If editing `data` directly could violate a strategy's
-own requirements (for example `LinearUniform`'s uniform-grid requirement, or `Step`'s
-per-dimension direction count), or after deserializing an interpolator with a stateful
-custom strategy, call `init_strategy` to re-run it.
-
 ### Data Shape Contract
 Grid and values shapes must match by axis order:
 for every dimension `n`, `grid[n].len() == values.shape()[n]`.
@@ -175,6 +164,8 @@ An interpolation strategy must be specified. Provided strategies:
 | [`Step`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Step.html) | Step interpolation with per-dimension directions or a direction chosen at runtime |
 | [`StepLower`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.StepLower.html) | Step interpolation to the previous grid value in each dimension |
 | [`StepUpper`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.StepUpper.html) | Step interpolation to the next grid value in each dimension |
+
+More strategies will be added in the future.
 
 To change the interpolation strategy, supply a `Strategy*DEnum` or `Box<dyn Strategy*D>` at instantiation and call `set_strategy`.
 Custom strategies can be defined, see [`examples/custom_strategy.rs`](https://github.com/NatLabRockies/ninterp/blob/main/examples/custom_strategy.rs).
@@ -196,19 +187,48 @@ If you are unsure which variant to choose, `Extrapolate::Error` is a good defaul
 To change extrapolation behavior after construction, call `set_extrapolate`.
 
 ### Interpolation Calls
-Interpolation is executed by calling [`Interpolator::interpolate`](https://docs.rs/ninterp/latest/ninterp/interpolator/trait.Interpolator.html#tymethod.interpolate).
+Call `interpolate` with one coordinate per dimension:
+- 1-D interpolator: `interp.interpolate(&[x])`
+- 2-D interpolator: `interp.interpolate(&[x, y])`
+- 3-D interpolator: `interp.interpolate(&[x, y, z])`
+- N-D interpolator: `interp.interpolate(&[x0, x1, ..., x_{N-1}])`
 
-The query point must contain one coordinate per dimension.
-For example:
-- 1-D interpolator: `&[x]`
-- 2-D interpolator: `&[x, y]`
-- 3-D interpolator: `&[x, y, z]`
-- N-D interpolator: `&[x0, x1, ..., x_{N-1}]`
-
-If the number of coordinates does not match dimensionality, interpolation returns an error.
-Retrieve dimensionality using
+For `Interp1D`/`Interp2D`/`Interp3D`, a wrong-length point is a compile error. For
+`InterpND`, `InterpolatorEnum`, and `Box<dyn Interpolator<T>>`, it's instead a runtime
+`InterpolateError::PointLength`. Retrieve dimensionality using
 [`Interpolator::ndim`](https://docs.rs/ninterp/latest/ninterp/interpolator/trait.Interpolator.html#tymethod.ndim)
 if necessary.
+
+For hot loops where the point is already known to be in-bounds and extrapolation isn't
+needed, [`interpolate_fast`](https://docs.rs/ninterp/latest/ninterp/interpolator/trait.Interpolator.html#method.interpolate_fast)
+skips the bounds check and extrapolation handling that `interpolate` does, returning
+`D::Elem` directly instead of a `Result` (panicking, instead of erroring, on an invalid
+point). It takes the same point argument as `interpolate` above.
+
+### Validation Lifecycle
+After editing interpolator data, call
+[`Interpolator::validate`](https://docs.rs/ninterp/latest/ninterp/interpolator/trait.Interpolator.html#tymethod.validate)
+to rerun data, extrapolate, and strategy validation checks together, or `interp.data.validate()`
+directly for just the narrower shape/monotonicity check on the grid and values.
+
+`validate` checks the data (shape, monotonicity), the extrapolate setting, and runs the
+strategy's own `validate`, a pure check for invariants that don't need precomputed state
+(for example `LinearUniform`'s uniform-grid requirement, or `Step`'s per-dimension
+direction count). It does not re-run the strategy's `init`, the mutating counterpart that
+only strategies caching derived state (such as precomputed spline coefficients) need to
+override.
+
+`new` and `set_strategy` call both `validate` and `init` on the strategy. If you mutate
+the public `data`/`strategy` fields directly instead, call `validate_strategy`/
+`init_strategy` to re-run just those steps.
+
+Deserialization does not call `validate` or `init`. Call `validate` afterward regardless:
+deserialized data isn't guaranteed to satisfy grid/strategy invariants (hand-edited JSON,
+a foreign writer, etc.), and the check is cheap. Whether you also need `init_strategy`
+depends on the strategy: if its cached state is stored in its own serialized fields,
+deserialize restores it as-is and `init` doesn't need to rerun; if that state is instead
+skipped from serialization (e.g. via `#[serde(skip)]`, to avoid bloating the wire format
+with a large derived array), call `init_strategy` to rebuild it.
 
 ### Errors
 Validation-time (`new` / `validate`):

@@ -94,8 +94,11 @@ where
     ///
     /// `new` and `set_strategy` already call this internally, so this is only needed
     /// after bypassing them: mutating the public `data`/`strategy` fields directly, or
-    /// deserializing an interpolator with a stateful custom strategy (`Deserialize`
-    /// does not call `init`).
+    /// deserializing an interpolator whose strategy skips its cached state from
+    /// serialization (e.g. via `#[serde(skip)]`, to avoid bloating the wire format with
+    /// a large derived array). `Deserialize` does not call `init`; if the cached state
+    /// is instead stored in ordinary serialized fields, it comes back as-is and this
+    /// isn't needed.
     pub fn init_strategy(&mut self) -> Result<(), ValidateError> {
         self.strategy.init(&self.data)
     }
