@@ -87,8 +87,8 @@ fn benchmark_2D() {
     )
     .unwrap();
     // Sample 1,000 points
-    let points: Vec<Vec<f64>> = (0..1_000)
-        .map(|_| vec![rng.random::<f64>() * 99., rng.random::<f64>() * 99.])
+    let points: Vec<[f64; 2]> = (0..1_000)
+        .map(|_| [rng.random::<f64>() * 99., rng.random::<f64>() * 99.])
         .collect();
     for point in points {
         interp_2d.interpolate(black_box(&point)).unwrap();
@@ -139,9 +139,9 @@ fn benchmark_3D() {
     )
     .unwrap();
     // Sample 1,000 points
-    let points: Vec<Vec<f64>> = (0..1_000)
+    let points: Vec<[f64; 3]> = (0..1_000)
         .map(|_| {
-            vec![
+            [
                 rng.random::<f64>() * 99.,
                 rng.random::<f64>() * 99.,
                 rng.random::<f64>() * 99.,
@@ -232,8 +232,8 @@ fn benchmark_2D_uniform() {
         Extrapolate::Error,
     )
     .unwrap();
-    let points: Vec<Vec<f64>> = (0..1_000)
-        .map(|_| vec![rng.random::<f64>() * 99., rng.random::<f64>() * 99.])
+    let points: Vec<[f64; 2]> = (0..1_000)
+        .map(|_| [rng.random::<f64>() * 99., rng.random::<f64>() * 99.])
         .collect();
     for point in points {
         interp.interpolate(black_box(&point)).unwrap();
@@ -276,9 +276,9 @@ fn benchmark_3D_uniform() {
         Extrapolate::Error,
     )
     .unwrap();
-    let points: Vec<Vec<f64>> = (0..1_000)
+    let points: Vec<[f64; 3]> = (0..1_000)
         .map(|_| {
-            vec![
+            [
                 rng.random::<f64>() * 99.,
                 rng.random::<f64>() * 99.,
                 rng.random::<f64>() * 99.,

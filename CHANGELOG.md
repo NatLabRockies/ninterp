@@ -95,6 +95,17 @@ Everything below is merged to `main` but not yet tagged/released.
   required; this was the only field with that leniency, and nothing pinned the behavior
   down, so a missing field now fails loudly (`missing field "extrapolate"`) instead of
   risking a silently different interpolator than intended.
+- **Breaking:** `Interp1D`/`Interp2D`/`Interp3D` gain an inherent
+  `interpolate(&self, point: &[D::Elem; N])`, taking the point as a fixed-size array so a
+  wrong-length point is a compile error instead of a runtime `InterpolateError::PointLength`.
+  `Interpolator::interpolate(&self, point: &[T])` remains available (now a thin
+  length-checking wrapper around the inherent method) for `InterpND`, `InterpolatorEnum`,
+  `Box<dyn Interpolator<T>>`, and other generic/trait-object callers, all unaffected.
+  Because Rust inherent methods unconditionally shadow trait methods of the same name,
+  any call site holding a genuine runtime-length slice for a concretely-typed
+  `Interp1D`/`2D`/`3D` (e.g. from a `Vec<f64>`, not an array literal) stops compiling;
+  migrate with `let point: &[D::Elem; N] = slice.try_into()?;` at the call site.
+  `InterpND` is unaffected (no fixed `N`).
 - Each `Interp1D`/`Interp2D`/`Interp3D`/`InterpND` gains a public `validate_strategy()`,
   mirroring the existing `init_strategy()`: re-runs the strategy's `validate` against
   the current data, for use after mutating the public `data`/`strategy` fields

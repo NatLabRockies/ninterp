@@ -9,6 +9,29 @@ fn test_invalid_args() {
         Extrapolate::Error,
     )
     .unwrap();
+    // Wrong-length points on a concretely-typed `Interp1D` are caught at compile time
+    // via the inherent `interpolate(&[D::Elem; N])`; the trait's checked path (used by
+    // generic/`dyn` callers passing a real slice) still catches it at runtime.
+    assert!(matches!(
+        Interpolator::interpolate(&interp, &[]).unwrap_err(),
+        InterpolateError::PointLength(_)
+    ));
+    assert_eq!(interp.interpolate(&[1.0]).unwrap(), 0.4);
+}
+
+#[test]
+fn test_invalid_args_dyn() {
+    let interp: Box<dyn Interpolator<f64>> = Box::new(
+        Interp1D::new(
+            array![0., 1., 2., 3., 4.],
+            array![0.2, 0.4, 0.6, 0.8, 1.0],
+            strategy::Linear,
+            Extrapolate::Error,
+        )
+        .unwrap(),
+    );
+    // Through `Box<dyn Interpolator<T>>`, only the trait's slice-taking method is ever
+    // reachable, so a wrong-length point still fails at runtime, not compile time.
     assert!(matches!(
         interp.interpolate(&[]).unwrap_err(),
         InterpolateError::PointLength(_)
