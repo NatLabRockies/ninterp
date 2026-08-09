@@ -256,6 +256,24 @@ fn test_dyn_strategy() {
 }
 
 #[test]
+fn test_dyn_strategy_batch_interpolate() {
+    // Strategy2D<D>'s batch_interpolate/batch_interpolate_fast for
+    // Box<dyn Strategy2D<D>> forward to the wrapped concrete strategy; confirm that
+    // forward actually produces correct output, not just that it compiles.
+    let interp = Interp2D::new(
+        array![0., 1.],
+        array![0., 1.],
+        array![[0., 1.], [2., 3.]],
+        Box::new(strategy::Linear) as Box<dyn Strategy2D<_>>,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let points = [[0.2, 0.], [1., 1.]];
+    assert_eq!(interp.batch_interpolate(&points).unwrap(), vec![0.4, 3.]);
+    assert_eq!(interp.batch_interpolate_fast(&points), vec![0.4, 3.]);
+}
+
+#[test]
 fn test_set_strategy_runs_init() {
     // `Step`'s `validate` checks its direction count against dimensionality,
     // so swapping in a `Step` with the wrong count via `set_strategy` must
