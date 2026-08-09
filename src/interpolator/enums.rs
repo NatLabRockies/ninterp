@@ -343,10 +343,6 @@ where
         }
     }
 
-    /// `Interpolator::interpolate_fast` has a default body (unlike `interpolate`
-    /// above, a required method with none), so this override is what keeps
-    /// `InterpolatorEnum` from silently falling back to it: the default just
-    /// unwraps the checked `interpolate` path instead of really skipping checks.
     #[inline]
     fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
         match self {
@@ -370,9 +366,6 @@ where
         }
     }
 
-    /// Same reason as [`Self::interpolate_fast`] above: `batch_interpolate` also has
-    /// a default body (a naive per-point loop) that this override exists to replace
-    /// with the real per-variant batch call.
     fn batch_interpolate(&self, points: &[&[D::Elem]]) -> Result<Vec<D::Elem>, InterpolateError> {
         match self {
             InterpolatorEnum::Interp0D(interp) => Interpolator::batch_interpolate(interp, points),
@@ -413,7 +406,6 @@ where
         }
     }
 
-    /// Same reason as [`Self::batch_interpolate`] above.
     fn batch_interpolate_fast(&self, points: &[&[D::Elem]]) -> Vec<D::Elem> {
         match self {
             InterpolatorEnum::Interp0D(interp) => vec![interp.0; points.len()],

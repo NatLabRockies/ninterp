@@ -95,13 +95,11 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
 {
-    /// Validate strategy state against interpolation data. Pure check, no mutation.
     #[inline]
     fn validate(&self, data: &InterpData1D<D>) -> Result<(), ValidateError> {
         (**self).validate(data)
     }
 
-    /// Initialize strategy struct, with access to interpolation data.
     #[inline]
     fn init(&mut self, data: &InterpData1D<D>) -> Result<(), ValidateError> {
         (**self).init(data)
@@ -238,13 +236,11 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
 {
-    /// Validate strategy state against interpolation data. Pure check, no mutation.
     #[inline]
     fn validate(&self, data: &InterpData2D<D>) -> Result<(), ValidateError> {
         (**self).validate(data)
     }
 
-    /// Initialize strategy struct, with access to interpolation data.
     #[inline]
     fn init(&mut self, data: &InterpData2D<D>) -> Result<(), ValidateError> {
         (**self).init(data)
@@ -381,13 +377,11 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
 {
-    /// Validate strategy state against interpolation data. Pure check, no mutation.
     #[inline]
     fn validate(&self, data: &InterpData3D<D>) -> Result<(), ValidateError> {
         (**self).validate(data)
     }
 
-    /// Initialize strategy struct, with access to interpolation data.
     #[inline]
     fn init(&mut self, data: &InterpData3D<D>) -> Result<(), ValidateError> {
         (**self).init(data)
@@ -524,7 +518,6 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
 {
-    /// Validate strategy state against interpolation data. Pure check, no mutation.
     #[inline]
     fn validate(&self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
         (**self).validate(data)
