@@ -54,11 +54,15 @@ Everything below is merged to `main` but not yet tagged/released.
   interpolating `m` points against a type-erased interpolator previously cost `m`
   virtual dispatches, one per `.interpolate()` call; `batch_interpolate` collapses
   that to a single dispatch that reaches the concrete type once, which then loops
-  internally via ordinary static calls. `Box<dyn Interpolator<T>>` and
-  `Box<dyn Strategy1D/2D/3D/ND<D>>` forward both methods to the wrapped concrete
-  type (the same way `interpolate_fast` already is) specifically so this collapse
-  actually happens: without the forward, the boxed type would inherit the trait's
-  own default loop operating on the box itself, one dispatch per point again. No
+  internally via ordinary static calls: this holds independently at both erasure
+  points, a boxed interpolator reaches its concrete type in one hop, and (for an
+  interpolator holding a boxed strategy, e.g. `Interp2D<D, Box<dyn Strategy2D<D>>>`)
+  the strategy call inside it reaches its own concrete type in a separate one hop.
+  `Box<dyn Interpolator<T>>` and `Box<dyn Strategy1D/2D/3D/ND<D>>` forward both
+  methods to the wrapped concrete type (the same way `interpolate_fast` already is)
+  specifically so this collapse actually happens: without the forward, the boxed
+  type would inherit the trait's own default loop operating on the box itself, one
+  dispatch per point again. No
   strategy overrides the default per-point loop yet either, so the same seam is
   also ready for a future strategy that amortizes its own locate step across a
   batch (sorting points once, SIMD-packing the blend step, etc.), independent of
