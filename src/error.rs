@@ -76,7 +76,7 @@ fn fmt_out_of_bounds(failures: &[(usize, usize)]) -> String {
     let show = show_index(failures);
     match failures {
         [(index, dim)] => format!(
-            "{} is out of bounds in dim {dim}, with `Extrapolate::Error` set",
+            "{} is out of bounds in dim {dim} with `Extrapolate::Error` set",
             point_at(*index, show)
         ),
         many => {
