@@ -449,7 +449,7 @@ fn test_serde() {
     .unwrap();
 
     let ser = serde_json::to_string(&interp).unwrap();
-    let de: Interp3DBase<_, _> = serde_json::from_str(&ser).unwrap();
+    let de: Interp3D<_, _> = serde_json::from_str(&ser).unwrap();
     assert_eq!(interp, de);
 
     // simple format (new serialization output)

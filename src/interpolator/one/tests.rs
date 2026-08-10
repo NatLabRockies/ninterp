@@ -491,7 +491,7 @@ fn test_serde() {
     .unwrap();
 
     let ser = serde_json::to_string(&interp).unwrap();
-    let de: Interp1DBase<f64, strategy::Step> = serde_json::from_str(&ser).unwrap();
+    let de: Interp1D<f64, strategy::Step> = serde_json::from_str(&ser).unwrap();
     assert_eq!(interp, de);
 
     // `ndarray` format by default
@@ -508,7 +508,7 @@ fn test_serde() {
     );
     // ...and the whole interpolator nests too
     let interp_ser_nested = serde_json::to_string(&crate::prelude::Nested(&interp)).unwrap();
-    let de_nested: Interp1DBase<f64, strategy::Step> =
+    let de_nested: Interp1D<f64, strategy::Step> =
         serde_json::from_str(&interp_ser_nested).unwrap();
     assert_eq!(interp, de_nested);
 

@@ -6,7 +6,7 @@
 #![cfg(feature = "serde")]
 
 use ndarray::prelude::*;
-use ninterp::data::{InterpData3DOwned, InterpDataND, InterpDataNDOwned};
+use ninterp::data::{InterpData3D, InterpDataND};
 use ninterp::prelude::*;
 
 /// Assert that a value survives a round trip in both the `ndarray` and nested-array formats,
@@ -35,7 +35,7 @@ where
     assert!(cross == *value);
 }
 
-fn interp_1d() -> Interp1DOwned<f64, strategy::Linear> {
+fn interp_1d() -> Interp1D<f64, strategy::Linear> {
     Interp1D::new(
         array![0., 1., 2., 3.],
         array![0.2, 0.4, 0.6, 0.8],
@@ -45,7 +45,7 @@ fn interp_1d() -> Interp1DOwned<f64, strategy::Linear> {
     .unwrap()
 }
 
-fn interp_2d() -> Interp2DOwned<f64, strategy::Linear> {
+fn interp_2d() -> Interp2D<f64, strategy::Linear> {
     Interp2D::new(
         array![0., 1.],
         array![0., 1.],
@@ -56,7 +56,7 @@ fn interp_2d() -> Interp2DOwned<f64, strategy::Linear> {
     .unwrap()
 }
 
-fn interp_3d() -> Interp3DOwned<f64, strategy::Linear> {
+fn interp_3d() -> Interp3D<f64, strategy::Linear> {
     Interp3D::new(
         array![0., 1.],
         array![0., 1.],
@@ -68,7 +68,7 @@ fn interp_3d() -> Interp3DOwned<f64, strategy::Linear> {
     .unwrap()
 }
 
-fn interp_nd() -> InterpNDOwned<f64, strategy::Linear> {
+fn interp_nd() -> InterpND<f64, strategy::Linear> {
     InterpND::new(
         vec![array![0., 1.], array![0., 1.]],
         array![[0., 1.], [2., 3.]].into_dyn(),
@@ -98,7 +98,7 @@ fn round_trip_data() {
 /// Untagged enums fail confusingly when a variant's field names shift, so cover every variant.
 #[test]
 fn round_trip_interpolator_enum() {
-    let variants: Vec<InterpolatorEnumOwned<f64>> = vec![
+    let variants: Vec<InterpolatorEnum<f64>> = vec![
         InterpolatorEnum::new_0d(0.5),
         InterpolatorEnum::new_1d(
             array![0., 1., 2., 3.],
@@ -147,11 +147,11 @@ fn round_trip_through_containers() {
     let nested = serde_json::to_string(&Nested(&curves)).unwrap();
     assert!(nested.starts_with("[{\"data\":{\"grid\":[[0.0,1.0,2.0,3.0]]"));
 
-    let de: Vec<Interp1DOwned<f64, strategy::Linear>> = serde_json::from_str(&nested).unwrap();
+    let de: Vec<Interp1D<f64, strategy::Linear>> = serde_json::from_str(&nested).unwrap();
     assert_eq!(de, curves);
 
     let some = Some(interp_1d());
-    let de: Option<Interp1DOwned<f64, strategy::Linear>> =
+    let de: Option<Interp1D<f64, strategy::Linear>> =
         serde_json::from_str(&serde_json::to_string(&Nested(&some)).unwrap()).unwrap();
     assert_eq!(de, some);
 }
@@ -163,7 +163,7 @@ fn serialize_with_on_a_field() {
     struct Config {
         name: String,
         #[serde(serialize_with = "serialize_nested")]
-        curve: Interp1DOwned<f64, strategy::Linear>,
+        curve: Interp1D<f64, strategy::Linear>,
     }
 
     let config = Config {
@@ -185,28 +185,28 @@ fn binary_formats_round_trip() {
     let data = interp_3d().data;
     let bytes = bincode::serialize(&data).unwrap();
     assert_eq!(
-        bincode::deserialize::<InterpData3DOwned<f64>>(&bytes).unwrap(),
+        bincode::deserialize::<InterpData3D<f64>>(&bytes).unwrap(),
         data
     );
 
     let nd = interp_nd().data;
     let bytes = bincode::serialize(&nd).unwrap();
     assert_eq!(
-        bincode::deserialize::<InterpDataNDOwned<f64>>(&bytes).unwrap(),
+        bincode::deserialize::<InterpDataND<f64>>(&bytes).unwrap(),
         nd
     );
 
     let interp = interp_1d();
     let bytes = bincode::serialize(&interp).unwrap();
     assert_eq!(
-        bincode::deserialize::<Interp1DOwned<f64, strategy::Linear>>(&bytes).unwrap(),
+        bincode::deserialize::<Interp1D<f64, strategy::Linear>>(&bytes).unwrap(),
         interp
     );
 
     // `Nested` degrades to the `ndarray` format here, so it must still round-trip.
     let bytes = bincode::serialize(&Nested(&interp)).unwrap();
     assert_eq!(
-        bincode::deserialize::<Interp1DOwned<f64, strategy::Linear>>(&bytes).unwrap(),
+        bincode::deserialize::<Interp1D<f64, strategy::Linear>>(&bytes).unwrap(),
         interp
     );
 }
@@ -219,13 +219,13 @@ fn zero_dimensional_nd_data() {
 
     let plain = serde_json::to_string(&data).unwrap();
     assert_eq!(
-        serde_json::from_str::<InterpDataNDOwned<f64>>(&plain).unwrap(),
+        serde_json::from_str::<InterpDataND<f64>>(&plain).unwrap(),
         data
     );
 
     let nested = serde_json::to_string(&Nested(&data)).unwrap();
     assert_eq!(
-        serde_json::from_str::<InterpDataNDOwned<f64>>(&nested).unwrap(),
+        serde_json::from_str::<InterpDataND<f64>>(&nested).unwrap(),
         data,
         "0-D values failed to round-trip in nested format: {nested}"
     );

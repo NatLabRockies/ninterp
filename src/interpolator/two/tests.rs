@@ -635,7 +635,7 @@ fn test_serde() {
     .unwrap();
 
     let ser = serde_json::to_string(&interp).unwrap();
-    let de: Interp2DBase<f64, strategy::Linear> = serde_json::from_str(&ser).unwrap();
+    let de: Interp2D<f64, strategy::Linear> = serde_json::from_str(&ser).unwrap();
     assert_eq!(interp, de);
 
     // simple format (new serialization output)

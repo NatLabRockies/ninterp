@@ -78,7 +78,7 @@ fn benchmark_2D() {
     let grid_data: Array1<f64> = (0..100).map(|x| x as f64).collect();
     let values_data = Array2::random_using((100, 100), Uniform::new(0., 1.).unwrap(), &mut rng);
     // Create a 2D interpolator with 100x100 data (10,000 points)
-    let interp_2d = Interp2D::new(
+    let interp_2d = Interp2DView::new(
         grid_data.view(),
         grid_data.view(),
         values_data.view(),
@@ -104,7 +104,7 @@ fn benchmark_2D_multi() {
     let values_data =
         Array2::random_using((100, 100), Uniform::new(0., 1.).unwrap(), &mut rng).into_dyn();
     // Create an N-D interpolator with 100x100 data (10,000 points)
-    let interp_2d_multi = InterpND::new(
+    let interp_2d_multi = InterpNDView::new(
         vec![grid_data.view(), grid_data.view()],
         values_data.view(),
         strategy::Linear,
@@ -129,7 +129,7 @@ fn benchmark_3D() {
     let values_data =
         Array3::random_using((100, 100, 100), Uniform::new(0., 1.).unwrap(), &mut rng);
     // Create a 3D interpolator with 100x100x100 data (1,000,000 points)
-    let interp_3d = Interp3D::new(
+    let interp_3d = Interp3DView::new(
         grid_data.view(),
         grid_data.view(),
         grid_data.view(),
@@ -162,7 +162,7 @@ fn benchmark_3D_multi() {
     let values_data =
         Array3::random_using((100, 100, 100), Uniform::new(0., 1.).unwrap(), &mut rng).into_dyn();
     // Create an N-D interpolator with 100x100x100 data (1,000,000 points)
-    let interp_3d_multi = InterpND::new(
+    let interp_3d_multi = InterpNDView::new(
         vec![grid_data.view(), grid_data.view(), grid_data.view()],
         values_data.view(),
         strategy::Linear,
@@ -224,7 +224,7 @@ fn benchmark_2D_uniform() {
     let mut rng = StdRng::seed_from_u64(RANDOM_SEED);
     let grid_data: Array1<f64> = (0..100).map(|x| x as f64).collect();
     let values_data = Array2::random_using((100, 100), Uniform::new(0., 1.).unwrap(), &mut rng);
-    let interp = Interp2D::new(
+    let interp = Interp2DView::new(
         grid_data.view(),
         grid_data.view(),
         values_data.view(),
@@ -246,7 +246,7 @@ fn benchmark_2D_multi_uniform() {
     let grid_data: Array1<f64> = (0..100).map(|x| x as f64).collect();
     let values_data =
         Array2::random_using((100, 100), Uniform::new(0., 1.).unwrap(), &mut rng).into_dyn();
-    let interp = InterpND::new(
+    let interp = InterpNDView::new(
         vec![grid_data.view(), grid_data.view()],
         values_data.view(),
         strategy::LinearUniform,
@@ -267,7 +267,7 @@ fn benchmark_3D_uniform() {
     let grid_data: Array1<f64> = (0..100).map(|x| x as f64).collect();
     let values_data =
         Array3::random_using((100, 100, 100), Uniform::new(0., 1.).unwrap(), &mut rng);
-    let interp = Interp3D::new(
+    let interp = Interp3DView::new(
         grid_data.view(),
         grid_data.view(),
         grid_data.view(),
@@ -296,7 +296,7 @@ fn benchmark_3D_multi_uniform() {
     let grid_data: Array1<f64> = (0..100).map(|x| x as f64).collect();
     let values_data =
         Array3::random_using((100, 100, 100), Uniform::new(0., 1.).unwrap(), &mut rng).into_dyn();
-    let interp = InterpND::new(
+    let interp = InterpNDView::new(
         vec![grid_data.view(), grid_data.view(), grid_data.view()],
         values_data.view(),
         strategy::LinearUniform,
