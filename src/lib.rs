@@ -2,7 +2,7 @@
 #![warn(missing_docs)]
 
 /// The `prelude` module exposes a variety of types:
-/// - All interpolator structs:
+/// - All interpolator types:
 ///   - [`Interp0D`](`interpolator::Interp0D`)
 ///   - [`Interp1D`](`interpolator::Interp1D`)
 ///   - [`Interp2D`](`interpolator::Interp2D`)

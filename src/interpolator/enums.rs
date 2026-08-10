@@ -440,9 +440,9 @@ where
     Interp3D(Interp3DBase<D, Strategy3DEnum>),
     InterpND(InterpNDBase<D, StrategyNDEnum>),
 }
-/// [`InterpolatorEnumBase`] that owns data.
+/// Owned interpolator enum (see [`InterpolatorEnumBase`] for the generic form).
 pub type InterpolatorEnum<T> = InterpolatorEnumBase<OwnedRepr<T>>;
-/// [`InterpolatorEnumBase`] that views data.
+/// Viewed interpolator enum (see [`InterpolatorEnumBase`] for the generic form).
 pub type InterpolatorEnumView<T> = InterpolatorEnumBase<ViewRepr<T>>;
 
 #[cfg(feature = "serde")]

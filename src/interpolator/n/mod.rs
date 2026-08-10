@@ -36,9 +36,9 @@ where
     #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_dyn"))]
     pub values: ArrayBase<D, IxDyn>,
 }
-/// [`InterpDataNDBase`] for N-D data that owns data.
+/// Owned data variant for N-D data (see [`InterpDataNDBase`] for the generic form).
 pub type InterpDataND<T> = InterpDataNDBase<OwnedRepr<T>>;
-/// [`InterpDataNDBase`] that views data.
+/// Viewed data variant for N-D data (see [`InterpDataNDBase`] for the generic form).
 pub type InterpDataNDView<T> = InterpDataNDBase<ViewRepr<T>>;
 
 #[cfg(feature = "serde")]
@@ -51,7 +51,7 @@ where
     where
         S: Serializer,
     {
-        let mut s = serializer.serialize_struct("InterpDataND", 2)?;
+        let mut s = serializer.serialize_struct("InterpDataNDBase", 2)?;
         s.serialize_field("grid", &GridVecWrapper(&self.grid))?;
         s.serialize_field("values", &ArrayWrapper(&self.values))?;
         s.end()
@@ -178,9 +178,9 @@ where
     /// Extrapolation setting.
     pub extrapolate: Extrapolate<D::Elem>,
 }
-/// [`InterpND`] that owns data.
+/// Owned interpolator variant (see [`InterpNDBase`] for the generic form).
 pub type InterpND<T, S> = InterpNDBase<OwnedRepr<T>, S>;
-/// [`InterpND`] that views data.
+/// Viewed interpolator variant (see [`InterpNDBase`] for the generic form).
 pub type InterpNDView<T, S> = InterpNDBase<ViewRepr<T>, S>;
 
 partialeq_impl!(InterpNDBase, InterpDataNDBase, StrategyND);

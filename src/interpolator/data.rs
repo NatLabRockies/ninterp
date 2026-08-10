@@ -62,7 +62,7 @@ where
     where
         S: Serializer,
     {
-        let mut s = serializer.serialize_struct("InterpData", 2)?;
+        let mut s = serializer.serialize_struct("InterpDataBase", 2)?;
         s.serialize_field("grid", &GridArrWrapper(&self.grid))?;
         s.serialize_field("values", &ArrayWrapper(&self.values))?;
         s.end()

@@ -65,7 +65,7 @@ where
     ) -> Result<f32, ninterp::error::InterpolateError> {
         // Dummy interpolation strategy, product of all point components
         //
-        // Here we could access the `InterpData2D` (and/or data in `self`) instead,
+        // Here we could access the `InterpData2DBase` (and/or data in `self`) instead,
         // but this is just an example.
         Ok(point.iter().fold(1., |acc, x| acc * x))
     }

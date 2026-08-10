@@ -61,9 +61,9 @@ where
     /// Extrapolation setting.
     pub extrapolate: Extrapolate<D::Elem>,
 }
-/// [`Interp1D`] that owns data.
+/// Owned interpolator variant (see [`Interp1DBase`] for the generic form).
 pub type Interp1D<T, S> = Interp1DBase<OwnedRepr<T>, S>;
-/// [`Interp1D`] that views data.
+/// Viewed interpolator variant (see [`Interp1DBase`] for the generic form).
 pub type Interp1DView<T, S> = Interp1DBase<ViewRepr<T>, S>;
 
 impl<D, S> Interp1DBase<D, S>

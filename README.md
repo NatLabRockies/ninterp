@@ -122,10 +122,10 @@ For dimensionalities N >= 1, this executes a validation step that prevents runti
 ## Choosing an Interpolator
 The [`prelude`](https://docs.rs/ninterp/latest/ninterp/prelude/index.html) exposes these interpolators:
 - [`Interp0D`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp0D.html): constant-value interpolator
-- [`Interp1D`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp1D.html): hard-coded 1-D interpolator
-- [`Interp2D`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp2D.html): hard-coded 2-D interpolator
-- [`Interp3D`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp3D.html): hard-coded 3-D interpolator
-- [`InterpND`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.InterpND.html): general N-D interpolator
+- [`Interp1D`](https://docs.rs/ninterp/latest/ninterp/interpolator/type.Interp1D.html): hard-coded 1-D interpolator
+- [`Interp2D`](https://docs.rs/ninterp/latest/ninterp/interpolator/type.Interp2D.html): hard-coded 2-D interpolator
+- [`Interp3D`](https://docs.rs/ninterp/latest/ninterp/interpolator/type.Interp3D.html): hard-coded 3-D interpolator
+- [`InterpND`](https://docs.rs/ninterp/latest/ninterp/interpolator/type.InterpND.html): general N-D interpolator
 
 Use `Interp0D` when working with heterogeneous collections such as an `InterpolatorEnum` or `Box<dyn Interpolator>`.
 
@@ -302,10 +302,10 @@ The same pattern applies to 2-D, 3-D, and N-D interpolators (`Interp2D`/`Interp2
 ## Examples
 See examples in `new` method documentation:
 - [`Interp0D::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp0D.html#method.new)
-- [`Interp1D::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp1D.html#method.new)
-- [`Interp2D::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp2D.html#method.new)
-- [`Interp3D::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp3D.html#method.new)
-- [`InterpND::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.InterpND.html#method.new)
+- [`Interp1D::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp1DBase.html#method.new)
+- [`Interp2D::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp2DBase.html#method.new)
+- [`Interp3D::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp3DBase.html#method.new)
+- [`InterpND::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.InterpNDBase.html#method.new)
 
 Also see the [`examples`](https://github.com/NatLabRockies/ninterp/tree/main/examples) directory for advanced examples:
 - Swapping strategies at runtime: [`swap_strategy.rs`](https://github.com/NatLabRockies/ninterp/blob/main/examples/swap_strategy.rs)

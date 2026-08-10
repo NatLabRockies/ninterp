@@ -56,7 +56,7 @@ Everything below is merged to `main` but not yet tagged/released.
   that to a single dispatch that reaches the concrete type once, which then loops
   internally via ordinary static calls: this holds independently at both erasure
   points, a boxed interpolator reaches its concrete type in one hop, and (for an
-  interpolator holding a boxed strategy, e.g. `Interp2D<D, Box<dyn Strategy2D<D>>>`)
+  interpolator holding a boxed strategy, e.g. `Interp2DBase<D, Box<dyn Strategy2D<D>>>`)
   the strategy call inside it reaches its own concrete type in a separate one hop.
   `Box<dyn Interpolator<T>>` and `Box<dyn Strategy1D/2D/3D/ND<D>>` forward both
   methods to the wrapped concrete type (the same way `interpolate_fast` already is)
@@ -91,7 +91,7 @@ Everything below is merged to `main` but not yet tagged/released.
   `prelude`): a downcastable counterpart to `Interpolator<T>`, for storing
   heterogeneous interpolators behind `Box<dyn DynInterpolator<T>>` and recovering the
   concrete type via `as_any`. Implemented for owned `Interp1D`/`2D`/`3D`/`ND` only,
-  since `as_any` requires `Self: 'static` and the borrowed `Interp*Viewed` types can't
+  since `as_any` requires `Self: 'static` and the borrowed `Interp*View` types can't
   satisfy that; a viewed interpolator can still be used through `Interpolator<T>`.
   `interpolate`/`batch_interpolate` are inherited from the `Interpolator<T>`
   supertrait rather than duplicated under `DynInterpolator`-specific names: called
@@ -100,15 +100,31 @@ Everything below is merged to `main` but not yet tagged/released.
   do on the concrete, unboxed type.
 
 ### Changed
-- **Breaking**: Owned interpolators now the default type (following Rust idioms like `String` vs `&str`):
-  - Generic interpolator structs: `Interp{1D,2D,3D,ND}<D, S>` -> `Interp{1D,2D,3D,ND}Base<D, S>` (now generic over `D: Data`); new owned alias is `Interp{1D,2D,3D,ND}<T, S>`
-  - Generic data structs: `InterpData<D, const N: usize>` -> `InterpDataBase<D, const N: usize>` (now generic over `D: Data`)
-  - Type alias renames: `Interp{1D,2D,3D,ND}Owned<T, S>` -> `Interp{1D,2D,3D,ND}<T, S>` (owned becomes default)
-  - Type alias renames: `Interp{1D,2D,3D,ND}Viewed<T, S>` -> `Interp{1D,2D,3D,ND}View<T, S>` (viewed gets View suffix)
-  - Same pattern for data types: `InterpData{1D,2D,3D,ND}Owned<T>` -> `InterpData{1D,2D,3D,ND}<T>` and `InterpData{1D,2D,3D,ND}View<T>`
-  - Generic enum struct: `InterpolatorEnum<D>` -> `InterpolatorEnumBase<D>`; `InterpolatorEnumOwned<T>` -> `InterpolatorEnum<T>` and `InterpolatorEnumViewed<T>` -> `InterpolatorEnumView<T>`
-  - **Footgun**: Custom strategy implementations using `InterpData{1D,2D,3D,ND}<D>` or generic interpolators like `Interp{1D,2D,3D,ND}<D, S>` still compile but
-    silently narrow to owned data. Use `InterpData{1D,2D,3D,ND}Base<D>` and `Interp{1D,2D,3D,ND}Base<D, S>` instead for generic support.
+- **Breaking:** owned data is now the default in type names, following Rust idioms
+  (`String` vs `&str`, `Vec<T>` vs `&[T]`). Every form that is generic over the `ndarray`
+  data representation gains a `Base` suffix, the unsuffixed name becomes the owned alias,
+  and `Viewed` becomes `View`:
+  - Structs: `Interp{1D,2D,3D,ND}<D, S>` -> `Interp{1D,2D,3D,ND}Base<D, S>`,
+    `InterpData<D, const N: usize>` -> `InterpDataBase<D, N>`,
+    `InterpDataND<D>` -> `InterpDataNDBase<D>`,
+    `InterpolatorEnum<D>` -> `InterpolatorEnumBase<D>`. `Interp0D<T>` is unaffected;
+    it was never generic over the representation.
+  - Generic aliases: `InterpData{1D,2D,3D}<D>` -> `InterpData{1D,2D,3D}Base<D>`.
+  - Owned aliases drop their suffix: `Interp{1D,2D,3D,ND}Owned<T, S>` ->
+    `Interp{1D,2D,3D,ND}<T, S>`, `InterpData{1D,2D,3D,ND}Owned<T>` ->
+    `InterpData{1D,2D,3D,ND}<T>`, `InterpDataOwned<T, N>` -> `InterpData<T, N>`,
+    `InterpolatorEnumOwned<T>` -> `InterpolatorEnum<T>`.
+  - Viewed aliases swap suffix: `Interp{1D,2D,3D,ND}Viewed<T, S>` ->
+    `Interp{1D,2D,3D,ND}View<T, S>`, `InterpData{1D,2D,3D,ND}Viewed<T>` ->
+    `InterpData{1D,2D,3D,ND}View<T>`, `InterpDataViewed<T, N>` -> `InterpDataView<T, N>`,
+    `InterpolatorEnumViewed<T>` -> `InterpolatorEnumView<T>`.
+  - `InterpDataBase` is now re-exported from `ninterp::interpolator` as well as
+    `ninterp::data`.
+  - **Footgun:** code that is generic over the representation still compiles after a
+    mechanical rename, but silently narrows to owned data, because `InterpData1D<D>` now
+    means `InterpDataBase<OwnedRepr<D>, 1>` rather than `InterpDataBase<D, 1>`. Custom
+    strategy impls and any other generic-over-`D` code must move to the `Base` names
+    (`InterpData{1D,2D,3D,ND}Base<D>`, `Interp{1D,2D,3D,ND}Base<D, S>`).
 - **Breaking:** `InterpolateError` and `ValidateError` are now `#[non_exhaustive]`,
   allowing new error variants to be added without breaking downstream exhaustive
   matches. Any existing exhaustive `match` over one without a `_` arm now needs one.
