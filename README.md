@@ -97,7 +97,7 @@ For dimensionalities N >= 1, this executes a validation step that prevents runti
     #[derive(serde::Serialize)]
     struct MyConfig {
         #[serde(serialize_with = "serialize_nested")]
-        surface: Interp2DOwned<f64, strategy::Linear>,
+        surface: Interp2D<f64, strategy::Linear>,
     }
     ```
 

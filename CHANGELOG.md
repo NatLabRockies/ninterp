@@ -101,11 +101,14 @@ Everything below is merged to `main` but not yet tagged/released.
 
 ### Changed
 - **Breaking**: Owned interpolators now the default type (following Rust idioms like `String` vs `&str`):
-  - `Interp{1D,2D,3D,ND}Owned<T, S>` -> `Interp{1D,2D,3D,ND}<T, S>`
-  - `Interp{1D,2D,3D,ND}Viewed<T, S>` -> `Interp{1D,2D,3D,ND}View<T, S>`
-  - Same pattern for data types: `InterpData{1D,2D,3D,ND}` and `InterpData{1D,2D,3D,ND}View`
-  - **Footgun**: Custom strategy implementations using `InterpData{1D,2D,3D,ND}<D>` still compile but
-    silently narrow to owned data. Use `InterpData{1D,2D,3D,ND}Base<D>` instead for generic support.
+  - Generic interpolator structs: `Interp{1D,2D,3D,ND}<D, S>` -> `Interp{1D,2D,3D,ND}Base<D, S>` (now generic over `D: Data`); new owned alias is `Interp{1D,2D,3D,ND}<T, S>`
+  - Generic data structs: `InterpData<D, const N: usize>` -> `InterpDataBase<D, const N: usize>` (now generic over `D: Data`)
+  - Type alias renames: `Interp{1D,2D,3D,ND}Owned<T, S>` -> `Interp{1D,2D,3D,ND}<T, S>` (owned becomes default)
+  - Type alias renames: `Interp{1D,2D,3D,ND}Viewed<T, S>` -> `Interp{1D,2D,3D,ND}View<T, S>` (viewed gets View suffix)
+  - Same pattern for data types: `InterpData{1D,2D,3D,ND}Owned<T>` -> `InterpData{1D,2D,3D,ND}<T>` and `InterpData{1D,2D,3D,ND}View<T>`
+  - Generic enum struct: `InterpolatorEnum<D>` -> `InterpolatorEnumBase<D>`; `InterpolatorEnumOwned<T>` -> `InterpolatorEnum<T>` and `InterpolatorEnumViewed<T>` -> `InterpolatorEnumView<T>`
+  - **Footgun**: Custom strategy implementations using `InterpData{1D,2D,3D,ND}<D>` or generic interpolators like `Interp{1D,2D,3D,ND}<D, S>` still compile but
+    silently narrow to owned data. Use `InterpData{1D,2D,3D,ND}Base<D>` and `Interp{1D,2D,3D,ND}Base<D, S>` instead for generic support.
 - **Breaking:** `InterpolateError` and `ValidateError` are now `#[non_exhaustive]`,
   allowing new error variants to be added without breaking downstream exhaustive
   matches. Any existing exhaustive `match` over one without a `_` arm now needs one.

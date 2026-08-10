@@ -36,7 +36,7 @@ macro_rules! sized_strategy_trait {
             ///
             /// # Note for custom strategies
             /// Index `data.grid[i]` directly via `ArrayView` indexing; avoid `.as_slice()`, which
-            /// panics on non-contiguous storage (possible with `Interp*Viewed`). See
+            /// panics on non-contiguous storage (possible with `Interp*View`). See
             /// [`crate::strategy::utils`] for ready-made per-axis search helpers (bracket search,
             /// exact-match short-circuit, step-direction lookup, uniform-grid fast path) built from
             /// the same primitives the built-in strategies use.
@@ -290,7 +290,7 @@ where
     ///
     /// # Note for custom strategies
     /// Index `data.grid[i]` directly via `ArrayView` indexing; avoid `.as_slice()`, which
-    /// panics on non-contiguous storage (possible with `Interp*Viewed`). See
+    /// panics on non-contiguous storage (possible with `Interp*View`). See
     /// [`crate::strategy::utils`] for ready-made per-axis search helpers (bracket search,
     /// exact-match short-circuit, step-direction lookup, uniform-grid fast path) built from
     /// the same primitives the built-in strategies use.

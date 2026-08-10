@@ -185,7 +185,7 @@ impl<T> Interpolator<T> for Box<dyn Interpolator<T>> {
 ///
 /// Implemented for owned `Interp1D`/`2D`/`3D`/`ND` types only:
 /// [`as_any`](DynInterpolator::as_any) requires `Self: 'static`, which the borrowed
-/// `Interp*Viewed` types can't satisfy. A viewed interpolator can still be used
+/// `Interp*View` types can't satisfy. A viewed interpolator can still be used
 /// through [`Interpolator<T>`].
 pub trait DynInterpolator<T>: Interpolator<T> + Send + Sync {
     /// Downcast to the concrete interpolator type.

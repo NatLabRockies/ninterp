@@ -9,7 +9,7 @@
 ///   - [`Interp3D`](`interpolator::Interp3D`)
 ///   - [`InterpND`](`interpolator::InterpND`)
 ///   - A `serde`-compatible interpolator enum [`InterpolatorEnum`](`interpolator::enums::InterpolatorEnum`)
-///   - `Owned` and `Viewed` type aliases for all of the above
+///   - `Base` (generic) and `View` (borrowed) type aliases for all of the above
 /// - Their common trait: [`Interpolator`](`interpolator::Interpolator`)
 /// - The [`strategy`] mod, containing pre-defined interpolation strategies:
 ///   - [`strategy::Linear`]
