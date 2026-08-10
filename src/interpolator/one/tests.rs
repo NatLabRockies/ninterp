@@ -40,6 +40,33 @@ fn test_invalid_args_dyn() {
 }
 
 #[test]
+fn test_dyn_interpolator() {
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let points: [&[f64]; 2] = [&[1.0], &[2.5]];
+
+    let boxed: Box<dyn DynInterpolator<f64>> = Box::new(interp.clone());
+    assert_eq!(boxed.interpolate_slice(&[1.0]).unwrap(), 0.4);
+    assert_eq!(
+        boxed.batch_interpolate_slice(&points).unwrap(),
+        interp.batch_interpolate(&[[1.0], [2.5]]).unwrap(),
+    );
+    assert!(matches!(
+        boxed.interpolate_slice(&[]).unwrap_err(),
+        InterpolateError::PointLength(1)
+    ));
+    assert_eq!(
+        boxed.as_any().downcast_ref::<Interp1DOwned<f64, _>>(),
+        Some(&interp)
+    );
+}
+
+#[test]
 fn test_insufficient_grid_points() {
     // A single grid point can't bracket anything, regardless of `Extrapolate` setting.
     // Previously this passed construction and panicked on the first `interpolate` call.

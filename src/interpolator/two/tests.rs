@@ -430,6 +430,36 @@ fn test_batch_interpolate_dyn() {
 }
 
 #[test]
+fn test_dyn_interpolator() {
+    let interp = Interp2D::new(
+        array![0.05, 0.10, 0.15],
+        array![0.10, 0.20, 0.30],
+        array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let points: [&[f64]; 2] = [&[0.075, 0.25], &[0.05, 0.10]];
+
+    let boxed: Box<dyn DynInterpolator<f64>> = Box::new(interp.clone());
+    assert_eq!(boxed.interpolate_slice(&[0.075, 0.25]).unwrap(), 3.);
+    assert_eq!(
+        boxed.batch_interpolate_slice(&points).unwrap(),
+        interp
+            .batch_interpolate(&[[0.075, 0.25], [0.05, 0.10]])
+            .unwrap(),
+    );
+    assert!(matches!(
+        boxed.interpolate_slice(&[]).unwrap_err(),
+        InterpolateError::PointLength(2)
+    ));
+    assert_eq!(
+        boxed.as_any().downcast_ref::<Interp2DOwned<f64, _>>(),
+        Some(&interp)
+    );
+}
+
+#[test]
 fn test_partialeq() {
     #[derive(PartialEq)]
     #[allow(unused)]

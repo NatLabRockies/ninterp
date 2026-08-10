@@ -1,5 +1,7 @@
 //! Module for all interpolation types.
 
+use std::any::Any;
+
 use super::*;
 
 mod n;
@@ -9,6 +11,7 @@ mod two;
 mod zero;
 
 pub mod data;
+pub mod dyn_interp;
 pub mod enums;
 
 pub use n::{InterpND, InterpNDOwned, InterpNDViewed};
@@ -16,6 +19,8 @@ pub use one::{Interp1D, Interp1DOwned, Interp1DViewed};
 pub use three::{Interp3D, Interp3DOwned, Interp3DViewed};
 pub use two::{Interp2D, Interp2DOwned, Interp2DViewed};
 pub use zero::Interp0D;
+
+pub use dyn_interp::DynInterpolator;
 
 /// An interpolator of data type `T`
 ///
@@ -220,6 +225,42 @@ macro_rules! sized_interpolate_impl {
     };
 }
 pub(crate) use sized_interpolate_impl;
+
+/// Generates the [`DynInterpolator::interpolate_slice`]/
+/// [`DynInterpolator::batch_interpolate_slice`]/[`DynInterpolator::as_any`] bodies
+/// shared by `Interp1D`/`2D`/`3D`'s blanket `DynInterpolator` impls, on the same
+/// slice-to-array conversion [`sized_interpolate_impl`] uses and for the same reason:
+/// the trait's slice-based methods can't reach the type's fixed-size array-based
+/// inherent `interpolate`/`batch_interpolate` without it. `InterpND` has no fixed `N`
+/// and implements `DynInterpolator` by hand instead, forwarding straight to its own
+/// already slice-typed methods.
+macro_rules! dyn_interpolate_impl {
+    () => {
+        fn interpolate_slice(&self, point: &[T]) -> Result<T, InterpolateError> {
+            let point: &[T; N] = point
+                .try_into()
+                .map_err(|_| InterpolateError::PointLength(N))?;
+            self.interpolate(point)
+        }
+
+        fn batch_interpolate_slice(&self, points: &[&[T]]) -> Result<Vec<T>, InterpolateError> {
+            let points: Vec<[T; N]> = points
+                .iter()
+                .map(|&point| {
+                    <&[T; N]>::try_from(point)
+                        .map(|arr| *arr)
+                        .map_err(|_| InterpolateError::PointLength(N))
+                })
+                .collect::<Result<_, _>>()?;
+            self.batch_interpolate(&points)
+        }
+
+        fn as_any(&self) -> &dyn Any {
+            self
+        }
+    };
+}
+pub(crate) use dyn_interpolate_impl;
 
 /// Generates the inherent `batch_interpolate_fast` shared by `Interp1D`/`2D`/`3D`:
 /// forwards straight to the strategy, same as the existing hand-written

@@ -552,3 +552,23 @@ where
         self.init_strategy()
     }
 }
+
+impl<T, S> DynInterpolator<T> for InterpNDOwned<T, S>
+where
+    T: Float + Euclid + Debug + Send + Sync + 'static,
+    S: StrategyND<OwnedRepr<T>> + Clone + Send + Sync + 'static,
+{
+    // No fixed `N` to convert a slice into, unlike `Interp1D`/`2D`/`3D`: forward
+    // straight to the already slice-typed inherent methods.
+    fn interpolate_slice(&self, point: &[T]) -> Result<T, InterpolateError> {
+        self.interpolate(point)
+    }
+
+    fn batch_interpolate_slice(&self, points: &[&[T]]) -> Result<Vec<T>, InterpolateError> {
+        self.batch_interpolate(points)
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
