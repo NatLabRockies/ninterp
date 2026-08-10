@@ -82,43 +82,10 @@ where
     D::Elem: PartialEq + Debug,
     S: Strategy3D<D> + Clone,
 {
-    /// Re-run the strategy's [`Strategy3D::validate`] against the current data.
-    ///
-    /// `new`, `set_strategy`, and [`Interpolator::validate`] already call this
-    /// internally, so this is only needed after mutating the public `data`/`strategy`
-    /// fields directly.
-    pub fn validate_strategy(&self) -> Result<(), ValidateError> {
-        self.strategy.validate(&self.data)
-    }
-
-    /// Re-run the strategy's [`Strategy3D::init`] against the current data.
-    ///
-    /// `new` and `set_strategy` already call this internally, so this is only needed
-    /// after bypassing them: mutating the public `data`/`strategy` fields directly, or
-    /// deserializing an interpolator whose strategy skips its cached state from
-    /// serialization (e.g. via `#[serde(skip)]`, to avoid bloating the wire format with
-    /// a large derived array). `Deserialize` does not call `init`; if the cached state
-    /// is instead stored in ordinary serialized fields, it comes back as-is and this
-    /// isn't needed.
-    pub fn init_strategy(&mut self) -> Result<(), ValidateError> {
-        self.strategy.init(&self.data)
-    }
-
-    /// Interpolate without bounds/extrapolation checks, for use in hot loops where the
-    /// caller has already checked bounds or knows that extrapolation handling is not needed.
-    pub fn interpolate_fast(&self, point: &[D::Elem; 3]) -> D::Elem {
-        self.strategy.interpolate_fast(&self.data, point)
-    }
-
+    strategy_accessors_impl!(Strategy3D);
+    interpolate_fast_impl!();
     batch_interpolate_fast_impl!();
-}
 
-impl<D, S> Interp3D<D, S>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialOrd + Debug,
-    S: Strategy3D<D> + Clone,
-{
     /// Construct and validate a 3-D interpolator.
     ///
     /// # Example:
@@ -165,7 +132,10 @@ where
         f_xyz: ArrayBase<D, Ix3>,
         strategy: S,
         extrapolate: Extrapolate<D::Elem>,
-    ) -> Result<Self, ValidateError> {
+    ) -> Result<Self, ValidateError>
+    where
+        D::Elem: PartialOrd,
+    {
         let mut interpolator = Self {
             data: InterpData3D::new(x, y, z, f_xyz)?,
             strategy,
@@ -202,14 +172,7 @@ where
             extrapolate: self.extrapolate.clone(),
         }
     }
-}
 
-impl<D, S> Interp3D<D, S>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Euclid + Copy + Debug,
-    S: Strategy3D<D> + Clone,
-{
     interpolate_impl!();
     batch_interpolate_impl!();
 }

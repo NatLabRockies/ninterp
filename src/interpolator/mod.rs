@@ -167,6 +167,57 @@ macro_rules! extrapolate_impl {
 }
 pub(crate) use extrapolate_impl;
 
+/// Generates the inherent `validate_strategy`/`init_strategy`, shared by
+/// `Interp1D`/`2D`/`3D`/`ND`. Both only need `D::Elem: PartialEq + Debug` (the struct's
+/// own bound), not the extra bounds of `new`/`interpolate`/etc. Kept on those methods
+/// directly rather than the enclosing impl block, so all inherent methods can share one
+/// block per type instead of being split across several.
+macro_rules! strategy_accessors_impl {
+    ($Strategy:ident) => {
+        #[doc = concat!(
+            " Re-run the strategy's [`", stringify!($Strategy), "::validate`] against the current data.\n",
+            "\n",
+            " `new`, `set_strategy`, and [`Interpolator::validate`] already call this\n",
+            " internally, so this is only needed after mutating the public `data`/`strategy`\n",
+            " fields directly.",
+        )]
+        pub fn validate_strategy(&self) -> Result<(), ValidateError> {
+            self.strategy.validate(&self.data)
+        }
+
+        #[doc = concat!(
+            " Re-run the strategy's [`", stringify!($Strategy), "::init`] against the current data.\n",
+            "\n",
+            " `new` and `set_strategy` already call this internally, so this is only needed\n",
+            " after bypassing them: mutating the public `data`/`strategy` fields directly, or\n",
+            " deserializing an interpolator whose strategy skips its cached state from\n",
+            " serialization (e.g. via `#[serde(skip)]`, to avoid bloating the wire format with\n",
+            " a large derived array). `Deserialize` does not call `init`; if the cached state\n",
+            " is instead stored in ordinary serialized fields, it comes back as-is and this\n",
+            " isn't needed.",
+        )]
+        pub fn init_strategy(&mut self) -> Result<(), ValidateError> {
+            self.strategy.init(&self.data)
+        }
+    };
+}
+pub(crate) use strategy_accessors_impl;
+
+/// Generates the inherent `interpolate_fast` shared by `Interp1D`/`2D`/`3D`: forwards
+/// straight to the strategy, same as [`batch_interpolate_fast_impl`]. `InterpND` has no
+/// fixed-size point array to take by value here, so its `interpolate_fast` lives
+/// directly on its [`Interpolator`] impl instead of as a matching inherent method.
+macro_rules! interpolate_fast_impl {
+    () => {
+        /// Interpolate without bounds/extrapolation checks, for use in hot loops where the
+        /// caller has already checked bounds or knows that extrapolation handling is not needed.
+        pub fn interpolate_fast(&self, point: &[D::Elem; N]) -> D::Elem {
+            self.strategy.interpolate_fast(&self.data, point)
+        }
+    };
+}
+pub(crate) use interpolate_fast_impl;
+
 /// Is `point` out of `grid`'s bounds in any dimension?
 ///
 /// Shared by `Interp1D`/`2D`/`3D`/`ND`'s `batch_interpolate`: both `grid` and `point`
@@ -269,7 +320,10 @@ macro_rules! batch_interpolate_impl {
         pub fn batch_interpolate(
             &self,
             points: &[[D::Elem; N]],
-        ) -> Result<Vec<D::Elem>, InterpolateError> {
+        ) -> Result<Vec<D::Elem>, InterpolateError>
+        where
+            D::Elem: Num + PartialOrd + Euclid + Copy,
+        {
             match &self.extrapolate {
                 Extrapolate::Enable => self.strategy.batch_interpolate(&self.data, points),
                 Extrapolate::Clamp => {
@@ -370,7 +424,10 @@ macro_rules! interpolate_impl {
         ///
         /// Unlike [`Interpolator::interpolate`], the point length is checked at compile
         /// time via `N`, so this cannot fail with [`InterpolateError::PointLength`].
-        pub fn interpolate(&self, point: &[D::Elem; N]) -> Result<D::Elem, InterpolateError> {
+        pub fn interpolate(&self, point: &[D::Elem; N]) -> Result<D::Elem, InterpolateError>
+        where
+            D::Elem: Num + PartialOrd + Euclid + Copy,
+        {
             let mut errors = Vec::new();
             for dim in 0..N {
                 if !(self.data.grid[dim].first().unwrap()..=self.data.grid[dim].last().unwrap())
