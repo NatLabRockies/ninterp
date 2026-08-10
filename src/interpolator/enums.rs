@@ -8,66 +8,6 @@ use super::*;
 
 use strategy::enums::*;
 
-/// Generates all five `From` impls for InterpolatorEnum variants.
-macro_rules! from_impls {
-    () => {
-        impl<D> From<Interp0D<D::Elem>> for InterpolatorEnum<D>
-        where
-            D: Data + RawDataClone + Clone,
-            D::Elem: Float + Debug,
-        {
-            #[inline]
-            fn from(interpolator: Interp0D<D::Elem>) -> Self {
-                InterpolatorEnum::Interp0D(interpolator)
-            }
-        }
-
-        impl<D> From<Interp1D<D, Strategy1DEnum>> for InterpolatorEnum<D>
-        where
-            D: Data + RawDataClone + Clone,
-            D::Elem: Float + Debug,
-        {
-            #[inline]
-            fn from(interpolator: Interp1D<D, Strategy1DEnum>) -> Self {
-                InterpolatorEnum::Interp1D(interpolator)
-            }
-        }
-
-        impl<D> From<Interp2D<D, Strategy2DEnum>> for InterpolatorEnum<D>
-        where
-            D: Data + RawDataClone + Clone,
-            D::Elem: Float + Debug,
-        {
-            #[inline]
-            fn from(interpolator: Interp2D<D, Strategy2DEnum>) -> Self {
-                InterpolatorEnum::Interp2D(interpolator)
-            }
-        }
-
-        impl<D> From<Interp3D<D, Strategy3DEnum>> for InterpolatorEnum<D>
-        where
-            D: Data + RawDataClone + Clone,
-            D::Elem: Float + Debug,
-        {
-            #[inline]
-            fn from(interpolator: Interp3D<D, Strategy3DEnum>) -> Self {
-                InterpolatorEnum::Interp3D(interpolator)
-            }
-        }
-
-        impl<D> From<InterpND<D, StrategyNDEnum>> for InterpolatorEnum<D>
-        where
-            D: Data + RawDataClone + Clone,
-            D::Elem: Float + Debug,
-        {
-            #[inline]
-            fn from(interpolator: InterpND<D, StrategyNDEnum>) -> Self {
-                InterpolatorEnum::InterpND(interpolator)
-            }
-        }
-    };
-}
-
 /// Generates simple forwarding methods where Interp0D returns Ok(()), others forward to variant.
 macro_rules! enum_method_forward {
     (validate_strategy) => {
@@ -175,57 +115,6 @@ macro_rules! enum_trait_method {
                 Self::Interp2D(i) => i.$method($param),
                 Self::Interp3D(i) => i.$method($param),
                 Self::InterpND(i) => i.$method($param),
-            }
-        }
-    };
-}
-
-/// Generates full PartialEq impl for enum variants. Takes enum type as argument for reusability
-/// with InterpolatorMultiEnum and others.
-macro_rules! enum_partialeq_impl {
-    ($enum_type:ident) => {
-        impl<D> PartialEq for $enum_type<D>
-        where
-            D: Data + RawDataClone + Clone,
-            D::Elem: PartialEq + Debug,
-            ArrayBase<D, Ix1>: PartialEq,
-        {
-            fn eq(&self, other: &Self) -> bool {
-                match (self, other) {
-                    (Self::Interp0D(l), Self::Interp0D(r)) => l == r,
-                    (Self::Interp1D(l), Self::Interp1D(r)) => l == r,
-                    (Self::Interp2D(l), Self::Interp2D(r)) => l == r,
-                    (Self::Interp3D(l), Self::Interp3D(r)) => l == r,
-                    (Self::InterpND(l), Self::InterpND(r)) => l == r,
-                    _ => false,
-                }
-            }
-        }
-    };
-}
-
-/// Generates full SerializeNested impl for enum variants. Takes enum type as argument for reusability
-/// with InterpolatorMultiEnum and others.
-#[cfg(feature = "serde")]
-macro_rules! enum_serialize_nested_impl {
-    ($enum_type:ident) => {
-        impl<D> SerializeNested for $enum_type<D>
-        where
-            D: Data + RawDataClone + Clone,
-            D::Elem: PartialEq + Debug + Serialize,
-        {
-            #[doc = "`#[serde(untagged)]`, so each variant serializes as its inner value."]
-            fn serialize_nested<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-            where
-                S: Serializer,
-            {
-                match self {
-                    Self::Interp0D(interp) => Nested(interp).serialize(serializer),
-                    Self::Interp1D(interp) => Nested(interp).serialize(serializer),
-                    Self::Interp2D(interp) => Nested(interp).serialize(serializer),
-                    Self::Interp3D(interp) => Nested(interp).serialize(serializer),
-                    Self::InterpND(interp) => Nested(interp).serialize(serializer),
-                }
             }
         }
     };
@@ -452,9 +341,98 @@ pub type InterpolatorEnumViewed<T> = InterpolatorEnum<ViewRepr<T>>;
 pub type InterpolatorEnumOwned<T> = InterpolatorEnum<OwnedRepr<T>>;
 
 #[cfg(feature = "serde")]
-enum_serialize_nested_impl!(InterpolatorEnum);
+impl<D> SerializeNested for InterpolatorEnum<D>
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: PartialEq + Debug + Serialize,
+{
+    /// `#[serde(untagged)]`, so each variant serializes as its inner value.
+    fn serialize_nested<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match self {
+            Self::Interp0D(interp) => Nested(interp).serialize(serializer),
+            Self::Interp1D(interp) => Nested(interp).serialize(serializer),
+            Self::Interp2D(interp) => Nested(interp).serialize(serializer),
+            Self::Interp3D(interp) => Nested(interp).serialize(serializer),
+            Self::InterpND(interp) => Nested(interp).serialize(serializer),
+        }
+    }
+}
 
-enum_partialeq_impl!(InterpolatorEnum);
+impl<D> PartialEq for InterpolatorEnum<D>
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: PartialEq + Debug,
+    ArrayBase<D, Ix1>: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Interp0D(l), Self::Interp0D(r)) => l == r,
+            (Self::Interp1D(l), Self::Interp1D(r)) => l == r,
+            (Self::Interp2D(l), Self::Interp2D(r)) => l == r,
+            (Self::Interp3D(l), Self::Interp3D(r)) => l == r,
+            (Self::InterpND(l), Self::InterpND(r)) => l == r,
+            _ => false,
+        }
+    }
+}
+
+impl<D> From<Interp0D<D::Elem>> for InterpolatorEnum<D>
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug,
+{
+    #[inline]
+    fn from(interpolator: Interp0D<D::Elem>) -> Self {
+        InterpolatorEnum::Interp0D(interpolator)
+    }
+}
+
+impl<D> From<Interp1D<D, Strategy1DEnum>> for InterpolatorEnum<D>
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug,
+{
+    #[inline]
+    fn from(interpolator: Interp1D<D, Strategy1DEnum>) -> Self {
+        InterpolatorEnum::Interp1D(interpolator)
+    }
+}
+
+impl<D> From<Interp2D<D, Strategy2DEnum>> for InterpolatorEnum<D>
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug,
+{
+    #[inline]
+    fn from(interpolator: Interp2D<D, Strategy2DEnum>) -> Self {
+        InterpolatorEnum::Interp2D(interpolator)
+    }
+}
+
+impl<D> From<Interp3D<D, Strategy3DEnum>> for InterpolatorEnum<D>
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug,
+{
+    #[inline]
+    fn from(interpolator: Interp3D<D, Strategy3DEnum>) -> Self {
+        InterpolatorEnum::Interp3D(interpolator)
+    }
+}
+
+impl<D> From<InterpND<D, StrategyNDEnum>> for InterpolatorEnum<D>
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug,
+{
+    #[inline]
+    fn from(interpolator: InterpND<D, StrategyNDEnum>) -> Self {
+        InterpolatorEnum::InterpND(interpolator)
+    }
+}
 
 impl<D> InterpolatorEnum<D>
 where
@@ -557,8 +535,6 @@ where
     slice_to_array_forward!(batch_interpolate);
     slice_to_array_forward!(batch_interpolate_fast);
 }
-
-from_impls!();
 
 mod tests {
     #[allow(unused_imports)]
