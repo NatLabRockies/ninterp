@@ -12,7 +12,7 @@
 //! use ndarray::prelude::*;
 //! use ninterp::prelude::*;
 //!
-//! let mut interp: Interp1DOwned<_, strategy::enums::Strategy1DEnum> = Interp1D::new(
+//! let mut interp: Interp1DBase<_, strategy::enums::Strategy1DEnum> = Interp1D::new(
 //!     // x
 //!     array![0., 1., 2., 3., 4.],
 //!     // f(x)
@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn test_1d() {
-        let mut interp: Interp1D<_, strategy::enums::Strategy1DEnum> = Interp1D::new(
+        let mut interp: Interp1DBase<_, strategy::enums::Strategy1DEnum> = Interp1DBase::new(
             array![0., 1., 2., 3., 4.],
             array![0.2, 0.4, 0.6, 0.8, 1.0],
             strategy::Linear.into(),
@@ -166,7 +166,7 @@ mod tests {
 
     #[test]
     fn test_2d() {
-        let mut interp: Interp2D<_, strategy::enums::Strategy2DEnum> = Interp2D::new(
+        let mut interp: Interp2DBase<_, strategy::enums::Strategy2DEnum> = Interp2DBase::new(
             array![0.05, 0.10, 0.15],
             array![0.10, 0.20, 0.30],
             array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn test_3d() {
-        let mut interp: Interp3D<_, strategy::enums::Strategy3DEnum> = Interp3D::new(
+        let mut interp: Interp3DBase<_, strategy::enums::Strategy3DEnum> = Interp3DBase::new(
             array![0.05, 0.10, 0.15],
             array![0.10, 0.20, 0.30],
             array![0.20, 0.40, 0.60],
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_nd() {
-        let mut interp: InterpND<_, strategy::enums::StrategyNDEnum> = InterpND::new(
+        let mut interp: InterpNDBase<_, strategy::enums::StrategyNDEnum> = InterpNDBase::new(
             vec![
                 array![0.05, 0.10, 0.15],
                 array![0.10, 0.20, 0.30],

@@ -8,14 +8,14 @@ mod tests;
 
 const N: usize = 2;
 
-/// [`InterpData`] for 2-D data.
-pub type InterpData2D<D> = InterpData<D, N>;
+/// [`InterpData`] generic (base) form for 2-D data.
+pub type InterpData2DBase<D> = InterpDataBase<D, N>;
+/// [`InterpData`] for 2-D data that owns data.
+pub type InterpData2D<T> = InterpData2DBase<OwnedRepr<T>>;
 /// [`InterpData2D`] that views data.
-pub type InterpData2DViewed<T> = InterpData2D<ViewRepr<T>>;
-/// [`InterpData2D`] that owns data.
-pub type InterpData2DOwned<T> = InterpData2D<OwnedRepr<T>>;
+pub type InterpData2DView<T> = InterpData2DBase<ViewRepr<T>>;
 
-impl<D> InterpData2D<D>
+impl<D> InterpData2DBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialOrd + Debug,
@@ -52,25 +52,25 @@ where
         "
     ))
 )]
-pub struct Interp2D<D, S>
+pub struct Interp2DBase<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
     S: Clone,
 {
     /// Interpolator data.
-    pub data: InterpData2D<D>,
+    pub data: InterpData2DBase<D>,
     /// Interpolation strategy.
     pub strategy: S,
     /// Extrapolation setting.
     pub extrapolate: Extrapolate<D::Elem>,
 }
-/// [`Interp2D`] that views data.
-pub type Interp2DViewed<T, S> = Interp2D<ViewRepr<T>, S>;
 /// [`Interp2D`] that owns data.
-pub type Interp2DOwned<T, S> = Interp2D<OwnedRepr<T>, S>;
+pub type Interp2D<T, S> = Interp2DBase<OwnedRepr<T>, S>;
+/// [`Interp2D`] that views data.
+pub type Interp2DView<T, S> = Interp2DBase<ViewRepr<T>, S>;
 
-impl<D, S> Interp2D<D, S>
+impl<D, S> Interp2DBase<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
@@ -83,8 +83,7 @@ where
     /// use ndarray::prelude::*;
     /// use ninterp::prelude::*;
     /// // f(x, y) = 0.2 * x + 0.4 * y
-    /// // type annotation for clarity
-    /// let interp: Interp2DOwned<f64, _> = Interp2D::new(
+    /// let interp = Interp2D::new(
     ///     // x
     ///     array![0., 1., 2.], // x0, x1, x2
     ///     // y
@@ -116,7 +115,7 @@ where
         D::Elem: PartialOrd,
     {
         let mut interpolator = Self {
-            data: InterpData2D::new(x, y, f_xy)?,
+            data: InterpData2DBase::new(x, y, f_xy)?,
             strategy,
             extrapolate,
         };
@@ -127,17 +126,17 @@ where
     }
 
     interp_inherent_methods!(
-        Interp2D,
+        Interp2DBase,
         Strategy2D,
-        Interp2DViewed<&D::Elem, S>,
-        Interp2DOwned<D::Elem, S>
+        Interp2DView<&D::Elem, S>,
+        Interp2D<D::Elem, S>
     );
 }
 
 interp_trait_impls!(
+    Interp2DBase,
     Interp2D,
-    Interp2DOwned,
-    InterpData2D,
+    InterpData2DBase,
     Strategy2D,
     strategy::enums::Strategy2DEnum,
     N

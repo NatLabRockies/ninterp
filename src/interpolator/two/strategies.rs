@@ -8,7 +8,7 @@ where
 {
     fn interpolate(
         &self,
-        data: &InterpData2D<D>,
+        data: &InterpData2DBase<D>,
         point: &[D::Elem; 2],
     ) -> Result<D::Elem, InterpolateError> {
         // Extrapolation is checked previously in Interpolator::interpolate,
@@ -78,14 +78,14 @@ where
     D::Elem: Float + Debug,
 {
     /// Ensures all grid dimensions are uniformly spaced.
-    fn validate(&self, data: &InterpData2D<D>) -> Result<(), ValidateError> {
+    fn validate(&self, data: &InterpData2DBase<D>) -> Result<(), ValidateError> {
         check_uniform_grid(data.grid[0].view(), 0)?;
         check_uniform_grid(data.grid[1].view(), 1)
     }
 
     fn interpolate(
         &self,
-        data: &InterpData2D<D>,
+        data: &InterpData2DBase<D>,
         point: &[D::Elem; 2],
     ) -> Result<D::Elem, InterpolateError> {
         let x_step = data.grid[0][1] - data.grid[0][0];
@@ -116,7 +116,7 @@ where
 {
     fn interpolate(
         &self,
-        data: &InterpData2D<D>,
+        data: &InterpData2DBase<D>,
         point: &[D::Elem; 2],
     ) -> Result<D::Elem, InterpolateError> {
         // x
@@ -151,7 +151,7 @@ where
     D::Elem: PartialOrd + Copy + Debug,
 {
     /// Ensures the number of provided step directions matches the interpolator dimensionality.
-    fn validate(&self, _data: &InterpData2D<D>) -> Result<(), ValidateError> {
+    fn validate(&self, _data: &InterpData2DBase<D>) -> Result<(), ValidateError> {
         if self.0.len() != 1 && self.0.len() != 2 {
             return Err(ValidateError::Other(format!(
                 "Step strategy has {} directions but interpolator is 2-D (expected 1 or 2)",
@@ -163,7 +163,7 @@ where
 
     fn interpolate(
         &self,
-        data: &InterpData2D<D>,
+        data: &InterpData2DBase<D>,
         point: &[D::Elem; 2],
     ) -> Result<D::Elem, InterpolateError> {
         let i = locate_step_index(self.dir(0), data.grid[0].view(), &point[0]);
@@ -184,7 +184,7 @@ where
 {
     fn interpolate(
         &self,
-        data: &InterpData2D<D>,
+        data: &InterpData2DBase<D>,
         point: &[D::Elem; 2],
     ) -> Result<D::Elem, InterpolateError> {
         let i = locate_step_index(StepDirection::Lower, data.grid[0].view(), &point[0]);
@@ -204,7 +204,7 @@ where
 {
     fn interpolate(
         &self,
-        data: &InterpData2D<D>,
+        data: &InterpData2DBase<D>,
         point: &[D::Elem; 2],
     ) -> Result<D::Elem, InterpolateError> {
         let i = locate_step_index(StepDirection::Upper, data.grid[0].view(), &point[0]);

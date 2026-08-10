@@ -28,7 +28,7 @@ pub trait SerializeNested {
 /// #[derive(serde::Serialize)]
 /// struct Config {
 ///     #[serde(serialize_with = "serialize_nested")]
-///     curve: Interp1DOwned<f64, strategy::Linear>,
+///     curve: Interp1DBase<f64, strategy::Linear>,
 /// }
 /// ```
 ///
@@ -83,7 +83,7 @@ where
 /// #[derive(serde::Serialize)]
 /// struct Config {
 ///     #[serde(serialize_with = "serialize_nested")]
-///     curve: Interp1DOwned<f64, strategy::Linear>,
+///     curve: Interp1DBase<f64, strategy::Linear>,
 /// }
 /// ```
 pub fn serialize_nested<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>

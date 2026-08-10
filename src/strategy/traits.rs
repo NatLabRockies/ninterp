@@ -244,9 +244,24 @@ macro_rules! sized_strategy_trait {
     };
 }
 
-sized_strategy_trait!(Strategy1D, InterpData1D, 1, "1-D interpolation strategy.");
-sized_strategy_trait!(Strategy2D, InterpData2D, 2, "2-D interpolation strategy.");
-sized_strategy_trait!(Strategy3D, InterpData3D, 3, "3-D interpolation strategy.");
+sized_strategy_trait!(
+    Strategy1D,
+    InterpData1DBase,
+    1,
+    "1-D interpolation strategy."
+);
+sized_strategy_trait!(
+    Strategy2D,
+    InterpData2DBase,
+    2,
+    "2-D interpolation strategy."
+);
+sized_strategy_trait!(
+    Strategy3D,
+    InterpData3DBase,
+    3,
+    "3-D interpolation strategy."
+);
 
 /// N-D interpolation strategy.
 pub trait StrategyND<D>: Debug + DynClone
@@ -258,7 +273,7 @@ where
     ///
     /// Default no-op. Override for invariant checks that don't require precomputed
     /// state (grid uniformity, direction-count matching, etc).
-    fn validate(&self, _data: &InterpDataND<D>) -> Result<(), ValidateError> {
+    fn validate(&self, _data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
         Ok(())
     }
 
@@ -267,7 +282,7 @@ where
     /// Default no-op. Override only when the strategy caches something derived from
     /// `data` (e.g. precomputed spline coefficients). Unlike [`StrategyND::validate`],
     /// this may do real, non-trivial calculation.
-    fn init(&mut self, _data: &InterpDataND<D>) -> Result<(), ValidateError> {
+    fn init(&mut self, _data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
         Ok(())
     }
 
@@ -281,7 +296,7 @@ where
     /// the same primitives the built-in strategies use.
     fn interpolate(
         &self,
-        data: &InterpDataND<D>,
+        data: &InterpDataNDBase<D>,
         point: &[D::Elem],
     ) -> Result<D::Elem, InterpolateError>;
 
@@ -292,7 +307,7 @@ where
     /// strategy's checked path does real internal fallible work beyond producing
     /// the final `Ok(...)`; otherwise the default already compiles to the same thing.
     #[inline]
-    fn interpolate_fast(&self, data: &InterpDataND<D>, point: &[D::Elem]) -> D::Elem {
+    fn interpolate_fast(&self, data: &InterpDataNDBase<D>, point: &[D::Elem]) -> D::Elem {
         self.interpolate(data, point)
             .expect("interpolate_fast: invalid point or data")
     }
@@ -306,7 +321,7 @@ where
     /// no strategy shipped in this crate does that today.
     fn batch_interpolate_into(
         &self,
-        data: &InterpDataND<D>,
+        data: &InterpDataNDBase<D>,
         points: &[&[D::Elem]],
         out: &mut [D::Elem],
     ) -> Result<(), InterpolateError> {
@@ -329,7 +344,7 @@ where
     /// [`StrategyND::interpolate_fast`].
     fn batch_interpolate_fast_into(
         &self,
-        data: &InterpDataND<D>,
+        data: &InterpDataNDBase<D>,
         points: &[&[D::Elem]],
         out: &mut [D::Elem],
     ) {
@@ -351,7 +366,7 @@ where
     /// for a locate sweep instead of one binary search per point).
     fn batch_interpolate(
         &self,
-        data: &InterpDataND<D>,
+        data: &InterpDataNDBase<D>,
         points: &[&[D::Elem]],
     ) -> Result<Vec<D::Elem>, InterpolateError>
     where
@@ -372,7 +387,11 @@ where
     /// Do not override this method. Override [`StrategyND::batch_interpolate_into`] instead
     /// if you need to amortize per-point work; the fast variant inherits those optimizations
     /// with no additional override needed.
-    fn batch_interpolate_fast(&self, data: &InterpDataND<D>, points: &[&[D::Elem]]) -> Vec<D::Elem>
+    fn batch_interpolate_fast(
+        &self,
+        data: &InterpDataNDBase<D>,
+        points: &[&[D::Elem]],
+    ) -> Vec<D::Elem>
     where
         D::Elem: Num + Copy,
     {
@@ -396,19 +415,19 @@ where
     D::Elem: PartialEq + Debug,
 {
     #[inline]
-    fn validate(&self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
+    fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
         (**self).validate(data)
     }
 
     #[inline]
-    fn init(&mut self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
+    fn init(&mut self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
         (**self).init(data)
     }
 
     #[inline]
     fn interpolate(
         &self,
-        data: &InterpDataND<D>,
+        data: &InterpDataNDBase<D>,
         point: &[D::Elem],
     ) -> Result<D::Elem, InterpolateError> {
         (**self).interpolate(data, point)
@@ -420,14 +439,14 @@ where
     }
 
     #[inline]
-    fn interpolate_fast(&self, data: &InterpDataND<D>, point: &[D::Elem]) -> D::Elem {
+    fn interpolate_fast(&self, data: &InterpDataNDBase<D>, point: &[D::Elem]) -> D::Elem {
         (**self).interpolate_fast(data, point)
     }
 
     #[inline]
     fn batch_interpolate_into(
         &self,
-        data: &InterpDataND<D>,
+        data: &InterpDataNDBase<D>,
         points: &[&[D::Elem]],
         out: &mut [D::Elem],
     ) -> Result<(), InterpolateError> {
@@ -437,7 +456,7 @@ where
     #[inline]
     fn batch_interpolate_fast_into(
         &self,
-        data: &InterpDataND<D>,
+        data: &InterpDataNDBase<D>,
         points: &[&[D::Elem]],
         out: &mut [D::Elem],
     ) {
@@ -447,7 +466,7 @@ where
     #[inline]
     fn batch_interpolate(
         &self,
-        data: &InterpDataND<D>,
+        data: &InterpDataNDBase<D>,
         points: &[&[D::Elem]],
     ) -> Result<Vec<D::Elem>, InterpolateError>
     where
@@ -457,7 +476,11 @@ where
     }
 
     #[inline]
-    fn batch_interpolate_fast(&self, data: &InterpDataND<D>, points: &[&[D::Elem]]) -> Vec<D::Elem>
+    fn batch_interpolate_fast(
+        &self,
+        data: &InterpDataNDBase<D>,
+        points: &[&[D::Elem]],
+    ) -> Vec<D::Elem>
     where
         D::Elem: Num + Copy,
     {

@@ -8,14 +8,14 @@ mod tests;
 
 const N: usize = 3;
 
-/// [`InterpData`] for 3-D data.
-pub type InterpData3D<D> = InterpData<D, N>;
+/// [`InterpData`] generic (base) form for 3-D data.
+pub type InterpData3DBase<D> = InterpDataBase<D, N>;
+/// [`InterpData`] for 3-D data that owns data.
+pub type InterpData3D<T> = InterpData3DBase<OwnedRepr<T>>;
 /// [`InterpData3D`] that views data.
-pub type InterpData3DViewed<T> = InterpData3D<ViewRepr<T>>;
-/// [`InterpData3D`] that owns data.
-pub type InterpData3DOwned<T> = InterpData3D<OwnedRepr<T>>;
+pub type InterpData3DView<T> = InterpData3DBase<ViewRepr<T>>;
 
-impl<D> InterpData3D<D>
+impl<D> InterpData3DBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialOrd + Debug,
@@ -53,25 +53,25 @@ where
         "
     ))
 )]
-pub struct Interp3D<D, S>
+pub struct Interp3DBase<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
     S: Clone,
 {
     /// Interpolator data.
-    pub data: InterpData3D<D>,
+    pub data: InterpData3DBase<D>,
     /// Interpolation strategy.
     pub strategy: S,
     /// Extrapolation setting.
     pub extrapolate: Extrapolate<D::Elem>,
 }
-/// [`Interp3D`] that views data.
-pub type Interp3DViewed<T, S> = Interp3D<ViewRepr<T>, S>;
 /// [`Interp3D`] that owns data.
-pub type Interp3DOwned<T, S> = Interp3D<OwnedRepr<T>, S>;
+pub type Interp3D<T, S> = Interp3DBase<OwnedRepr<T>, S>;
+/// [`Interp3D`] that views data.
+pub type Interp3DView<T, S> = Interp3DBase<ViewRepr<T>, S>;
 
-impl<D, S> Interp3D<D, S>
+impl<D, S> Interp3DBase<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
@@ -84,8 +84,7 @@ where
     /// use ndarray::prelude::*;
     /// use ninterp::prelude::*;
     /// // f(x, y, z) = 0.2 * x + 0.2 * y + 0.2 * z
-    /// // type annotation for clarity
-    /// let interp: Interp3DOwned<f64, _> = Interp3D::new(
+    /// let interp = Interp3D::new(
     ///     // x
     ///     array![1., 2.], // x0, x1
     ///     // y
@@ -128,7 +127,7 @@ where
         D::Elem: PartialOrd,
     {
         let mut interpolator = Self {
-            data: InterpData3D::new(x, y, z, f_xyz)?,
+            data: InterpData3DBase::new(x, y, z, f_xyz)?,
             strategy,
             extrapolate,
         };
@@ -139,17 +138,17 @@ where
     }
 
     interp_inherent_methods!(
-        Interp3D,
+        Interp3DBase,
         Strategy3D,
-        Interp3DViewed<&D::Elem, S>,
-        Interp3DOwned<D::Elem, S>
+        Interp3DView<&D::Elem, S>,
+        Interp3D<D::Elem, S>
     );
 }
 
 interp_trait_impls!(
+    Interp3DBase,
     Interp3D,
-    Interp3DOwned,
-    InterpData3D,
+    InterpData3DBase,
     Strategy3D,
     strategy::enums::Strategy3DEnum,
     N

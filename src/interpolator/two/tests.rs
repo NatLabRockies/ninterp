@@ -278,7 +278,7 @@ fn test_set_strategy_runs_init() {
     // `Step`'s `validate` checks its direction count against dimensionality,
     // so swapping in a `Step` with the wrong count via `set_strategy` must
     // surface that error rather than silently leaving the strategy unvalidated.
-    let mut interp: Interp2D<_, strategy::enums::Strategy2DEnum> = Interp2D::new(
+    let mut interp: Interp2DBase<_, strategy::enums::Strategy2DEnum> = Interp2D::new(
         array![0., 1.],
         array![0., 1.],
         array![[0., 1.], [2., 3.]],
@@ -300,7 +300,7 @@ fn test_set_strategy_runs_validate() {
     // fine, but swapping to `LinearUniform` via `set_strategy` must catch it via
     // `Strategy2D::validate` rather than silently accepting a strategy that will
     // produce wrong results at query time.
-    let mut interp: Interp2D<_, strategy::enums::Strategy2DEnum> = Interp2D::new(
+    let mut interp: Interp2DBase<_, strategy::enums::Strategy2DEnum> = Interp2D::new(
         array![0., 1., 5.], // non-uniform
         array![0., 1., 2.],
         array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
@@ -454,7 +454,7 @@ fn test_dyn_interpolator() {
         InterpolateError::PointLength(2)
     ));
     assert_eq!(
-        boxed.as_any().downcast_ref::<Interp2DOwned<f64, _>>(),
+        boxed.as_any().downcast_ref::<Interp2D<f64, _>>(),
         Some(&interp)
     );
 }
@@ -619,7 +619,7 @@ fn test_partialeq() {
 
     #[derive(PartialEq)]
     #[allow(unused)]
-    struct MyStruct2(Interp2DOwned<f64, strategy::Linear>);
+    struct MyStruct2(Interp2D<f64, strategy::Linear>);
 }
 
 #[test]
@@ -635,7 +635,7 @@ fn test_serde() {
     .unwrap();
 
     let ser = serde_json::to_string(&interp).unwrap();
-    let de: Interp2DOwned<f64, strategy::Linear> = serde_json::from_str(&ser).unwrap();
+    let de: Interp2DBase<f64, strategy::Linear> = serde_json::from_str(&ser).unwrap();
     assert_eq!(interp, de);
 
     // simple format (new serialization output)

@@ -13,10 +13,11 @@ mod zero;
 pub mod data;
 pub mod enums;
 
-pub use n::{InterpND, InterpNDOwned, InterpNDViewed};
-pub use one::{Interp1D, Interp1DOwned, Interp1DViewed};
-pub use three::{Interp3D, Interp3DOwned, Interp3DViewed};
-pub use two::{Interp2D, Interp2DOwned, Interp2DViewed};
+pub use data::InterpDataBase;
+pub use n::{InterpND, InterpNDBase, InterpNDView};
+pub use one::{Interp1D, Interp1DBase, Interp1DView};
+pub use three::{Interp3D, Interp3DBase, Interp3DView};
+pub use two::{Interp2D, Interp2DBase, Interp2DView};
 pub use zero::Interp0D;
 
 /// An interpolator of data type `T`

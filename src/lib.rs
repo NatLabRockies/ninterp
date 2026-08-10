@@ -27,13 +27,13 @@ pub mod prelude {
     pub use crate::interpolator::{Extrapolate, Interpolator};
 
     pub use crate::interpolator::Interp0D;
-    pub use crate::interpolator::{Interp1D, Interp1DOwned, Interp1DViewed};
-    pub use crate::interpolator::{Interp2D, Interp2DOwned, Interp2DViewed};
-    pub use crate::interpolator::{Interp3D, Interp3DOwned, Interp3DViewed};
-    pub use crate::interpolator::{InterpND, InterpNDOwned, InterpNDViewed};
+    pub use crate::interpolator::{Interp1D, Interp1DBase, Interp1DView};
+    pub use crate::interpolator::{Interp2D, Interp2DBase, Interp2DView};
+    pub use crate::interpolator::{Interp3D, Interp3DBase, Interp3DView};
+    pub use crate::interpolator::{InterpND, InterpNDBase, InterpNDView};
 
     pub use crate::interpolator::enums::{
-        InterpolatorEnum, InterpolatorEnumOwned, InterpolatorEnumViewed,
+        InterpolatorEnum, InterpolatorEnumBase, InterpolatorEnumView,
     };
 
     #[cfg(feature = "serde")]

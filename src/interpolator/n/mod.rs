@@ -23,7 +23,7 @@ mod tests;
         "
     ))
 )]
-pub struct InterpDataND<D>
+pub struct InterpDataNDBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
@@ -35,13 +35,13 @@ where
     #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_dyn"))]
     pub values: ArrayBase<D, IxDyn>,
 }
+/// [`InterpDataND`] for N-D data that owns data.
+pub type InterpDataND<T> = InterpDataNDBase<OwnedRepr<T>>;
 /// [`InterpDataND`] that views data.
-pub type InterpDataNDViewed<T> = InterpDataND<ViewRepr<T>>;
-/// [`InterpDataND`] that owns data.
-pub type InterpDataNDOwned<T> = InterpDataND<OwnedRepr<T>>;
+pub type InterpDataNDView<T> = InterpDataNDBase<ViewRepr<T>>;
 
 #[cfg(feature = "serde")]
-impl<D> SerializeNested for InterpDataND<D>
+impl<D> SerializeNested for InterpDataNDBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug + Serialize,
@@ -57,7 +57,7 @@ where
     }
 }
 
-impl<D> PartialEq for InterpDataND<D>
+impl<D> PartialEq for InterpDataNDBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
@@ -68,7 +68,7 @@ where
     }
 }
 
-impl<D> InterpDataND<D>
+impl<D> InterpDataNDBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
@@ -128,19 +128,19 @@ where
     }
 
     /// View interpolator data.
-    pub fn view(&self) -> InterpDataNDViewed<&D::Elem> {
-        InterpDataNDViewed {
+    pub fn view(&self) -> InterpDataNDView<&D::Elem> {
+        InterpDataNDView {
             grid: self.grid.iter().map(|g| g.view()).collect(),
             values: self.values.view(),
         }
     }
 
-    /// Turn the data into an [`InterpDataNDOwned`], cloning the array elements if necessary.
-    pub fn into_owned(self) -> InterpDataNDOwned<D::Elem>
+    /// Turn the data into an [`InterpDataND`], cloning the array elements if necessary.
+    pub fn into_owned(self) -> InterpDataND<D::Elem>
     where
         D::Elem: Clone,
     {
-        InterpDataNDOwned {
+        InterpDataND {
             grid: self.grid.into_iter().map(|g| g.into_owned()).collect(),
             values: self.values.into_owned(),
         }
@@ -164,29 +164,29 @@ where
         "
     ))
 )]
-pub struct InterpND<D, S>
+pub struct InterpNDBase<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
     S: Clone,
 {
     /// Interpolator data.
-    pub data: InterpDataND<D>,
+    pub data: InterpDataNDBase<D>,
     /// Interpolation strategy.
     pub strategy: S,
     /// Extrapolation setting.
     pub extrapolate: Extrapolate<D::Elem>,
 }
-/// [`InterpND`] that views data.
-pub type InterpNDViewed<T, S> = InterpND<ViewRepr<T>, S>;
 /// [`InterpND`] that owns data.
-pub type InterpNDOwned<T, S> = InterpND<OwnedRepr<T>, S>;
+pub type InterpND<T, S> = InterpNDBase<OwnedRepr<T>, S>;
+/// [`InterpND`] that views data.
+pub type InterpNDView<T, S> = InterpNDBase<ViewRepr<T>, S>;
 
-partialeq_impl!(InterpND, InterpDataND, StrategyND);
+partialeq_impl!(InterpNDBase, InterpDataNDBase, StrategyND);
 #[cfg(feature = "serde")]
-serialize_nested_impl!(InterpND, InterpDataND, StrategyND);
+serialize_nested_impl!(InterpNDBase, InterpDataNDBase, StrategyND);
 
-impl<D, S> InterpND<D, S>
+impl<D, S> InterpNDBase<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
@@ -215,7 +215,7 @@ where
     }
 }
 
-impl<D, S> InterpND<D, S>
+impl<D, S> InterpNDBase<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialOrd + Debug,
@@ -228,8 +228,7 @@ where
     /// use ndarray::prelude::*;
     /// use ninterp::prelude::*;
     /// // f(x, y, z) = 0.2 * x + 0.2 * y + 0.2 * z
-    /// // type annotation for clarity
-    /// let interp: InterpNDOwned<f64, _> = InterpND::new(
+    /// let interp = InterpND::new(
     ///     // grid
     ///     vec![
     ///         // x
@@ -271,7 +270,7 @@ where
         extrapolate: Extrapolate<D::Elem>,
     ) -> Result<Self, ValidateError> {
         let mut interpolator = Self {
-            data: InterpDataND::new(grid, values)?,
+            data: InterpDataNDBase::new(grid, values)?,
             strategy,
             extrapolate,
         };
@@ -282,25 +281,25 @@ where
     }
 
     /// Return an interpolator with viewed data.
-    pub fn view(&self) -> InterpNDViewed<&D::Elem, S>
+    pub fn view(&self) -> InterpNDView<&D::Elem, S>
     where
         S: for<'a> StrategyND<ViewRepr<&'a D::Elem>>,
         D::Elem: Clone,
     {
-        InterpNDViewed {
+        InterpNDView {
             data: self.data.view(),
             strategy: self.strategy.clone(),
             extrapolate: self.extrapolate.clone(),
         }
     }
 
-    /// Turn the interpolator into an [`InterpNDOwned`], cloning the array elements if necessary.
-    pub fn into_owned(self) -> InterpNDOwned<D::Elem, S>
+    /// Turn the interpolator into an [`InterpND`], cloning the array elements if necessary.
+    pub fn into_owned(self) -> InterpND<D::Elem, S>
     where
         S: StrategyND<OwnedRepr<D::Elem>>,
         D::Elem: Clone,
     {
-        InterpNDOwned {
+        InterpND {
             data: self.data.into_owned(),
             strategy: self.strategy.clone(),
             extrapolate: self.extrapolate.clone(),
@@ -308,7 +307,7 @@ where
     }
 }
 
-impl<D, S> Interpolator<D::Elem> for InterpND<D, S>
+impl<D, S> Interpolator<D::Elem> for InterpNDBase<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: Num + PartialOrd + Euclid + Copy + Debug,
@@ -559,7 +558,7 @@ where
     }
 }
 
-extrapolate_impl!(InterpND, StrategyND);
-set_strategy_box_impl!(InterpND, StrategyND);
-set_strategy_enum_impl!(InterpND, strategy::enums::StrategyNDEnum);
-dyn_interpolator_impl!(InterpNDOwned, StrategyND);
+extrapolate_impl!(InterpNDBase, StrategyND);
+set_strategy_box_impl!(InterpNDBase, StrategyND);
+set_strategy_enum_impl!(InterpNDBase, strategy::enums::StrategyNDEnum);
+dyn_interpolator_impl!(InterpND, StrategyND);

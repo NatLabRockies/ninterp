@@ -2,10 +2,10 @@
 
 use super::*;
 
-pub use n::{InterpDataND, InterpDataNDOwned, InterpDataNDViewed};
-pub use one::{InterpData1D, InterpData1DOwned, InterpData1DViewed};
-pub use three::{InterpData3D, InterpData3DOwned, InterpData3DViewed};
-pub use two::{InterpData2D, InterpData2DOwned, InterpData2DViewed};
+pub use n::{InterpDataND, InterpDataNDBase, InterpDataNDView};
+pub use one::{InterpData1D, InterpData1DBase, InterpData1DView};
+pub use three::{InterpData3D, InterpData3DBase, InterpData3DView};
+pub use two::{InterpData2D, InterpData2DBase, InterpData2DView};
 
 /// Interpolator data for interpolators of concrete dimensionality `const N: usize`.
 ///
@@ -29,7 +29,7 @@ pub use two::{InterpData2D, InterpData2DOwned, InterpData2DViewed};
         "
     ))
 )]
-pub struct InterpData<D, const N: usize>
+pub struct InterpDataBase<D, const N: usize>
 where
     Dim<[Ix; N]>: Dimension,
     D: Data + RawDataClone + Clone,
@@ -46,12 +46,12 @@ where
     pub values: ArrayBase<D, Dim<[Ix; N]>>,
 }
 /// [`InterpData`] that views data.
-pub type InterpDataViewed<T, const N: usize> = InterpData<ViewRepr<T>, N>;
+pub type InterpDataView<T, const N: usize> = InterpDataBase<ViewRepr<T>, N>;
 /// [`InterpData`] that owns data.
-pub type InterpDataOwned<T, const N: usize> = InterpData<OwnedRepr<T>, N>;
+pub type InterpDataOwned<T, const N: usize> = InterpDataBase<OwnedRepr<T>, N>;
 
 #[cfg(feature = "serde")]
-impl<D, const N: usize> SerializeNested for InterpData<D, N>
+impl<D, const N: usize> SerializeNested for InterpDataBase<D, N>
 where
     Dim<[Ix; N]>: Dimension,
     D: Data + RawDataClone + Clone,
@@ -69,7 +69,7 @@ where
     }
 }
 
-impl<D, const N: usize> PartialEq for InterpData<D, N>
+impl<D, const N: usize> PartialEq for InterpDataBase<D, N>
 where
     Dim<[Ix; N]>: Dimension,
     D: Data + RawDataClone + Clone,
@@ -81,7 +81,7 @@ where
     }
 }
 
-impl<D, const N: usize> InterpData<D, N>
+impl<D, const N: usize> InterpDataBase<D, N>
 where
     Dim<[Ix; N]>: Dimension,
     D: Data + RawDataClone + Clone,
@@ -111,8 +111,8 @@ where
     }
 
     /// View interpolator data.
-    pub fn view(&self) -> InterpDataViewed<&D::Elem, N> {
-        InterpDataViewed {
+    pub fn view(&self) -> InterpDataView<&D::Elem, N> {
+        InterpDataView {
             grid: std::array::from_fn(|i| self.grid[i].view()),
             values: self.values.view(),
         }
