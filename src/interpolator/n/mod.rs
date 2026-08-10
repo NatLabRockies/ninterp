@@ -397,15 +397,29 @@ where
         self.strategy.interpolate_fast(&self.data, point)
     }
 
-    fn batch_interpolate(&self, points: &[&[D::Elem]]) -> Result<Vec<D::Elem>, InterpolateError> {
+    fn batch_interpolate_into(
+        &self,
+        points: &[&[D::Elem]],
+        out: &mut [D::Elem],
+    ) -> Result<(), InterpolateError> {
         let n = self.ndim();
         for point in points {
             if point.len() != n {
                 return Err(InterpolateError::PointLength(n));
             }
         }
+        if out.len() != points.len() {
+            return Err(InterpolateError::OutputLength {
+                expected: points.len(),
+                found: out.len(),
+            });
+        }
         match &self.extrapolate {
-            Extrapolate::Enable => self.strategy.batch_interpolate(&self.data, points),
+            Extrapolate::Enable => {
+                self.strategy
+                    .batch_interpolate_into(&self.data, points, out)?;
+                Ok(())
+            }
             Extrapolate::Clamp => {
                 // Clamping an in-bounds point is already identity, so every point
                 // can be clamped unconditionally.
@@ -426,7 +440,9 @@ where
                     })
                     .collect();
                 let clamped: Vec<&[D::Elem]> = clamped.iter().map(Vec::as_slice).collect();
-                self.strategy.batch_interpolate(&self.data, &clamped)
+                self.strategy
+                    .batch_interpolate_into(&self.data, &clamped, out)?;
+                Ok(())
             }
             Extrapolate::Wrap => {
                 // Unlike `Clamp`, `wrap()` isn't identity exactly at the boundary,
@@ -452,10 +468,16 @@ where
                     })
                     .collect();
                 let wrapped: Vec<&[D::Elem]> = wrapped.iter().map(Vec::as_slice).collect();
-                self.strategy.batch_interpolate(&self.data, &wrapped)
+                self.strategy
+                    .batch_interpolate_into(&self.data, &wrapped, out)?;
+                Ok(())
             }
             Extrapolate::Fill(value) => {
-                let mut results = vec![*value; points.len()];
+                // Pre-fill output with the fill value, then scatter interpolated
+                // results from in-bounds points into their corresponding indices.
+                for o in out.iter_mut() {
+                    *o = *value;
+                }
                 let mut in_bounds_indices = Vec::new();
                 let mut in_bounds_points: Vec<&[D::Elem]> = Vec::new();
                 for (i, &point) in points.iter().enumerate() {
@@ -464,16 +486,22 @@ where
                         in_bounds_points.push(point);
                     }
                 }
-                let interpolated = self
-                    .strategy
-                    .batch_interpolate(&self.data, &in_bounds_points)?;
-                for (i, value) in in_bounds_indices.into_iter().zip(interpolated) {
-                    results[i] = value;
+                if !in_bounds_indices.is_empty() {
+                    let mut scratch = vec![D::Elem::zero(); in_bounds_indices.len()];
+                    self.strategy.batch_interpolate_into(
+                        &self.data,
+                        &in_bounds_points,
+                        &mut scratch,
+                    )?;
+                    for (idx, value) in in_bounds_indices.into_iter().zip(scratch) {
+                        out[idx] = value;
+                    }
                 }
-                Ok(results)
+                Ok(())
             }
             Extrapolate::Error => {
                 let mut errors = Vec::new();
+                let mut in_bounds_indices = Vec::new();
                 let mut in_bounds_points: Vec<&[D::Elem]> = Vec::new();
                 for (i, &point) in points.iter().enumerate() {
                     let mut point_errors = Vec::new();
@@ -486,6 +514,7 @@ where
                         }
                     }
                     if point_errors.is_empty() {
+                        in_bounds_indices.push(i);
                         in_bounds_points.push(point);
                     } else {
                         errors.extend(point_errors);
@@ -494,10 +523,49 @@ where
                 if !errors.is_empty() {
                     return Err(InterpolateError::ExtrapolateError(errors.join("")));
                 }
-                self.strategy
-                    .batch_interpolate(&self.data, &in_bounds_points)
+                if !in_bounds_indices.is_empty() {
+                    self.strategy.batch_interpolate_into(
+                        &self.data,
+                        &in_bounds_points,
+                        &mut out[0..in_bounds_points.len()],
+                    )?;
+                }
+                Ok(())
             }
         }
+    }
+
+    fn batch_interpolate_fast_into(&self, points: &[&[D::Elem]], out: &mut [D::Elem]) {
+        let n = self.ndim();
+        for point in points {
+            assert_eq!(
+                point.len(),
+                n,
+                "batch_interpolate_fast_into: point length mismatch"
+            );
+        }
+        assert_eq!(
+            out.len(),
+            points.len(),
+            "batch_interpolate_fast_into: length mismatch"
+        );
+        self.strategy
+            .batch_interpolate_fast_into(&self.data, points, out)
+    }
+
+    fn batch_interpolate(&self, points: &[&[D::Elem]]) -> Result<Vec<D::Elem>, InterpolateError> {
+        let n = self.ndim();
+        for point in points {
+            if point.len() != n {
+                return Err(InterpolateError::PointLength(n));
+            }
+        }
+        let mut out = Vec::with_capacity(points.len());
+        for _ in 0..points.len() {
+            out.push(D::Elem::zero());
+        }
+        self.batch_interpolate_into(points, &mut out)?;
+        Ok(out)
     }
 
     fn batch_interpolate_fast(&self, points: &[&[D::Elem]]) -> Vec<D::Elem> {
@@ -509,7 +577,12 @@ where
                 "batch_interpolate_fast: point length mismatch"
             );
         }
-        self.strategy.batch_interpolate_fast(&self.data, points)
+        let mut out = Vec::with_capacity(points.len());
+        for _ in 0..points.len() {
+            out.push(D::Elem::zero());
+        }
+        self.batch_interpolate_fast_into(points, &mut out);
+        out
     }
 }
 

@@ -255,6 +255,98 @@ macro_rules! slice_to_array_forward {
             }
         }
     };
+    (batch_interpolate_into) => {
+        fn batch_interpolate_into(
+            &self,
+            points: &[&[D::Elem]],
+            out: &mut [D::Elem],
+        ) -> Result<(), InterpolateError> {
+            match self {
+                InterpolatorEnum::Interp0D(interp) => {
+                    Interpolator::batch_interpolate_into(interp, points, out)
+                }
+                InterpolatorEnum::Interp1D(interp) => {
+                    let points: Vec<[D::Elem; 1]> = points
+                        .iter()
+                        .map(|&point| {
+                            point
+                                .try_into()
+                                .map_err(|_| InterpolateError::PointLength(1))
+                        })
+                        .collect::<Result<_, _>>()?;
+                    interp.batch_interpolate_into(&points, out)
+                }
+                InterpolatorEnum::Interp2D(interp) => {
+                    let points: Vec<[D::Elem; 2]> = points
+                        .iter()
+                        .map(|&point| {
+                            point
+                                .try_into()
+                                .map_err(|_| InterpolateError::PointLength(2))
+                        })
+                        .collect::<Result<_, _>>()?;
+                    interp.batch_interpolate_into(&points, out)
+                }
+                InterpolatorEnum::Interp3D(interp) => {
+                    let points: Vec<[D::Elem; 3]> = points
+                        .iter()
+                        .map(|&point| {
+                            point
+                                .try_into()
+                                .map_err(|_| InterpolateError::PointLength(3))
+                        })
+                        .collect::<Result<_, _>>()?;
+                    interp.batch_interpolate_into(&points, out)
+                }
+                InterpolatorEnum::InterpND(interp) => interp.batch_interpolate_into(points, out),
+            }
+        }
+    };
+    (batch_interpolate_fast_into) => {
+        fn batch_interpolate_fast_into(&self, points: &[&[D::Elem]], out: &mut [D::Elem]) {
+            match self {
+                InterpolatorEnum::Interp0D(interp) => {
+                    Interpolator::batch_interpolate_fast_into(interp, points, out)
+                }
+                InterpolatorEnum::Interp1D(interp) => {
+                    let points: Vec<[D::Elem; 1]> = points
+                        .iter()
+                        .map(|&point| {
+                            point
+                                .try_into()
+                                .expect("batch_interpolate_fast_into: point length mismatch")
+                        })
+                        .collect();
+                    interp.batch_interpolate_fast_into(&points, out)
+                }
+                InterpolatorEnum::Interp2D(interp) => {
+                    let points: Vec<[D::Elem; 2]> = points
+                        .iter()
+                        .map(|&point| {
+                            point
+                                .try_into()
+                                .expect("batch_interpolate_fast_into: point length mismatch")
+                        })
+                        .collect();
+                    interp.batch_interpolate_fast_into(&points, out)
+                }
+                InterpolatorEnum::Interp3D(interp) => {
+                    let points: Vec<[D::Elem; 3]> = points
+                        .iter()
+                        .map(|&point| {
+                            point
+                                .try_into()
+                                .expect("batch_interpolate_fast_into: point length mismatch")
+                        })
+                        .collect();
+                    interp.batch_interpolate_fast_into(&points, out)
+                }
+                InterpolatorEnum::InterpND(interp) => {
+                    interp.batch_interpolate_fast_into(points, out)
+                }
+            }
+        }
+    };
 }
 
 /// This is an alternative to using a `Box<dyn Interpolator<_>>` with a few key differences:
@@ -534,6 +626,8 @@ where
     slice_to_array_forward!(interpolate_fast);
     slice_to_array_forward!(batch_interpolate);
     slice_to_array_forward!(batch_interpolate_fast);
+    slice_to_array_forward!(batch_interpolate_into);
+    slice_to_array_forward!(batch_interpolate_fast_into);
 }
 
 mod tests {

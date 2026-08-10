@@ -33,6 +33,8 @@ pub enum InterpolateError {
     ExtrapolateError(String),
     #[error("supplied point slice should have length {0} for {0}-D interpolation")]
     PointLength(usize),
+    #[error("output slice has length {found}, expected {expected}")]
+    OutputLength { expected: usize, found: usize },
     #[error("{0}")]
     Other(String),
 }
