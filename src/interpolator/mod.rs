@@ -288,22 +288,52 @@ macro_rules! interpolate_impl {
                             return self.strategy.interpolate(&self.data, &wrapped_point);
                         }
                         Extrapolate::Error => {
-                            errors.push(format!(
-                                "\n    point[{dim}] = {:?} is out of bounds for grid[{dim}] = {:?}",
-                                point[dim], self.data.grid[dim],
-                            ));
+                            errors.push((0, dim));
                         }
                     };
                 }
             }
             if !errors.is_empty() {
-                return Err(InterpolateError::OutOfBounds(errors.join("")));
+                return Err(InterpolateError::OutOfBounds(errors));
             }
             self.strategy.interpolate(&self.data, point)
         }
     };
 }
 pub(crate) use interpolate_impl;
+
+/// Reinterpret a runtime-length point as a fixed-size array, for the `Interpolator<T>`
+/// trait methods on `Interp1D`/`2D`/`3D`, whose inherent counterparts take `&[T; N]`.
+pub(crate) fn to_fixed_point<T, const N: usize>(point: &[T]) -> Result<&[T; N], InterpolateError> {
+    <&[T; N]>::try_from(point).map_err(|_| InterpolateError::PointLength {
+        expected: N,
+        failures: vec![(0, point.len())],
+    })
+}
+
+/// Batched [`to_fixed_point`]. Every offending point is reported, not just the first, so
+/// one call surfaces the whole problem with a malformed batch. Mirrors how the
+/// `Extrapolate::Error` path aggregates out-of-bounds points.
+pub(crate) fn to_fixed_points<T: Copy, const N: usize>(
+    points: &[&[T]],
+) -> Result<Vec<[T; N]>, InterpolateError> {
+    let mut converted = Vec::with_capacity(points.len());
+    let mut failures = Vec::new();
+    for (i, &point) in points.iter().enumerate() {
+        match <&[T; N]>::try_from(point) {
+            Ok(arr) => converted.push(*arr),
+            Err(_) => failures.push((i, point.len())),
+        }
+    }
+    if failures.is_empty() {
+        Ok(converted)
+    } else {
+        Err(InterpolateError::PointLength {
+            expected: N,
+            failures,
+        })
+    }
+}
 
 /// Is `point` out of `grid`'s bounds in any dimension?
 ///
@@ -353,7 +383,9 @@ macro_rules! batch_interpolate_into_impl {
                 });
             }
             match &self.extrapolate {
-                Extrapolate::Enable => self.strategy.batch_interpolate_into(&self.data, points, out),
+                Extrapolate::Enable => self
+                    .strategy
+                    .batch_interpolate_into(&self.data, points, out),
                 Extrapolate::Clamp => {
                     // Clamping an in-bounds point is already identity, so every point
                     // can be clamped unconditionally.
@@ -369,7 +401,8 @@ macro_rules! batch_interpolate_into_impl {
                             })
                         })
                         .collect();
-                    self.strategy.batch_interpolate_into(&self.data, &clamped, out)
+                    self.strategy
+                        .batch_interpolate_into(&self.data, &clamped, out)
                 }
                 Extrapolate::Wrap => {
                     // Unlike `Clamp`, `wrap()` isn't identity exactly at the
@@ -390,7 +423,8 @@ macro_rules! batch_interpolate_into_impl {
                             }
                         })
                         .collect();
-                    self.strategy.batch_interpolate_into(&self.data, &wrapped, out)
+                    self.strategy
+                        .batch_interpolate_into(&self.data, &wrapped, out)
                 }
                 Extrapolate::Fill(value) => {
                     // Pre-fill output with the fill value, then scatter interpolated
@@ -407,7 +441,11 @@ macro_rules! batch_interpolate_into_impl {
                             .unzip();
                     if !in_bounds_indices.is_empty() {
                         let mut scratch = vec![D::Elem::zero(); in_bounds_indices.len()];
-                        self.strategy.batch_interpolate_into(&self.data, &in_bounds_points, &mut scratch)?;
+                        self.strategy.batch_interpolate_into(
+                            &self.data,
+                            &in_bounds_points,
+                            &mut scratch,
+                        )?;
                         for (idx, value) in in_bounds_indices.into_iter().zip(scratch) {
                             out[idx] = value;
                         }
@@ -424,10 +462,7 @@ macro_rules! batch_interpolate_into_impl {
                                 ..=self.data.grid[dim].last().unwrap())
                                 .contains(&&point[dim])
                             {
-                                point_errors.push(format!(
-                                    "\n    point[{i}][{dim}] = {:?} is out of bounds for grid[{dim}] = {:?}",
-                                    point[dim], self.data.grid[dim],
-                                ));
+                                point_errors.push((i, dim));
                             }
                         }
                         if point_errors.is_empty() {
@@ -437,9 +472,10 @@ macro_rules! batch_interpolate_into_impl {
                         }
                     }
                     if !errors.is_empty() {
-                        return Err(InterpolateError::OutOfBounds(errors.join("")));
+                        return Err(InterpolateError::OutOfBounds(errors));
                     }
-                    self.strategy.batch_interpolate_into(&self.data, &in_bounds_points, out)
+                    self.strategy
+                        .batch_interpolate_into(&self.data, &in_bounds_points, out)
                 }
             }
         }
@@ -617,14 +653,7 @@ macro_rules! interpolator_trait_impl {
             }
 
             fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
-                let point: &[D::Elem; N] =
-                    point
-                        .try_into()
-                        .map_err(|_| InterpolateError::PointLength {
-                            expected: N,
-                            found: point.len(),
-                        })?;
-                self.interpolate(point)
+                self.interpolate(to_fixed_point(point)?)
             }
 
             fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
@@ -639,17 +668,7 @@ macro_rules! interpolator_trait_impl {
                 points: &[&[D::Elem]],
                 out: &mut [D::Elem],
             ) -> Result<(), InterpolateError> {
-                let points: Vec<[D::Elem; N]> = points
-                    .iter()
-                    .map(|&point| {
-                        <&[D::Elem; N]>::try_from(point)
-                            .map(|arr| *arr)
-                            .map_err(|_| InterpolateError::PointLength {
-                                expected: N,
-                                found: point.len(),
-                            })
-                    })
-                    .collect::<Result<_, _>>()?;
+                let points: Vec<[D::Elem; N]> = to_fixed_points(points)?;
                 self.batch_interpolate_into(&points, out)
             }
 
@@ -668,17 +687,7 @@ macro_rules! interpolator_trait_impl {
                 &self,
                 points: &[&[D::Elem]],
             ) -> Result<Vec<D::Elem>, InterpolateError> {
-                let points: Vec<[D::Elem; N]> = points
-                    .iter()
-                    .map(|&point| {
-                        <&[D::Elem; N]>::try_from(point)
-                            .map(|arr| *arr)
-                            .map_err(|_| InterpolateError::PointLength {
-                                expected: N,
-                                found: point.len(),
-                            })
-                    })
-                    .collect::<Result<_, _>>()?;
+                let points: Vec<[D::Elem; N]> = to_fixed_points(points)?;
                 self.batch_interpolate(&points)
             }
 

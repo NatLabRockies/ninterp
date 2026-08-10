@@ -591,12 +591,13 @@ fn test_batch_interpolate_error_aggregates_all_points() {
     .unwrap();
     let points: [&[f64]; 3] = [&[0.4, 0.4, 0.4], &[-1., -1., -1.], &[2., 2., 2.]];
     let err = interp.batch_interpolate(&points).unwrap_err();
-    let InterpolateError::OutOfBounds(message) = err else {
+    let InterpolateError::OutOfBounds(failures) = err else {
         panic!("expected InterpolateError::OutOfBounds");
     };
-    assert!(message.contains("point[1]"));
-    assert!(message.contains("point[2]"));
-    assert!(!message.contains("point[0]"));
+    let offending: Vec<usize> = failures.iter().map(|(index, _)| *index).collect();
+    assert!(offending.contains(&1));
+    assert!(offending.contains(&2));
+    assert!(!offending.contains(&0));
 }
 
 #[test]

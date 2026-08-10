@@ -404,12 +404,13 @@ fn test_batch_interpolate_error_aggregates_all_points() {
     let err = interp
         .batch_interpolate(&[[0.5, 0.5], [-1., -1.], [2., 2.]])
         .unwrap_err();
-    let InterpolateError::OutOfBounds(message) = err else {
+    let InterpolateError::OutOfBounds(failures) = err else {
         panic!("expected InterpolateError::OutOfBounds");
     };
-    assert!(message.contains("point[1]"));
-    assert!(message.contains("point[2]"));
-    assert!(!message.contains("point[0]"));
+    let offending: Vec<usize> = failures.iter().map(|(index, _)| *index).collect();
+    assert!(offending.contains(&1));
+    assert!(offending.contains(&2));
+    assert!(!offending.contains(&0));
 }
 
 #[test]
@@ -579,10 +580,11 @@ fn test_batch_interpolate_into_error_aggregates_all_points() {
         .batch_interpolate_into(&[[0.5, 0.5], [-1., -1.], [2., 2.]], &mut out)
         .unwrap_err();
     match err {
-        InterpolateError::OutOfBounds(s) => {
-            // Should mention all out-of-bounds points
-            assert!(s.contains("point[1]"));
-            assert!(s.contains("point[2]"));
+        InterpolateError::OutOfBounds(failures) => {
+            // Should report all out-of-bounds points
+            let offending: Vec<usize> = failures.iter().map(|(index, _)| *index).collect();
+            assert!(offending.contains(&1));
+            assert!(offending.contains(&2));
         }
         _ => panic!("expected InterpolateError::OutOfBounds"),
     }

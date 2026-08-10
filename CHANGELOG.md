@@ -161,11 +161,23 @@ Everything below is merged to `main` but not yet tagged/released.
   `Num + PartialOrd`). Other strategies (`Nearest`, `Step`, etc.) keep looser numeric
   bounds after an initial, overly broad `Float` restriction across the whole strategy
   surface was narrowed back down to just the two strategies that actually need it.
-- **Breaking:** `InterpolateError::PointLength(usize)` becomes
-  `PointLength { expected: usize, found: usize }`, matching its neighbor
-  `OutputLength { expected, found }`. The actual length was already available at every
-  construction site and thrown away, so the message can now read "point has length 2,
-  expected 3 for 3-D interpolation" instead of naming only the expectation.
+- **Breaking:** both interpolation-time failures now carry structured positions instead
+  of prose, and both aggregate across a batch rather than one aggregating and the other
+  stopping at the first failure:
+  - `InterpolateError::PointLength(usize)` ->
+    `PointLength { expected: usize, failures: Vec<(usize, usize)> }`, where each entry is
+    `(point index, actual length)`. The actual length was available at every construction
+    site and thrown away.
+  - `InterpolateError::OutOfBounds(String)` -> `OutOfBounds(Vec<(usize, usize)>)`, where
+    each entry is `(point index, dimension)`. A point out of bounds in two dimensions
+    yields two entries. The offending coordinate and grid bounds are no longer echoed
+    into the message: they are `D::Elem`, which the error is not generic over, and the
+    caller can index the `points` and `grid` it already owns. This also drops one
+    `String` allocation per offending coordinate from the batch error path.
+
+  Both variants render a lone failure as a sentence and several as an indented list, and
+  omit point indices entirely when every failure is at index 0, which is every
+  single-point call: `point has length 2, expected 3 for 3-D interpolation`.
 - **Breaking:** `ValidateError::ExtrapolateSelection` becomes the payload-free
   `ExtrapolateUnsupported`. Only `Extrapolate::Enable` can ever be rejected, and only by
   a strategy whose `allow_extrapolate` returns `false`, so the stringified setting the
@@ -177,9 +189,8 @@ Everything below is merged to `main` but not yet tagged/released.
   (a query point outside the grid) rather than the setting that turns it into an
   error. Its message is rewritten to match, from "attempted to interpolate at point(s)
   beyond grid data" to ``point(s) out of bounds with `Extrapolate::Error` set``, so the
-  variant states the condition and the message states which setting to change. It also
-  reads "point(s)" rather than "point", since a batch error can name more than one
-  offending point. `ValidateError::EmptyGrid` is removed outright; a grid dimension
+  variant states the condition and the message states which setting to change.
+  `ValidateError::EmptyGrid` is removed outright; a grid dimension
   with 0 or 1 points is now rejected by the same `InsufficientGridPoints`, since a
   single point can't bracket a query either.
 - **Breaking:** the `serde_ndim` Cargo feature is removed. It switched the nested-array
