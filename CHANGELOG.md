@@ -100,6 +100,9 @@ Everything below is merged to `main` but not yet tagged/released.
   do on the concrete, unboxed type.
 
 ### Changed
+- **Breaking:** `InterpolateError` and `ValidateError` are now `#[non_exhaustive]`,
+  allowing new error variants to be added without breaking downstream exhaustive
+  matches. Any existing exhaustive `match` over one without a `_` arm now needs one.
 - **Breaking:** `Strategy1DEnum`/`Strategy2DEnum`/`Strategy3DEnum`/`StrategyNDEnum` are
   now `#[non_exhaustive]`, since every new built-in strategy adds a variant. Any
   existing exhaustive `match` over one without a `_` arm now needs one; construction
