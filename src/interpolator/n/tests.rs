@@ -83,7 +83,7 @@ fn test_dyn_interpolator() {
     );
     assert!(matches!(
         boxed.interpolate(&[]).unwrap_err(),
-        InterpolateError::PointLength(3)
+        InterpolateError::PointLength { expected: 3, .. }
     ));
     assert_eq!(
         boxed.as_any().downcast_ref::<InterpND<f64, _>>(),
@@ -405,7 +405,7 @@ fn test_extrapolate_inputs() {
             Extrapolate::Enable,
         )
         .unwrap_err(),
-        ValidateError::InvalidExtrapolate(_)
+        ValidateError::ExtrapolateUnsupported
     ));
     // Extrapolate::Error
     let interp = InterpND::new(
@@ -611,7 +611,7 @@ fn test_batch_interpolate_point_length_mismatch() {
     let points: [&[f64]; 2] = [&[0.25, 0.65, 0.9], &[0.5, 0.5]];
     assert!(matches!(
         interp.batch_interpolate(&points).unwrap_err(),
-        InterpolateError::PointLength(3)
+        InterpolateError::PointLength { expected: 3, .. }
     ));
 }
 

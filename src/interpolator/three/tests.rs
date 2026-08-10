@@ -20,7 +20,7 @@ fn test_invalid_args() {
     // generic/`dyn` callers passing a real slice) still catches it at runtime.
     assert!(matches!(
         Interpolator::interpolate(&interp, &[]).unwrap_err(),
-        InterpolateError::PointLength(_)
+        InterpolateError::PointLength { .. }
     ));
 }
 
@@ -51,7 +51,7 @@ fn test_dyn_interpolator() {
     );
     assert!(matches!(
         boxed.interpolate(&[]).unwrap_err(),
-        InterpolateError::PointLength(3)
+        InterpolateError::PointLength { expected: 3, .. }
     ));
     assert_eq!(
         boxed.as_any().downcast_ref::<Interp3D<f64, _>>(),
@@ -281,7 +281,7 @@ fn test_extrapolate_inputs() {
             Extrapolate::Enable,
         )
         .unwrap_err(),
-        ValidateError::InvalidExtrapolate(_)
+        ValidateError::ExtrapolateUnsupported
     ));
     // Extrapolate::Error
     let interp = Interp3D::new(

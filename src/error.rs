@@ -8,8 +8,8 @@ use thiserror::Error;
 #[derive(Error, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum ValidateError {
-    #[error("selected `Extrapolate` variant ({0}) is unimplemented/inapplicable for interpolator")]
-    InvalidExtrapolate(String),
+    #[error("`Extrapolate::Enable` is not supported by this strategy")]
+    ExtrapolateUnsupported,
     #[error("at least 2 grid points are required per dimension: dim {0}")]
     InsufficientGridPoints(usize),
     #[error("supplied coordinates must be monotonically increasing: dim {0}")]
@@ -33,8 +33,8 @@ impl fmt::Debug for ValidateError {
 pub enum InterpolateError {
     #[error("point(s) out of bounds with `Extrapolate::Error` set: {0}")]
     OutOfBounds(String),
-    #[error("supplied point slice should have length {0} for {0}-D interpolation")]
-    PointLength(usize),
+    #[error("point has length {found}, expected {expected} for {expected}-D interpolation")]
+    PointLength { expected: usize, found: usize },
     #[error("output slice has length {found}, expected {expected}")]
     OutputLength { expected: usize, found: usize },
     #[error("{0}")]

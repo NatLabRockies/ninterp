@@ -15,7 +15,7 @@ fn test_invalid_args() {
     // generic/`dyn` callers passing a real slice) still catches it at runtime.
     assert!(matches!(
         Interpolator::interpolate(&interp, &[]).unwrap_err(),
-        InterpolateError::PointLength(_)
+        InterpolateError::PointLength { .. }
     ));
     assert_eq!(interp.interpolate(&[0.075, 0.25]).unwrap(), 3.);
 }
@@ -201,7 +201,7 @@ fn test_extrapolate_inputs() {
             Extrapolate::Enable,
         )
         .unwrap_err(),
-        ValidateError::InvalidExtrapolate(_)
+        ValidateError::ExtrapolateUnsupported
     ));
     // Extrapolate::Error
     let interp = Interp2D::new(
@@ -451,7 +451,7 @@ fn test_dyn_interpolator() {
     );
     assert!(matches!(
         boxed.interpolate(&[]).unwrap_err(),
-        InterpolateError::PointLength(2)
+        InterpolateError::PointLength { expected: 2, .. }
     ));
     assert_eq!(
         boxed.as_any().downcast_ref::<Interp2D<f64, _>>(),

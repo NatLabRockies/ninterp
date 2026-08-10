@@ -238,7 +238,7 @@ Validation-time (`new` / `validate`):
 | `ValidateError::InsufficientGridPoints` | Fewer than 2 grid coordinates in a dimension |
 | `ValidateError::NonMonotonic` | Non-monotonic coordinates |
 | `ValidateError::IncompatibleShapes` | Grid/value shape mismatch |
-| `ValidateError::InvalidExtrapolate` | Inapplicable extrapolation setting |
+| `ValidateError::ExtrapolateUnsupported` | `Extrapolate::Enable` on a strategy that can't extrapolate |
 
 Interpolation-time (`interpolate`):
 

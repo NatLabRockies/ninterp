@@ -329,7 +329,10 @@ where
     fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
         let n = self.ndim();
         if point.len() != n {
-            return Err(InterpolateError::PointLength(n));
+            return Err(InterpolateError::PointLength {
+                expected: n,
+                found: point.len(),
+            });
         }
         let mut errors = Vec::new();
         for dim in 0..n {
@@ -405,7 +408,10 @@ where
         let n = self.ndim();
         for point in points {
             if point.len() != n {
-                return Err(InterpolateError::PointLength(n));
+                return Err(InterpolateError::PointLength {
+                    expected: n,
+                    found: point.len(),
+                });
             }
         }
         if out.len() != points.len() {

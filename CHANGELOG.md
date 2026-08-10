@@ -161,9 +161,17 @@ Everything below is merged to `main` but not yet tagged/released.
   `Num + PartialOrd`). Other strategies (`Nearest`, `Step`, etc.) keep looser numeric
   bounds after an initial, overly broad `Float` restriction across the whole strategy
   surface was narrowed back down to just the two strategies that actually need it.
+- **Breaking:** `InterpolateError::PointLength(usize)` becomes
+  `PointLength { expected: usize, found: usize }`, matching its neighbor
+  `OutputLength { expected, found }`. The actual length was already available at every
+  construction site and thrown away, so the message can now read "point has length 2,
+  expected 3 for 3-D interpolation" instead of naming only the expectation.
+- **Breaking:** `ValidateError::ExtrapolateSelection` becomes the payload-free
+  `ExtrapolateUnsupported`. Only `Extrapolate::Enable` can ever be rejected, and only by
+  a strategy whose `allow_extrapolate` returns `false`, so the stringified setting the
+  variant used to carry said nothing the variant name doesn't.
 - **Breaking:** error variants renamed for consistency, and no longer read as
-  full sentences: `ValidateError::ExtrapolateSelection` -> `InvalidExtrapolate`,
-  `ValidateError::Monotonicity` -> `NonMonotonic`, and
+  full sentences: `ValidateError::Monotonicity` -> `NonMonotonic`, and
   `InterpolateError::ExtrapolateError` -> `InterpolateError::OutOfBounds`, which drops
   the stuttering `Error` suffix no sibling variant carried and names the condition
   (a query point outside the grid) rather than the setting that turns it into an
@@ -221,11 +229,6 @@ Everything below is merged to `main` but not yet tagged/released.
 - Various documentation and README improvements; CI workflow polish.
 
 ### Fixed
-- `validate_extrapolate` (formerly `check_extrapolate`) tested the setting passed in but
-  formatted `self.extrapolate` into the resulting `ValidateError::InvalidExtrapolate`. On
-  the `set_extrapolate` path, which vets a candidate before storing it, the rejection
-  message therefore named the currently-stored setting rather than the one that was
-  refused.
 - `InterpND` panicked on `n == 0` (the 0-D-via-`InterpND` case, e.g. after
   dimensionality reduction collapses every axis). The ND `Linear` strategy's exact-match
   scan was rewritten from `iter().position()` (which returned `None` on an empty grid

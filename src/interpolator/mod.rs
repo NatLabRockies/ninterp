@@ -235,9 +235,7 @@ macro_rules! extrapolate_impl {
             ) -> Result<(), ValidateError> {
                 if matches!(extrapolate, Extrapolate::Enable) && !self.strategy.allow_extrapolate()
                 {
-                    return Err(ValidateError::InvalidExtrapolate(format!(
-                        "{extrapolate:?}"
-                    )));
+                    return Err(ValidateError::ExtrapolateUnsupported);
                 }
                 Ok(())
             }
@@ -619,9 +617,13 @@ macro_rules! interpolator_trait_impl {
             }
 
             fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
-                let point: &[D::Elem; N] = point
-                    .try_into()
-                    .map_err(|_| InterpolateError::PointLength(N))?;
+                let point: &[D::Elem; N] =
+                    point
+                        .try_into()
+                        .map_err(|_| InterpolateError::PointLength {
+                            expected: N,
+                            found: point.len(),
+                        })?;
                 self.interpolate(point)
             }
 
@@ -642,7 +644,10 @@ macro_rules! interpolator_trait_impl {
                     .map(|&point| {
                         <&[D::Elem; N]>::try_from(point)
                             .map(|arr| *arr)
-                            .map_err(|_| InterpolateError::PointLength(N))
+                            .map_err(|_| InterpolateError::PointLength {
+                                expected: N,
+                                found: point.len(),
+                            })
                     })
                     .collect::<Result<_, _>>()?;
                 self.batch_interpolate_into(&points, out)
@@ -668,7 +673,10 @@ macro_rules! interpolator_trait_impl {
                     .map(|&point| {
                         <&[D::Elem; N]>::try_from(point)
                             .map(|arr| *arr)
-                            .map_err(|_| InterpolateError::PointLength(N))
+                            .map_err(|_| InterpolateError::PointLength {
+                                expected: N,
+                                found: point.len(),
+                            })
                     })
                     .collect::<Result<_, _>>()?;
                 self.batch_interpolate(&points)
