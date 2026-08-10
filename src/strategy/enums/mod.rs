@@ -12,7 +12,7 @@
 //! use ndarray::prelude::*;
 //! use ninterp::prelude::*;
 //!
-//! let mut interp: Interp1DOwned<_, strategy::enums::Strategy1DEnum> = Interp1D::new(
+//! let mut interp: Interp1D<_, strategy::enums::Strategy1DEnum> = Interp1D::new(
 //!     // x
 //!     array![0., 1., 2., 3., 4.],
 //!     // f(x)

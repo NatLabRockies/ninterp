@@ -97,7 +97,7 @@ For dimensionalities N >= 1, this executes a validation step that prevents runti
     #[derive(serde::Serialize)]
     struct MyConfig {
         #[serde(serialize_with = "serialize_nested")]
-        surface: Interp2DOwned<f64, strategy::Linear>,
+        surface: Interp2D<f64, strategy::Linear>,
     }
     ```
 
@@ -122,10 +122,10 @@ For dimensionalities N >= 1, this executes a validation step that prevents runti
 ## Choosing an Interpolator
 The [`prelude`](https://docs.rs/ninterp/latest/ninterp/prelude/index.html) exposes these interpolators:
 - [`Interp0D`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp0D.html): constant-value interpolator
-- [`Interp1D`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp1D.html): hard-coded 1-D interpolator
-- [`Interp2D`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp2D.html): hard-coded 2-D interpolator
-- [`Interp3D`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp3D.html): hard-coded 3-D interpolator
-- [`InterpND`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.InterpND.html): general N-D interpolator
+- [`Interp1D`](https://docs.rs/ninterp/latest/ninterp/interpolator/type.Interp1D.html): hard-coded 1-D interpolator
+- [`Interp2D`](https://docs.rs/ninterp/latest/ninterp/interpolator/type.Interp2D.html): hard-coded 2-D interpolator
+- [`Interp3D`](https://docs.rs/ninterp/latest/ninterp/interpolator/type.Interp3D.html): hard-coded 3-D interpolator
+- [`InterpND`](https://docs.rs/ninterp/latest/ninterp/interpolator/type.InterpND.html): general N-D interpolator
 
 Use `Interp0D` when working with heterogeneous collections such as an `InterpolatorEnum` or `Box<dyn Interpolator>`.
 
@@ -262,14 +262,16 @@ use ndarray::prelude::*;
 ```
 
 Type aliases in the [`prelude`](https://docs.rs/ninterp/latest/ninterp/prelude/index.html)
-make ownership intent explicit, for example in 1-D:
-- [`Interp1DOwned`](https://docs.rs/ninterp/latest/ninterp/interpolator/type.Interp1DOwned.html)
-  - Data is owned by the interpolator
+follow Rust idioms (like `String` vs `&str` and `Vec` vs `&[T]`), making ownership intent explicit.
+For example, in 1-D:
+
+- [`Interp1D`](https://docs.rs/ninterp/latest/ninterp/interpolator/type.Interp1D.html) (owned data)
+  - Default type for owned arrays
   - Examples: struct fields, general use
   ```rust
   use ndarray::prelude::*;
   use ninterp::prelude::*;
-  let interp: Interp1DOwned<f64, _> = Interp1D::new(
+  let interp = Interp1D::new(
       array![0.0, 1.0, 2.0, 3.0],
       array![0.0, 1.0, 4.0, 9.0],
       strategy::Linear,
@@ -277,15 +279,16 @@ make ownership intent explicit, for example in 1-D:
   )
   .unwrap();
   ```
-- [`Interp1DViewed`](https://docs.rs/ninterp/latest/ninterp/interpolator/type.Interp1DViewed.html)
-  - Data is borrowed by the interpolator
+
+- [`Interp1DView`](https://docs.rs/ninterp/latest/ninterp/interpolator/type.Interp1DView.html) (borrowed data)
+  - For viewed arrays (data borrowed from elsewhere)
   - Examples: data lives in a larger struct, data is shared without copying
   ```rust
   use ndarray::prelude::*;
   use ninterp::prelude::*;
   let x = array![0.0, 1.0, 2.0, 3.0];
   let f_x = array![0.0, 1.0, 4.0, 9.0];
-  let interp: Interp1DViewed<&f64, _> = Interp1D::new(
+  let interp = Interp1DView::new(
       x.view(),
       f_x.view(),
       strategy::Linear,
@@ -294,16 +297,15 @@ make ownership intent explicit, for example in 1-D:
   .unwrap();
   ```
 
-Typically, the compiler can infer concrete types from arguments passed to `new`.
-Some examples use explicit annotations for clarity.
+The same pattern applies to 2-D, 3-D, and N-D interpolators (`Interp2D`/`Interp2DView`, etc.).
 
 ## Examples
 See examples in `new` method documentation:
 - [`Interp0D::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp0D.html#method.new)
-- [`Interp1D::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp1D.html#method.new)
-- [`Interp2D::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp2D.html#method.new)
-- [`Interp3D::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp3D.html#method.new)
-- [`InterpND::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.InterpND.html#method.new)
+- [`Interp1D::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp1DBase.html#method.new)
+- [`Interp2D::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp2DBase.html#method.new)
+- [`Interp3D::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.Interp3DBase.html#method.new)
+- [`InterpND::new`](https://docs.rs/ninterp/latest/ninterp/interpolator/struct.InterpNDBase.html#method.new)
 
 Also see the [`examples`](https://github.com/NatLabRockies/ninterp/tree/main/examples) directory for advanced examples:
 - Swapping strategies at runtime: [`swap_strategy.rs`](https://github.com/NatLabRockies/ninterp/blob/main/examples/swap_strategy.rs)

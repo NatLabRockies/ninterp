@@ -8,7 +8,7 @@ where
 {
     fn interpolate(
         &self,
-        data: &InterpDataND<D>,
+        data: &InterpDataNDBase<D>,
         point: &[D::Elem],
     ) -> Result<D::Elem, InterpolateError> {
         // Dimensionality
@@ -92,7 +92,7 @@ where
     D::Elem: Float + Debug,
 {
     /// Ensures grid uniformity in all dimensions
-    fn validate(&self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
+    fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
         for (dim, grid) in data.grid.iter().enumerate() {
             check_uniform_grid(grid.view(), dim)?;
         }
@@ -101,7 +101,7 @@ where
 
     fn interpolate(
         &self,
-        data: &InterpDataND<D>,
+        data: &InterpDataNDBase<D>,
         point: &[D::Elem],
     ) -> Result<D::Elem, InterpolateError> {
         let n = data.values.ndim();
@@ -147,7 +147,7 @@ where
 {
     fn interpolate(
         &self,
-        data: &InterpDataND<D>,
+        data: &InterpDataNDBase<D>,
         point: &[D::Elem],
     ) -> Result<D::Elem, InterpolateError> {
         let n = data.values.ndim();
@@ -180,7 +180,7 @@ where
     D::Elem: PartialOrd + Copy + Debug,
 {
     /// Ensures the number of provided step directions matches the dimensionality of the interpolator
-    fn validate(&self, data: &InterpDataND<D>) -> Result<(), ValidateError> {
+    fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
         let n = data.values.ndim();
         if self.0.len() != 1 && self.0.len() != n {
             return Err(ValidateError::Other(format!(
@@ -193,7 +193,7 @@ where
 
     fn interpolate(
         &self,
-        data: &InterpDataND<D>,
+        data: &InterpDataNDBase<D>,
         point: &[D::Elem],
     ) -> Result<D::Elem, InterpolateError> {
         let n = data.values.ndim();
@@ -217,7 +217,7 @@ where
 {
     fn interpolate(
         &self,
-        data: &InterpDataND<D>,
+        data: &InterpDataNDBase<D>,
         point: &[D::Elem],
     ) -> Result<D::Elem, InterpolateError> {
         let n = data.values.ndim();
@@ -240,7 +240,7 @@ where
 {
     fn interpolate(
         &self,
-        data: &InterpDataND<D>,
+        data: &InterpDataNDBase<D>,
         point: &[D::Elem],
     ) -> Result<D::Elem, InterpolateError> {
         let n = data.values.ndim();

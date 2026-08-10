@@ -28,7 +28,7 @@ pub trait SerializeNested {
 /// #[derive(serde::Serialize)]
 /// struct Config {
 ///     #[serde(serialize_with = "serialize_nested")]
-///     curve: Interp1DOwned<f64, strategy::Linear>,
+///     curve: Interp1D<f64, strategy::Linear>,
 /// }
 /// ```
 ///
@@ -39,7 +39,7 @@ pub trait SerializeNested {
 /// ```
 /// # use ndarray::array;
 /// # use ninterp::prelude::*;
-/// # use ninterp::data::InterpData1DOwned;
+/// # use ninterp::data::InterpData1D;
 /// let interp = Interp1D::new(
 ///     array![0., 1., 2.],
 ///     array![0.0, 0.4, 0.8],
@@ -52,7 +52,7 @@ pub trait SerializeNested {
 /// assert_eq!(json, r#"{"grid":[[0.0,1.0,2.0]],"values":[0.0,0.4,0.8]}"#);
 ///
 /// // ...and reads back regardless of which format it was written in
-/// let de: InterpData1DOwned<f64> = serde_json::from_str(&json).unwrap();
+/// let de: InterpData1D<f64> = serde_json::from_str(&json).unwrap();
 /// assert_eq!(de, interp.data);
 /// ```
 pub struct Nested<'a, T: ?Sized>(pub &'a T);
@@ -83,7 +83,7 @@ where
 /// #[derive(serde::Serialize)]
 /// struct Config {
 ///     #[serde(serialize_with = "serialize_nested")]
-///     curve: Interp1DOwned<f64, strategy::Linear>,
+///     curve: Interp1D<f64, strategy::Linear>,
 /// }
 /// ```
 pub fn serialize_nested<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>

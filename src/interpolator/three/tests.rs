@@ -54,7 +54,7 @@ fn test_dyn_interpolator() {
         InterpolateError::PointLength(3)
     ));
     assert_eq!(
-        boxed.as_any().downcast_ref::<Interp3DOwned<f64, _>>(),
+        boxed.as_any().downcast_ref::<Interp3D<f64, _>>(),
         Some(&interp)
     );
 }
@@ -417,11 +417,11 @@ fn test_batch_interpolate_error_aggregates_all_points() {
 fn test_partialeq() {
     #[derive(PartialEq)]
     #[allow(unused)]
-    struct MyStruct(InterpData3DOwned<f64>);
+    struct MyStruct(InterpData3D<f64>);
 
     #[derive(PartialEq)]
     #[allow(unused)]
-    struct MyStruct2(Interp3DOwned<f64, strategy::Linear>);
+    struct MyStruct2(Interp3D<f64, strategy::Linear>);
 }
 
 #[test]

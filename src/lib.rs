@@ -2,14 +2,14 @@
 #![warn(missing_docs)]
 
 /// The `prelude` module exposes a variety of types:
-/// - All interpolator structs:
+/// - All interpolator types:
 ///   - [`Interp0D`](`interpolator::Interp0D`)
 ///   - [`Interp1D`](`interpolator::Interp1D`)
 ///   - [`Interp2D`](`interpolator::Interp2D`)
 ///   - [`Interp3D`](`interpolator::Interp3D`)
 ///   - [`InterpND`](`interpolator::InterpND`)
 ///   - A `serde`-compatible interpolator enum [`InterpolatorEnum`](`interpolator::enums::InterpolatorEnum`)
-///   - `Owned` and `Viewed` type aliases for all of the above
+///   - `Base` (generic) and `View` (borrowed) type aliases for all of the above
 /// - Their common trait: [`Interpolator`](`interpolator::Interpolator`)
 /// - The [`strategy`] mod, containing pre-defined interpolation strategies:
 ///   - [`strategy::Linear`]
@@ -27,13 +27,13 @@ pub mod prelude {
     pub use crate::interpolator::{Extrapolate, Interpolator};
 
     pub use crate::interpolator::Interp0D;
-    pub use crate::interpolator::{Interp1D, Interp1DOwned, Interp1DViewed};
-    pub use crate::interpolator::{Interp2D, Interp2DOwned, Interp2DViewed};
-    pub use crate::interpolator::{Interp3D, Interp3DOwned, Interp3DViewed};
-    pub use crate::interpolator::{InterpND, InterpNDOwned, InterpNDViewed};
+    pub use crate::interpolator::{Interp1D, Interp1DBase, Interp1DView};
+    pub use crate::interpolator::{Interp2D, Interp2DBase, Interp2DView};
+    pub use crate::interpolator::{Interp3D, Interp3DBase, Interp3DView};
+    pub use crate::interpolator::{InterpND, InterpNDBase, InterpNDView};
 
     pub use crate::interpolator::enums::{
-        InterpolatorEnum, InterpolatorEnumOwned, InterpolatorEnumViewed,
+        InterpolatorEnum, InterpolatorEnumBase, InterpolatorEnumView,
     };
 
     #[cfg(feature = "serde")]

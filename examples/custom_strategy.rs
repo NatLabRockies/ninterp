@@ -1,6 +1,6 @@
 use ninterp::prelude::*;
 
-use ninterp::data::InterpData2D;
+use ninterp::data::InterpData2DBase;
 use ninterp::strategy::traits::Strategy2D;
 
 // Note: ninterp also re-exposes the internally used `ndarray` crate
@@ -22,7 +22,7 @@ where
     //
     // Note: when reading grid coordinates in `interpolate`, index `data.grid[i]` directly
     // via ArrayView indexing (e.g. `data.grid[i][idx]`), not `.as_slice()`, which panics
-    // on non-contiguous storage. `Interp*Viewed` can produce that from a strided slice.
+    // on non-contiguous storage. `Interp*View` can produce that from a strided slice.
     // `ninterp::strategy::utils` has ready-made per-axis search helpers (bracket search,
     // exact-match short-circuit, step-direction lookup, uniform-grid fast path) built from
     // the same primitives the built-in strategies use.
@@ -35,7 +35,7 @@ where
     // `Interpolator::validate` is called on the interpolator directly.
     //
     // There is a default implementation that just returns `Ok(())`, so leave this out if not needed.
-    fn validate(&self, data: &InterpData2D<D>) -> Result<(), ninterp::error::ValidateError> {
+    fn validate(&self, data: &InterpData2DBase<D>) -> Result<(), ninterp::error::ValidateError> {
         // Dummy invariant: reject non-uniformly-spaced grids. `strategy::utils` has a
         // ready-made helper for exactly this, used by the built-in `LinearUniform` strategy.
         ninterp::strategy::utils::check_uniform_grid(data.grid[0].view(), 0)?;
@@ -52,7 +52,7 @@ where
     // `validate`, it is not re-run by a standalone `Interpolator::validate` call.
     //
     // There is a default implementation that just returns `Ok(())`, so leave this out if not needed.
-    fn init(&mut self, _data: &InterpData2D<D>) -> Result<(), ninterp::error::ValidateError> {
+    fn init(&mut self, _data: &InterpData2DBase<D>) -> Result<(), ninterp::error::ValidateError> {
         println!("initialized!");
         Ok(())
     }
@@ -60,12 +60,12 @@ where
     // Returns interpolated value for the supplied point.
     fn interpolate(
         &self,
-        _data: &InterpData2D<D>,
+        _data: &InterpData2DBase<D>,
         point: &[f32; 2],
     ) -> Result<f32, ninterp::error::InterpolateError> {
         // Dummy interpolation strategy, product of all point components
         //
-        // Here we could access the `InterpData2D` (and/or data in `self`) instead,
+        // Here we could access the `InterpData2DBase` (and/or data in `self`) instead,
         // but this is just an example.
         Ok(point.iter().fold(1., |acc, x| acc * x))
     }
@@ -88,7 +88,7 @@ where
 
 fn main() {
     // type annotation for clarity
-    let interp: Interp2DOwned<f32, CustomStrategy> = Interp2D::new(
+    let interp: Interp2D<f32, CustomStrategy> = Interp2D::new(
         array![0., 2.],
         array![0., 4., 8.],
         array![[0., 0., 0.], [0., 0., 0.]],

@@ -61,7 +61,7 @@ fn test_dyn_interpolator() {
         InterpolateError::PointLength(1)
     ));
     assert_eq!(
-        boxed.as_any().downcast_ref::<Interp1DOwned<f64, _>>(),
+        boxed.as_any().downcast_ref::<Interp1D<f64, _>>(),
         Some(&interp)
     );
 }
@@ -472,11 +472,11 @@ fn test_batch_interpolate_dyn() {
 fn test_partialeq() {
     #[derive(PartialEq)]
     #[allow(unused)]
-    struct MyStruct(InterpData1DOwned<f64>);
+    struct MyStruct(InterpData1D<f64>);
 
     #[derive(PartialEq)]
     #[allow(unused)]
-    struct MyStruct2(Interp1DOwned<f64, strategy::Linear>);
+    struct MyStruct2(Interp1D<f64, strategy::Linear>);
 }
 
 #[test]
@@ -491,7 +491,7 @@ fn test_serde() {
     .unwrap();
 
     let ser = serde_json::to_string(&interp).unwrap();
-    let de: Interp1DOwned<f64, strategy::Step> = serde_json::from_str(&ser).unwrap();
+    let de: Interp1D<f64, strategy::Step> = serde_json::from_str(&ser).unwrap();
     assert_eq!(interp, de);
 
     // `ndarray` format by default
@@ -508,7 +508,7 @@ fn test_serde() {
     );
     // ...and the whole interpolator nests too
     let interp_ser_nested = serde_json::to_string(&crate::prelude::Nested(&interp)).unwrap();
-    let de_nested: Interp1DOwned<f64, strategy::Step> =
+    let de_nested: Interp1D<f64, strategy::Step> =
         serde_json::from_str(&interp_ser_nested).unwrap();
     assert_eq!(interp, de_nested);
 

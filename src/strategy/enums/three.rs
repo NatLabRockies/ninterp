@@ -3,7 +3,7 @@ use super::*;
 strategy_enum_impl!(
     Strategy3DEnum,
     Strategy3D,
-    InterpData3D,
+    InterpData3DBase,
     &[D::Elem; 3],
     [
         (Linear, strategy::Linear),

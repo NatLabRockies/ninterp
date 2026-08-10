@@ -86,7 +86,7 @@ fn test_dyn_interpolator() {
         InterpolateError::PointLength(3)
     ));
     assert_eq!(
-        boxed.as_any().downcast_ref::<InterpNDOwned<f64, _>>(),
+        boxed.as_any().downcast_ref::<InterpND<f64, _>>(),
         Some(&interp)
     );
 }
@@ -668,11 +668,11 @@ fn test_mismatched_grid() {
 fn test_partialeq() {
     #[derive(PartialEq)]
     #[allow(unused)]
-    struct MyStruct(InterpDataNDOwned<f64>);
+    struct MyStruct(InterpDataND<f64>);
 
     #[derive(PartialEq)]
     #[allow(unused)]
-    struct MyStruct2(InterpNDOwned<f64, strategy::Linear>);
+    struct MyStruct2(InterpND<f64, strategy::Linear>);
 }
 
 #[test]
@@ -687,7 +687,7 @@ fn test_serde() {
     .unwrap();
 
     let ser = serde_json::to_string(&interp).unwrap();
-    let de: InterpNDOwned<f64, strategy::Nearest> = serde_json::from_str(&ser).unwrap();
+    let de: InterpND<f64, strategy::Nearest> = serde_json::from_str(&ser).unwrap();
     assert_eq!(interp, de);
 
     // `ndarray` format by default
@@ -704,7 +704,7 @@ fn test_serde() {
     );
     // ...and the whole interpolator nests too
     let interp_ser_nested = serde_json::to_string(&crate::prelude::Nested(&interp)).unwrap();
-    let de_nested: InterpNDOwned<f64, strategy::Nearest> =
+    let de_nested: InterpND<f64, strategy::Nearest> =
         serde_json::from_str(&interp_ser_nested).unwrap();
     assert_eq!(interp, de_nested);
 
@@ -773,10 +773,10 @@ fn test_dyn_interpolator_heterogeneous_storage() {
     // Downcast back to the concrete type for the first entry.
     assert!(interps[0]
         .as_any()
-        .downcast_ref::<Interp1DOwned<f64, strategy::Linear>>()
+        .downcast_ref::<Interp1D<f64, strategy::Linear>>()
         .is_some());
     assert!(interps[0]
         .as_any()
-        .downcast_ref::<Interp2DOwned<f64, strategy::Nearest>>()
+        .downcast_ref::<Interp2D<f64, strategy::Nearest>>()
         .is_none());
 }

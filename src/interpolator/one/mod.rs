@@ -8,14 +8,14 @@ mod tests;
 
 const N: usize = 1;
 
-/// [`InterpData`] for 1-D data.
-pub type InterpData1D<D> = InterpData<D, N>;
-/// [`InterpData1D`] that views data.
-pub type InterpData1DViewed<T> = InterpData1D<ViewRepr<T>>;
-/// [`InterpData1D`] that owns data.
-pub type InterpData1DOwned<T> = InterpData1D<OwnedRepr<T>>;
+/// Generic (base) form for 1-D data; parameterized by data representation.
+pub type InterpData1DBase<D> = InterpDataBase<D, N>;
+/// Owned data variant for 1-D data (see [`InterpData1DBase`] for the generic form).
+pub type InterpData1D<T> = InterpData1DBase<OwnedRepr<T>>;
+/// Viewed data variant for 1-D data (see [`InterpData1DBase`] for the generic form).
+pub type InterpData1DView<T> = InterpData1DBase<ViewRepr<T>>;
 
-impl<D> InterpData1D<D>
+impl<D> InterpData1DBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialOrd + Debug,
@@ -48,25 +48,25 @@ where
         "
     ))
 )]
-pub struct Interp1D<D, S>
+pub struct Interp1DBase<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
     S: Clone,
 {
     /// Interpolator data.
-    pub data: InterpData1D<D>,
+    pub data: InterpData1DBase<D>,
     /// Interpolation strategy.
     pub strategy: S,
     /// Extrapolation setting.
     pub extrapolate: Extrapolate<D::Elem>,
 }
-/// [`Interp1D`] that views data.
-pub type Interp1DViewed<T, S> = Interp1D<ViewRepr<T>, S>;
-/// [`Interp1D`] that owns data.
-pub type Interp1DOwned<T, S> = Interp1D<OwnedRepr<T>, S>;
+/// Owned interpolator variant (see [`Interp1DBase`] for the generic form).
+pub type Interp1D<T, S> = Interp1DBase<OwnedRepr<T>, S>;
+/// Viewed interpolator variant (see [`Interp1DBase`] for the generic form).
+pub type Interp1DView<T, S> = Interp1DBase<ViewRepr<T>, S>;
 
-impl<D, S> Interp1D<D, S>
+impl<D, S> Interp1DBase<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
@@ -79,8 +79,7 @@ where
     /// use ndarray::prelude::*;
     /// use ninterp::prelude::*;
     /// // f(x) = 0.4 * x
-    /// // type annotation for clarity
-    /// let interp: Interp1DOwned<f64, _> = Interp1D::new(
+    /// let interp = Interp1D::new(
     ///     // x
     ///     array![0., 1., 2.], // x0, x1, x2
     ///     // f(x)
@@ -102,7 +101,7 @@ where
         D::Elem: PartialOrd,
     {
         let mut interpolator = Self {
-            data: InterpData1D::new(x, f_x)?,
+            data: InterpData1DBase::new(x, f_x)?,
             strategy,
             extrapolate,
         };
@@ -113,17 +112,17 @@ where
     }
 
     interp_inherent_methods!(
-        Interp1D,
+        Interp1DBase,
         Strategy1D,
-        Interp1DViewed<&D::Elem, S>,
-        Interp1DOwned<D::Elem, S>
+        Interp1DView<&D::Elem, S>,
+        Interp1D<D::Elem, S>
     );
 }
 
 interp_trait_impls!(
+    Interp1DBase,
     Interp1D,
-    Interp1DOwned,
-    InterpData1D,
+    InterpData1DBase,
     Strategy1D,
     strategy::enums::Strategy1DEnum,
     N
