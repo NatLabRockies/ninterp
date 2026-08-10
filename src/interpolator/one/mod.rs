@@ -297,5 +297,7 @@ where
     T: Float + Euclid + Debug + Send + Sync + 'static,
     S: Strategy1D<OwnedRepr<T>> + Clone + Send + Sync + 'static,
 {
-    dyn_interpolate_impl!();
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }

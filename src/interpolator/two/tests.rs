@@ -442,15 +442,15 @@ fn test_dyn_interpolator() {
     let points: [&[f64]; 2] = [&[0.075, 0.25], &[0.05, 0.10]];
 
     let boxed: Box<dyn DynInterpolator<f64>> = Box::new(interp.clone());
-    assert_eq!(boxed.interpolate_slice(&[0.075, 0.25]).unwrap(), 3.);
+    assert_eq!(boxed.interpolate(&[0.075, 0.25]).unwrap(), 3.);
     assert_eq!(
-        boxed.batch_interpolate_slice(&points).unwrap(),
+        boxed.batch_interpolate(&points).unwrap(),
         interp
             .batch_interpolate(&[[0.075, 0.25], [0.05, 0.10]])
             .unwrap(),
     );
     assert!(matches!(
-        boxed.interpolate_slice(&[]).unwrap_err(),
+        boxed.interpolate(&[]).unwrap_err(),
         InterpolateError::PointLength(2)
     ));
     assert_eq!(

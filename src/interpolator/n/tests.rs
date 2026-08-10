@@ -72,20 +72,17 @@ fn test_dyn_interpolator() {
     .unwrap();
     let points: [&[f64]; 2] = [&[0.05, 0.10, 0.20], &[0.15, 0.30, 0.60]];
 
-    // `InterpND` has no fixed `N`, so unlike `Interp1D`/`2D`/`3D`, `interpolate_slice`/
-    // `batch_interpolate_slice` forward straight to the trait's own already
-    // slice-typed `interpolate`/`batch_interpolate`.
     let boxed: Box<dyn DynInterpolator<f64>> = Box::new(interp.clone());
     assert_eq!(
-        boxed.interpolate_slice(&[0.05, 0.10, 0.20]).unwrap(),
+        boxed.interpolate(&[0.05, 0.10, 0.20]).unwrap(),
         interp.interpolate(&[0.05, 0.10, 0.20]).unwrap(),
     );
     assert_eq!(
-        boxed.batch_interpolate_slice(&points).unwrap(),
+        boxed.batch_interpolate(&points).unwrap(),
         interp.batch_interpolate(&points).unwrap(),
     );
     assert!(matches!(
-        boxed.interpolate_slice(&[]).unwrap_err(),
+        boxed.interpolate(&[]).unwrap_err(),
         InterpolateError::PointLength(3)
     ));
     assert_eq!(
@@ -767,7 +764,7 @@ fn test_dyn_interpolator_heterogeneous_storage() {
     let results: Vec<f64> = interps
         .iter()
         .zip(&points)
-        .map(|(interp, point)| interp.interpolate_slice(point).unwrap())
+        .map(|(interp, point)| interp.interpolate(point).unwrap())
         .collect();
     assert_approx_eq!(results[0], 0.6);
     assert_approx_eq!(results[1], 3.);
