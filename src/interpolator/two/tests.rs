@@ -278,7 +278,7 @@ fn test_set_strategy_runs_init() {
     // `Step`'s `validate` checks its direction count against dimensionality,
     // so swapping in a `Step` with the wrong count via `set_strategy` must
     // surface that error rather than silently leaving the strategy unvalidated.
-    let mut interp: Interp2DBase<_, strategy::enums::Strategy2DEnum> = Interp2D::new(
+    let mut interp: Interp2D<_, strategy::enums::Strategy2DEnum> = Interp2D::new(
         array![0., 1.],
         array![0., 1.],
         array![[0., 1.], [2., 3.]],
@@ -300,7 +300,7 @@ fn test_set_strategy_runs_validate() {
     // fine, but swapping to `LinearUniform` via `set_strategy` must catch it via
     // `Strategy2D::validate` rather than silently accepting a strategy that will
     // produce wrong results at query time.
-    let mut interp: Interp2DBase<_, strategy::enums::Strategy2DEnum> = Interp2D::new(
+    let mut interp: Interp2D<_, strategy::enums::Strategy2DEnum> = Interp2D::new(
         array![0., 1., 5.], // non-uniform
         array![0., 1., 2.],
         array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
