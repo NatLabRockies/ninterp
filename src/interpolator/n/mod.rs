@@ -36,9 +36,9 @@ where
     #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_dyn"))]
     pub values: ArrayBase<D, IxDyn>,
 }
-/// [`InterpDataND`] for N-D data that owns data.
+/// [`InterpDataNDBase`] for N-D data that owns data.
 pub type InterpDataND<T> = InterpDataNDBase<OwnedRepr<T>>;
-/// [`InterpDataND`] that views data.
+/// [`InterpDataNDBase`] that views data.
 pub type InterpDataNDView<T> = InterpDataNDBase<ViewRepr<T>>;
 
 #[cfg(feature = "serde")]
