@@ -188,7 +188,7 @@ Everything below is merged to `main` but not yet tagged/released.
   the stuttering `Error` suffix no sibling variant carried and names the condition
   (a query point outside the grid) rather than the setting that turns it into an
   error. Its message is rewritten to match, from "attempted to interpolate at point(s)
-  beyond grid data" to ``point(s) out of bounds with `Extrapolate::Error` set``, so the
+  beyond grid data" to ``point out of bounds with `Extrapolate::Error` set``, so the
   variant states the condition and the message states which setting to change.
   `ValidateError::EmptyGrid` is removed outright; a grid dimension
   with 0 or 1 points is now rejected by the same `InsufficientGridPoints`, since a

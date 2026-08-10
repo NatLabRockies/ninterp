@@ -80,7 +80,14 @@ fn fmt_out_of_bounds(failures: &[(usize, usize)]) -> String {
             point_at(*index, show)
         ),
         many => {
-            let mut s = String::from("point(s) out of bounds with `Extrapolate::Error` set:");
+            // One point can be out of bounds in several dimensions, so the number of
+            // failures doesn't decide the plural here; the number of distinct points does.
+            let subject = if many.iter().any(|(index, _)| *index != many[0].0) {
+                "points"
+            } else {
+                "point"
+            };
+            let mut s = format!("{subject} out of bounds with `Extrapolate::Error` set:");
             for (index, dim) in many {
                 s.push_str(&format!("\n    {} in dim {dim}", point_at(*index, show)));
             }
@@ -98,7 +105,9 @@ fn fmt_point_length(expected: usize, failures: &[(usize, usize)]) -> String {
             point_at(*index, show)
         ),
         many => {
-            let mut s = format!("point(s) have the wrong length for {expected}-D interpolation:");
+            // Unlike out-of-bounds, each failure here is a distinct point, so reaching
+            // this arm always means more than one.
+            let mut s = format!("points have the wrong length for {expected}-D interpolation:");
             for (index, found) in many {
                 s.push_str(&format!(
                     "\n    {} has length {found}",
