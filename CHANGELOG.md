@@ -120,11 +120,13 @@ Everything below is merged to `main` but not yet tagged/released.
     `InterpolatorEnumViewed<T>` -> `InterpolatorEnumView<T>`.
   - `InterpDataBase` is now re-exported from `ninterp::interpolator` as well as
     `ninterp::data`.
-  - **Footgun:** code that is generic over the representation still compiles after a
-    mechanical rename, but silently narrows to owned data, because `InterpData1D<D>` now
-    means `InterpDataBase<OwnedRepr<D>, 1>` rather than `InterpDataBase<D, 1>`. Custom
-    strategy impls and any other generic-over-`D` code must move to the `Base` names
-    (`InterpData{1D,2D,3D,ND}Base<D>`, `Interp{1D,2D,3D,ND}Base<D, S>`).
+  - **Migrating generic-over-`D` code:** custom strategy impls and anything else written
+    against the representation parameter must move to the `Base` names
+    (`InterpData{1D,2D,3D,ND}Base<D>`, `Interp{1D,2D,3D,ND}Base<D, S>`). Keeping the old
+    unsuffixed name is a compile error, though an indirect one: `InterpData1D<D>` now
+    means `InterpDataBase<OwnedRepr<D>, 1>`, so `D` lands in `Elem` position and the
+    failure surfaces as an unsatisfied `D::Elem: PartialEq + Debug` bound, or as a
+    signature mismatch against `&InterpData1DBase<D>` on a trait impl.
 - **Breaking:** `InterpolateError` and `ValidateError` are now `#[non_exhaustive]`,
   allowing new error variants to be added without breaking downstream exhaustive
   matches. Any existing exhaustive `match` over one without a `_` arm now needs one.
