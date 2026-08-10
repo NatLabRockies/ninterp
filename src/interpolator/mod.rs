@@ -101,8 +101,8 @@ pub trait Interpolator<T>: DynClone {
     ///
     /// `self.extrapolate` is one setting for the whole call, not resolved per
     /// point. Default allocates an output buffer and calls [`Interpolator::batch_interpolate_into`];
-    /// `Interp1D`/`2D`/`3D`/`ND` override this to funnel every point into at most one call to the
-    /// strategy instead.
+    /// `Interp1D`/`2D`/`3D`/`ND` override [`batch_interpolate_into`] to funnel every point into
+    /// at most one call to the strategy instead. Do not override this method.
     fn batch_interpolate(&self, points: &[&[T]]) -> Result<Vec<T>, InterpolateError>
     where
         T: Num,
@@ -119,7 +119,7 @@ pub trait Interpolator<T>: DynClone {
     /// valid.
     ///
     /// Default allocates an output buffer and calls [`Interpolator::batch_interpolate_fast_into`].
-    /// `Interp1D`/`2D`/`3D`/`ND` override this the same way as [`Interpolator::batch_interpolate`].
+    /// `Interp1D`/`2D`/`3D`/`ND` override [`batch_interpolate_fast_into`] instead. Do not override this method.
     fn batch_interpolate_fast(&self, points: &[&[T]]) -> Vec<T>
     where
         T: Num + Copy,
@@ -461,9 +461,10 @@ macro_rules! batch_interpolate_impl {
         /// Interpolate at each of several points, sharing one grid across all of
         /// them.
         ///
-        /// `self.extrapolate` is one setting for the whole call, not resolved per
-        /// point: every point still funnels into at most one call to the strategy,
-        /// rather than calling [`Self::interpolate`] once per point.
+        /// Allocates an output buffer and calls [`Self::batch_interpolate_into`],
+        /// which handles `self.extrapolate` resolution and funnels every point into
+        /// at most one call to the strategy rather than calling [`Self::interpolate`]
+        /// once per point.
         pub fn batch_interpolate(
             &self,
             points: &[[D::Elem; N]],
@@ -831,8 +832,8 @@ macro_rules! interp_inherent_methods {
                 .batch_interpolate_fast_into(&self.data, points, out)
         }
         /// Batched [`Self::interpolate_fast`], for use in hot loops where the caller
-        /// has already checked bounds or knows that extrapolation handling is not
-        /// needed.
+        /// has already checked bounds. Allocates an output buffer and calls
+        /// [`Self::batch_interpolate_fast_into`].
         pub fn batch_interpolate_fast(&self, points: &[[D::Elem; N]]) -> Vec<D::Elem>
         where
             D::Elem: Num + Copy,

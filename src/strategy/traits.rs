@@ -110,9 +110,9 @@ macro_rules! sized_strategy_trait {
                 " Interpolate at each of several points, sharing one grid across all of them.\n",
                 "\n",
                 " Default allocates an output buffer and calls [`", stringify!($Trait), "::batch_interpolate_into`].\n",
-                " Override only if locating a point in the grid can be amortized across the batch\n",
-                " (e.g. sorting points once for a locate sweep instead of one binary search per point);\n",
-                " no strategy shipped in this crate does that today.",
+                " Do not override this method; override [`", stringify!($Trait), "::batch_interpolate_into`] instead\n",
+                " if you need to amortize locating a point across the batch (e.g. sorting points once\n",
+                " for a locate sweep instead of one binary search per point).",
             )]
             fn batch_interpolate(
                 &self,
@@ -135,7 +135,7 @@ macro_rules! sized_strategy_trait {
                 " already valid.\n",
                 "\n",
                 " Default allocates an output buffer and calls [`", stringify!($Trait), "::batch_interpolate_fast_into`].\n",
-                " Override under the same condition as [`", stringify!($Trait), "::batch_interpolate`].",
+                " Do not override this method; override [`", stringify!($Trait), "::batch_interpolate_fast_into`] instead.",
             )]
             fn batch_interpolate_fast(
                 &self,
@@ -344,9 +344,9 @@ where
     /// Interpolate at each of several points, sharing one grid across all of them.
     ///
     /// Default allocates an output buffer and calls [`StrategyND::batch_interpolate_into`].
-    /// Override only if locating a point in the grid can be amortized across the batch
-    /// (e.g. sorting points once for a locate sweep instead of one binary search per point);
-    /// no strategy shipped in this crate does that today.
+    /// Do not override this method; override [`StrategyND::batch_interpolate_into`] instead
+    /// if you need to amortize locating a point across the batch (e.g. sorting points once
+    /// for a locate sweep instead of one binary search per point).
     fn batch_interpolate(
         &self,
         data: &InterpDataND<D>,
@@ -367,7 +367,7 @@ where
     /// already valid.
     ///
     /// Default allocates an output buffer and calls [`StrategyND::batch_interpolate_fast_into`].
-    /// Override under the same condition as [`StrategyND::batch_interpolate`].
+    /// Do not override this method; override [`StrategyND::batch_interpolate_fast_into`] instead.
     fn batch_interpolate_fast(&self, data: &InterpDataND<D>, points: &[&[D::Elem]]) -> Vec<D::Elem>
     where
         D::Elem: Num + Copy,
