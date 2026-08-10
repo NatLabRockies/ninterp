@@ -133,7 +133,7 @@ pub fn locate_lower_index_uniform<T: Float>(grid0: T, step: T, n: usize, point: 
 
 /// Validates that `grid` is uniformly spaced within `tolerance`.
 ///
-/// `tolerance` is an absolute bound, in the same units as `grid`, on how far a interval
+/// `tolerance` is an absolute bound, in the same units as `grid`, on how far an interval
 /// may drift from the grid's first interval (either wider or narrower). Pass `None` for a
 /// sensible default: a relative tolerance of 1024 × ε, scaled by the grid's own step
 /// size, loose enough to absorb the rounding error that accumulates in grids built from

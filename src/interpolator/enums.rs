@@ -172,16 +172,13 @@ macro_rules! slice_to_array_forward {
                     Interpolator::batch_interpolate(interp, points)
                 }
                 InterpolatorEnumBase::Interp1D(interp) => {
-                    let points: Vec<[D::Elem; 1]> = to_fixed_points(points)?;
-                    interp.batch_interpolate(&points)
+                    interp.batch_interpolate(&to_fixed_points(points)?)
                 }
                 InterpolatorEnumBase::Interp2D(interp) => {
-                    let points: Vec<[D::Elem; 2]> = to_fixed_points(points)?;
-                    interp.batch_interpolate(&points)
+                    interp.batch_interpolate(&to_fixed_points(points)?)
                 }
                 InterpolatorEnumBase::Interp3D(interp) => {
-                    let points: Vec<[D::Elem; 3]> = to_fixed_points(points)?;
-                    interp.batch_interpolate(&points)
+                    interp.batch_interpolate(&to_fixed_points(points)?)
                 }
                 InterpolatorEnumBase::InterpND(interp) => interp.batch_interpolate(points),
             }
@@ -248,16 +245,13 @@ macro_rules! slice_to_array_forward {
                     Ok(())
                 }
                 InterpolatorEnumBase::Interp1D(interp) => {
-                    let points: Vec<[D::Elem; 1]> = to_fixed_points(points)?;
-                    interp.batch_interpolate_into(&points, out)
+                    interp.batch_interpolate_into(&to_fixed_points(points)?, out)
                 }
                 InterpolatorEnumBase::Interp2D(interp) => {
-                    let points: Vec<[D::Elem; 2]> = to_fixed_points(points)?;
-                    interp.batch_interpolate_into(&points, out)
+                    interp.batch_interpolate_into(&to_fixed_points(points)?, out)
                 }
                 InterpolatorEnumBase::Interp3D(interp) => {
-                    let points: Vec<[D::Elem; 3]> = to_fixed_points(points)?;
-                    interp.batch_interpolate_into(&points, out)
+                    interp.batch_interpolate_into(&to_fixed_points(points)?, out)
                 }
                 InterpolatorEnumBase::InterpND(interp) => {
                     interp.batch_interpolate_into(points, out)

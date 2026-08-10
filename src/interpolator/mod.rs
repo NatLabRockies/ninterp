@@ -675,8 +675,7 @@ macro_rules! interpolator_trait_impl {
                 points: &[&[D::Elem]],
                 out: &mut [D::Elem],
             ) -> Result<(), InterpolateError> {
-                let points: Vec<[D::Elem; N]> = to_fixed_points(points)?;
-                self.batch_interpolate_into(&points, out)
+                self.batch_interpolate_into(&to_fixed_points(points)?, out)
             }
 
             fn batch_interpolate_fast_into(&self, points: &[&[D::Elem]], out: &mut [D::Elem]) {
@@ -694,8 +693,7 @@ macro_rules! interpolator_trait_impl {
                 &self,
                 points: &[&[D::Elem]],
             ) -> Result<Vec<D::Elem>, InterpolateError> {
-                let points: Vec<[D::Elem; N]> = to_fixed_points(points)?;
-                self.batch_interpolate(&points)
+                self.batch_interpolate(&to_fixed_points(points)?)
             }
 
             fn batch_interpolate_fast(&self, points: &[&[D::Elem]]) -> Vec<D::Elem> {
