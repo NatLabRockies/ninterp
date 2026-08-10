@@ -68,6 +68,169 @@ macro_rules! from_impls {
     };
 }
 
+/// Generates simple forwarding methods where Interp0D returns Ok(()), others forward to variant.
+macro_rules! enum_method_forward {
+    (validate_strategy) => {
+        #[doc = "Re-run the current variant's strategy `validate` against its data.\n\n`new_0d`/`new_1d`/etc. already call this internally, so this is only needed\nafter mutating a variant's `data`/`strategy` fields directly (via `match`)."]
+        pub fn validate_strategy(&self) -> Result<(), ValidateError> {
+            match self {
+                InterpolatorEnum::Interp0D(_) => Ok(()),
+                InterpolatorEnum::Interp1D(interp) => interp.validate_strategy(),
+                InterpolatorEnum::Interp2D(interp) => interp.validate_strategy(),
+                InterpolatorEnum::Interp3D(interp) => interp.validate_strategy(),
+                InterpolatorEnum::InterpND(interp) => interp.validate_strategy(),
+            }
+        }
+    };
+    (check_extrapolate) => {
+        #[doc = "Check applicability of the current variant's strategy, data, and extrapolate setting."]
+        pub fn check_extrapolate(
+            &self,
+            extrapolate: &Extrapolate<D::Elem>,
+        ) -> Result<(), ValidateError> {
+            match self {
+                InterpolatorEnum::Interp0D(_) => Ok(()),
+                InterpolatorEnum::Interp1D(interp) => interp.check_extrapolate(extrapolate),
+                InterpolatorEnum::Interp2D(interp) => interp.check_extrapolate(extrapolate),
+                InterpolatorEnum::Interp3D(interp) => interp.check_extrapolate(extrapolate),
+                InterpolatorEnum::InterpND(interp) => interp.check_extrapolate(extrapolate),
+            }
+        }
+    };
+    (mut init_strategy) => {
+        #[doc = "Re-run the current variant's strategy `init` against its data.\n\n`new_0d`/`new_1d`/etc. already call this internally, so this is only needed\nafter bypassing them: mutating a variant's `data`/`strategy` fields directly\n(via `match`), or deserializing an interpolator with a stateful custom strategy\n(`Deserialize` does not call `init`)."]
+        pub fn init_strategy(&mut self) -> Result<(), ValidateError> {
+            match self {
+                InterpolatorEnum::Interp0D(_) => Ok(()),
+                InterpolatorEnum::Interp1D(interp) => interp.init_strategy(),
+                InterpolatorEnum::Interp2D(interp) => interp.init_strategy(),
+                InterpolatorEnum::Interp3D(interp) => interp.init_strategy(),
+                InterpolatorEnum::InterpND(interp) => interp.init_strategy(),
+            }
+        }
+    };
+}
+
+/// Generates enum-wrapping forwarding methods (view, into_owned).
+macro_rules! enum_method_wrap {
+    (view) => {
+        #[doc = "Return an interpolator with viewed data."]
+        pub fn view(&self) -> InterpolatorEnumViewed<&D::Elem> {
+            match self {
+                InterpolatorEnum::Interp0D(interp) => InterpolatorEnum::Interp0D(interp.clone()),
+                InterpolatorEnum::Interp1D(interp) => InterpolatorEnum::Interp1D(interp.view()),
+                InterpolatorEnum::Interp2D(interp) => InterpolatorEnum::Interp2D(interp.view()),
+                InterpolatorEnum::Interp3D(interp) => InterpolatorEnum::Interp3D(interp.view()),
+                InterpolatorEnum::InterpND(interp) => InterpolatorEnum::InterpND(interp.view()),
+            }
+        }
+    };
+    (into_owned) => {
+        #[doc = "Turn the interpolator into an [`InterpolatorEnumOwned`], cloning the array elements if necessary."]
+        pub fn into_owned(self) -> InterpolatorEnumOwned<D::Elem>
+        where
+            D::Elem: Clone,
+        {
+            match self {
+                InterpolatorEnum::Interp0D(interp) => InterpolatorEnum::Interp0D(interp.clone()),
+                InterpolatorEnum::Interp1D(interp) => InterpolatorEnum::Interp1D(interp.into_owned()),
+                InterpolatorEnum::Interp2D(interp) => InterpolatorEnum::Interp2D(interp.into_owned()),
+                InterpolatorEnum::Interp3D(interp) => InterpolatorEnum::Interp3D(interp.into_owned()),
+                InterpolatorEnum::InterpND(interp) => InterpolatorEnum::InterpND(interp.into_owned()),
+            }
+        }
+    };
+}
+
+/// Generates trait forwarding methods for Interpolator impl.
+macro_rules! enum_trait_method {
+    (ndim) => {
+        #[inline]
+        fn ndim(&self) -> usize {
+            match self {
+                InterpolatorEnum::Interp0D(_) => 0,
+                InterpolatorEnum::Interp1D(_) => 1,
+                InterpolatorEnum::Interp2D(_) => 2,
+                InterpolatorEnum::Interp3D(_) => 3,
+                InterpolatorEnum::InterpND(interp) => interp.ndim(),
+            }
+        }
+    };
+    ($method:ident) => {
+        fn $method(&self) -> Result<(), ValidateError> {
+            match self {
+                Self::Interp0D(_) => Ok(()),
+                Self::Interp1D(i) => i.$method(),
+                Self::Interp2D(i) => i.$method(),
+                Self::Interp3D(i) => i.$method(),
+                Self::InterpND(i) => i.$method(),
+            }
+        }
+    };
+    (mut $method:ident, $param:ident: $param_ty:ty) => {
+        fn $method(&mut self, $param: $param_ty) -> Result<(), ValidateError> {
+            match self {
+                Self::Interp0D(_) => Ok(()),
+                Self::Interp1D(i) => i.$method($param),
+                Self::Interp2D(i) => i.$method($param),
+                Self::Interp3D(i) => i.$method($param),
+                Self::InterpND(i) => i.$method($param),
+            }
+        }
+    };
+}
+
+/// Generates full PartialEq impl for enum variants. Takes enum type as argument for reusability
+/// with InterpolatorMultiEnum and others.
+macro_rules! enum_partialeq_impl {
+    ($enum_type:ident) => {
+        impl<D> PartialEq for $enum_type<D>
+        where
+            D: Data + RawDataClone + Clone,
+            D::Elem: PartialEq + Debug,
+            ArrayBase<D, Ix1>: PartialEq,
+        {
+            fn eq(&self, other: &Self) -> bool {
+                match (self, other) {
+                    (Self::Interp0D(l), Self::Interp0D(r)) => l == r,
+                    (Self::Interp1D(l), Self::Interp1D(r)) => l == r,
+                    (Self::Interp2D(l), Self::Interp2D(r)) => l == r,
+                    (Self::Interp3D(l), Self::Interp3D(r)) => l == r,
+                    (Self::InterpND(l), Self::InterpND(r)) => l == r,
+                    _ => false,
+                }
+            }
+        }
+    };
+}
+
+/// Generates full SerializeNested impl for enum variants. Takes enum type as argument for reusability
+/// with InterpolatorMultiEnum and others.
+#[cfg(feature = "serde")]
+macro_rules! enum_serialize_nested_impl {
+    ($enum_type:ident) => {
+        impl<D> SerializeNested for $enum_type<D>
+        where
+            D: Data + RawDataClone + Clone,
+            D::Elem: PartialEq + Debug + Serialize,
+        {
+            #[doc = "`#[serde(untagged)]`, so each variant serializes as its inner value."]
+            fn serialize_nested<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: Serializer,
+            {
+                match self {
+                    Self::Interp0D(interp) => Nested(interp).serialize(serializer),
+                    Self::Interp1D(interp) => Nested(interp).serialize(serializer),
+                    Self::Interp2D(interp) => Nested(interp).serialize(serializer),
+                    Self::Interp3D(interp) => Nested(interp).serialize(serializer),
+                    Self::InterpND(interp) => Nested(interp).serialize(serializer),
+                }
+            }
+        }
+    };
+}
+
 /// Generates trait impl methods with slice-to-array conversion and doc comments built in.
 macro_rules! slice_to_array_forward {
     (interpolate) => {
@@ -289,43 +452,9 @@ pub type InterpolatorEnumViewed<T> = InterpolatorEnum<ViewRepr<T>>;
 pub type InterpolatorEnumOwned<T> = InterpolatorEnum<OwnedRepr<T>>;
 
 #[cfg(feature = "serde")]
-impl<D> SerializeNested for InterpolatorEnum<D>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialEq + Debug + Serialize,
-{
-    /// `#[serde(untagged)]`, so each variant serializes as its inner value.
-    fn serialize_nested<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        match self {
-            Self::Interp0D(interp) => Nested(interp).serialize(serializer),
-            Self::Interp1D(interp) => Nested(interp).serialize(serializer),
-            Self::Interp2D(interp) => Nested(interp).serialize(serializer),
-            Self::Interp3D(interp) => Nested(interp).serialize(serializer),
-            Self::InterpND(interp) => Nested(interp).serialize(serializer),
-        }
-    }
-}
+enum_serialize_nested_impl!(InterpolatorEnum);
 
-impl<D> PartialEq for InterpolatorEnum<D>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialEq + Debug,
-    ArrayBase<D, Ix1>: PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Interp0D(l), Self::Interp0D(r)) => l == r,
-            (Self::Interp1D(l), Self::Interp1D(r)) => l == r,
-            (Self::Interp2D(l), Self::Interp2D(r)) => l == r,
-            (Self::Interp3D(l), Self::Interp3D(r)) => l == r,
-            (Self::InterpND(l), Self::InterpND(r)) => l == r,
-            _ => false,
-        }
-    }
-}
+enum_partialeq_impl!(InterpolatorEnum);
 
 impl<D> InterpolatorEnum<D>
 where
@@ -408,75 +537,11 @@ where
         )?))
     }
 
-    /// Return an interpolator with viewed data.
-    pub fn view(&self) -> InterpolatorEnumViewed<&D::Elem> {
-        match self {
-            InterpolatorEnum::Interp0D(interp) => InterpolatorEnum::Interp0D(interp.clone()),
-            InterpolatorEnum::Interp1D(interp) => InterpolatorEnum::Interp1D(interp.view()),
-            InterpolatorEnum::Interp2D(interp) => InterpolatorEnum::Interp2D(interp.view()),
-            InterpolatorEnum::Interp3D(interp) => InterpolatorEnum::Interp3D(interp.view()),
-            InterpolatorEnum::InterpND(interp) => InterpolatorEnum::InterpND(interp.view()),
-        }
-    }
-
-    /// Turn the interpolator into an [`InterpolatorEnumOwned`], cloning the array elements if necessary.
-    pub fn into_owned(self) -> InterpolatorEnumOwned<D::Elem>
-    where
-        D::Elem: Clone,
-    {
-        match self {
-            InterpolatorEnum::Interp0D(interp) => InterpolatorEnum::Interp0D(interp.clone()),
-            InterpolatorEnum::Interp1D(interp) => InterpolatorEnum::Interp1D(interp.into_owned()),
-            InterpolatorEnum::Interp2D(interp) => InterpolatorEnum::Interp2D(interp.into_owned()),
-            InterpolatorEnum::Interp3D(interp) => InterpolatorEnum::Interp3D(interp.into_owned()),
-            InterpolatorEnum::InterpND(interp) => InterpolatorEnum::InterpND(interp.into_owned()),
-        }
-    }
-
-    /// Check applicability of the current variant's strategy, data, and extrapolate
-    /// setting.
-    pub fn check_extrapolate(
-        &self,
-        extrapolate: &Extrapolate<D::Elem>,
-    ) -> Result<(), ValidateError> {
-        match self {
-            InterpolatorEnum::Interp0D(_) => Ok(()),
-            InterpolatorEnum::Interp1D(interp) => interp.check_extrapolate(extrapolate),
-            InterpolatorEnum::Interp2D(interp) => interp.check_extrapolate(extrapolate),
-            InterpolatorEnum::Interp3D(interp) => interp.check_extrapolate(extrapolate),
-            InterpolatorEnum::InterpND(interp) => interp.check_extrapolate(extrapolate),
-        }
-    }
-
-    /// Re-run the current variant's strategy `validate` against its data.
-    ///
-    /// `new_0d`/`new_1d`/etc. already call this internally, so this is only needed
-    /// after mutating a variant's `data`/`strategy` fields directly (via `match`).
-    pub fn validate_strategy(&self) -> Result<(), ValidateError> {
-        match self {
-            InterpolatorEnum::Interp0D(_) => Ok(()),
-            InterpolatorEnum::Interp1D(interp) => interp.validate_strategy(),
-            InterpolatorEnum::Interp2D(interp) => interp.validate_strategy(),
-            InterpolatorEnum::Interp3D(interp) => interp.validate_strategy(),
-            InterpolatorEnum::InterpND(interp) => interp.validate_strategy(),
-        }
-    }
-
-    /// Re-run the current variant's strategy `init` against its data.
-    ///
-    /// `new_0d`/`new_1d`/etc. already call this internally, so this is only needed
-    /// after bypassing them: mutating a variant's `data`/`strategy` fields directly
-    /// (via `match`), or deserializing an interpolator with a stateful custom strategy
-    /// (`Deserialize` does not call `init`).
-    pub fn init_strategy(&mut self) -> Result<(), ValidateError> {
-        match self {
-            InterpolatorEnum::Interp0D(_) => Ok(()),
-            InterpolatorEnum::Interp1D(interp) => interp.init_strategy(),
-            InterpolatorEnum::Interp2D(interp) => interp.init_strategy(),
-            InterpolatorEnum::Interp3D(interp) => interp.init_strategy(),
-            InterpolatorEnum::InterpND(interp) => interp.init_strategy(),
-        }
-    }
+    enum_method_wrap!(view);
+    enum_method_wrap!(into_owned);
+    enum_method_forward!(check_extrapolate);
+    enum_method_forward!(validate_strategy);
+    enum_method_forward!(mut init_strategy);
 }
 
 impl<D> Interpolator<D::Elem> for InterpolatorEnum<D>
@@ -484,39 +549,10 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Euclid + Debug,
 {
-    #[inline]
-    fn ndim(&self) -> usize {
-        match self {
-            InterpolatorEnum::Interp0D(_) => 0,
-            InterpolatorEnum::Interp1D(_) => 1,
-            InterpolatorEnum::Interp2D(_) => 2,
-            InterpolatorEnum::Interp3D(_) => 3,
-            InterpolatorEnum::InterpND(interp) => interp.ndim(),
-        }
-    }
-
-    fn validate(&self) -> Result<(), ValidateError> {
-        match self {
-            Self::Interp0D(_) => Ok(()),
-            Self::Interp1D(i) => i.validate(),
-            Self::Interp2D(i) => i.validate(),
-            Self::Interp3D(i) => i.validate(),
-            Self::InterpND(i) => i.validate(),
-        }
-    }
-
+    enum_trait_method!(ndim);
+    enum_trait_method!(validate);
+    enum_trait_method!(mut set_extrapolate, extrapolate: Extrapolate<D::Elem>);
     slice_to_array_forward!(interpolate);
-
-    fn set_extrapolate(&mut self, extrapolate: Extrapolate<D::Elem>) -> Result<(), ValidateError> {
-        match self {
-            Self::Interp0D(_) => Ok(()),
-            Self::Interp1D(i) => i.set_extrapolate(extrapolate),
-            Self::Interp2D(i) => i.set_extrapolate(extrapolate),
-            Self::Interp3D(i) => i.set_extrapolate(extrapolate),
-            Self::InterpND(i) => i.set_extrapolate(extrapolate),
-        }
-    }
-
     slice_to_array_forward!(interpolate_fast);
     slice_to_array_forward!(batch_interpolate);
     slice_to_array_forward!(batch_interpolate_fast);
