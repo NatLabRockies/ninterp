@@ -45,10 +45,10 @@ where
     #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_fixed"))]
     pub values: ArrayBase<D, Dim<[Ix; N]>>,
 }
+/// Owned data variant (see [`InterpDataBase`] for the generic form).
+pub type InterpData<T, const N: usize> = InterpDataBase<OwnedRepr<T>, N>;
 /// Viewed data variant (see [`InterpDataBase`] for the generic form).
 pub type InterpDataView<T, const N: usize> = InterpDataBase<ViewRepr<T>, N>;
-/// Owned data variant (see [`InterpDataBase`] for the generic form).
-pub type InterpDataOwned<T, const N: usize> = InterpDataBase<OwnedRepr<T>, N>;
 
 #[cfg(feature = "serde")]
 impl<D, const N: usize> SerializeNested for InterpDataBase<D, N>
@@ -118,13 +118,13 @@ where
         }
     }
 
-    /// Turn the data into an [`InterpDataOwned`], cloning the array elements if necessary.
-    pub fn into_owned(self) -> InterpDataOwned<D::Elem, N>
+    /// Turn the data into an [`InterpData`], cloning the array elements if necessary.
+    pub fn into_owned(self) -> InterpData<D::Elem, N>
     where
         Dim<[Ix; N]>: Dimension,
         D::Elem: Clone,
     {
-        InterpDataOwned {
+        InterpData {
             grid: self.grid.map(|arr| arr.into_owned()),
             values: self.values.into_owned(),
         }
