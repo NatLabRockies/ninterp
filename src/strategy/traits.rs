@@ -135,7 +135,9 @@ macro_rules! sized_strategy_trait {
                 " already valid.\n",
                 "\n",
                 " Default allocates an output buffer and calls [`", stringify!($Trait), "::batch_interpolate_fast_into`].\n",
-                " Do not override this method; override [`", stringify!($Trait), "::batch_interpolate_fast_into`] instead.",
+                " Do not override this method. Override [`", stringify!($Trait), "::batch_interpolate_into`] instead\n",
+                " if you need to amortize per-point work; the fast variant inherits those optimizations with no\n",
+                " additional override needed.",
             )]
             fn batch_interpolate_fast(
                 &self,
@@ -367,7 +369,9 @@ where
     /// already valid.
     ///
     /// Default allocates an output buffer and calls [`StrategyND::batch_interpolate_fast_into`].
-    /// Do not override this method; override [`StrategyND::batch_interpolate_fast_into`] instead.
+    /// Do not override this method. Override [`StrategyND::batch_interpolate_into`] instead
+    /// if you need to amortize per-point work; the fast variant inherits those optimizations
+    /// with no additional override needed.
     fn batch_interpolate_fast(&self, data: &InterpDataND<D>, points: &[&[D::Elem]]) -> Vec<D::Elem>
     where
         D::Elem: Num + Copy,

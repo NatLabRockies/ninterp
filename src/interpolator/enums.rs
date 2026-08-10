@@ -263,7 +263,16 @@ macro_rules! slice_to_array_forward {
         ) -> Result<(), InterpolateError> {
             match self {
                 InterpolatorEnum::Interp0D(interp) => {
-                    Interpolator::batch_interpolate_into(interp, points, out)
+                    if out.len() != points.len() {
+                        return Err(InterpolateError::OutputLength {
+                            expected: points.len(),
+                            found: out.len(),
+                        });
+                    }
+                    for o in out.iter_mut() {
+                        *o = interp.0;
+                    }
+                    Ok(())
                 }
                 InterpolatorEnum::Interp1D(interp) => {
                     let points: Vec<[D::Elem; 1]> = points
@@ -306,7 +315,9 @@ macro_rules! slice_to_array_forward {
         fn batch_interpolate_fast_into(&self, points: &[&[D::Elem]], out: &mut [D::Elem]) {
             match self {
                 InterpolatorEnum::Interp0D(interp) => {
-                    Interpolator::batch_interpolate_fast_into(interp, points, out)
+                    for o in out.iter_mut() {
+                        *o = interp.0;
+                    }
                 }
                 InterpolatorEnum::Interp1D(interp) => {
                     let points: Vec<[D::Elem; 1]> = points

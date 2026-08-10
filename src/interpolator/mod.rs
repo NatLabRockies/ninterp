@@ -119,7 +119,8 @@ pub trait Interpolator<T>: DynClone {
     /// valid.
     ///
     /// Default allocates an output buffer and calls [`Interpolator::batch_interpolate_fast_into`].
-    /// `Interp1D`/`2D`/`3D`/`ND` override [`Self::batch_interpolate_fast_into`] instead. Do not override this method.
+    /// Do not override this method. If you need to amortize work across the batch, override
+    /// [`Self::batch_interpolate_into`] instead; the fast variant is rarely optimized.
     fn batch_interpolate_fast(&self, points: &[&[T]]) -> Vec<T>
     where
         T: Num + Copy,
@@ -350,10 +351,7 @@ macro_rules! batch_interpolate_into_impl {
                 });
             }
             match &self.extrapolate {
-                Extrapolate::Enable => {
-                    self.strategy.batch_interpolate_into(&self.data, points, out)?;
-                    Ok(())
-                }
+                Extrapolate::Enable => self.strategy.batch_interpolate_into(&self.data, points, out),
                 Extrapolate::Clamp => {
                     // Clamping an in-bounds point is already identity, so every point
                     // can be clamped unconditionally.
@@ -369,8 +367,7 @@ macro_rules! batch_interpolate_into_impl {
                             })
                         })
                         .collect();
-                    self.strategy.batch_interpolate_into(&self.data, &clamped, out)?;
-                    Ok(())
+                    self.strategy.batch_interpolate_into(&self.data, &clamped, out)
                 }
                 Extrapolate::Wrap => {
                     // Unlike `Clamp`, `wrap()` isn't identity exactly at the
@@ -391,8 +388,7 @@ macro_rules! batch_interpolate_into_impl {
                             }
                         })
                         .collect();
-                    self.strategy.batch_interpolate_into(&self.data, &wrapped, out)?;
-                    Ok(())
+                    self.strategy.batch_interpolate_into(&self.data, &wrapped, out)
                 }
                 Extrapolate::Fill(value) => {
                     // Pre-fill output with the fill value, then scatter interpolated
@@ -418,7 +414,6 @@ macro_rules! batch_interpolate_into_impl {
                 }
                 Extrapolate::Error => {
                     let mut errors = Vec::new();
-                    let mut in_bounds_indices = Vec::new();
                     let mut in_bounds_points = Vec::new();
                     for (i, point) in points.iter().enumerate() {
                         let mut point_errors = Vec::new();
@@ -434,7 +429,6 @@ macro_rules! batch_interpolate_into_impl {
                             }
                         }
                         if point_errors.is_empty() {
-                            in_bounds_indices.push(i);
                             in_bounds_points.push(*point);
                         } else {
                             errors.extend(point_errors);
@@ -443,10 +437,7 @@ macro_rules! batch_interpolate_into_impl {
                     if !errors.is_empty() {
                         return Err(InterpolateError::ExtrapolateError(errors.join("")));
                     }
-                    if !in_bounds_indices.is_empty() {
-                        self.strategy.batch_interpolate_into(&self.data, &in_bounds_points, &mut out[0..in_bounds_points.len()])?;
-                    }
-                    Ok(())
+                    self.strategy.batch_interpolate_into(&self.data, &in_bounds_points, out)
                 }
             }
         }
