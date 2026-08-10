@@ -13,7 +13,7 @@ fn main() {
     // `uom::si::Quantity` is repr(transparent), meaning it has the same memory layout as its contained type.
     // This means we can get the contained type via transmuting.
     let interp: Interp1DView<&f64, _> = unsafe {
-        Interp1D::new(
+        Interp1DView::new(
             std::mem::transmute::<ArrayView1<Ratio>, ArrayView1<f64>>(x.view()),
             std::mem::transmute::<ArrayView1<Power>, ArrayView1<f64>>(f_x.view()),
             strategy::Linear,

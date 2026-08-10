@@ -262,14 +262,16 @@ use ndarray::prelude::*;
 ```
 
 Type aliases in the [`prelude`](https://docs.rs/ninterp/latest/ninterp/prelude/index.html)
-make ownership intent explicit, for example in 1-D:
-- [`Interp1DOwned`](https://docs.rs/ninterp/latest/ninterp/interpolator/type.Interp1DOwned.html)
-  - Data is owned by the interpolator
+follow Rust idioms (like `String` vs `&str` and `Vec` vs `&[T]`), making ownership intent explicit.
+For example, in 1-D:
+
+- [`Interp1D`](https://docs.rs/ninterp/latest/ninterp/interpolator/type.Interp1D.html) (owned data)
+  - Default type for owned arrays
   - Examples: struct fields, general use
   ```rust
   use ndarray::prelude::*;
   use ninterp::prelude::*;
-  let interp: Interp1DOwned<f64, _> = Interp1D::new(
+  let interp = Interp1D::new(
       array![0.0, 1.0, 2.0, 3.0],
       array![0.0, 1.0, 4.0, 9.0],
       strategy::Linear,
@@ -277,15 +279,16 @@ make ownership intent explicit, for example in 1-D:
   )
   .unwrap();
   ```
-- [`Interp1DViewed`](https://docs.rs/ninterp/latest/ninterp/interpolator/type.Interp1DViewed.html)
-  - Data is borrowed by the interpolator
+
+- [`Interp1DView`](https://docs.rs/ninterp/latest/ninterp/interpolator/type.Interp1DView.html) (borrowed data)
+  - For viewed arrays (data borrowed from elsewhere)
   - Examples: data lives in a larger struct, data is shared without copying
   ```rust
   use ndarray::prelude::*;
   use ninterp::prelude::*;
   let x = array![0.0, 1.0, 2.0, 3.0];
   let f_x = array![0.0, 1.0, 4.0, 9.0];
-  let interp: Interp1DViewed<&f64, _> = Interp1D::new(
+  let interp = Interp1DView::new(
       x.view(),
       f_x.view(),
       strategy::Linear,
@@ -294,8 +297,7 @@ make ownership intent explicit, for example in 1-D:
   .unwrap();
   ```
 
-Typically, the compiler can infer concrete types from arguments passed to `new`.
-Some examples use explicit annotations for clarity.
+The same pattern applies to 2-D, 3-D, and N-D interpolators (`Interp2D`/`Interp2DView`, etc.).
 
 ## Examples
 See examples in `new` method documentation:
