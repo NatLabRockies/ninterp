@@ -101,7 +101,7 @@ pub trait Interpolator<T>: DynClone {
     ///
     /// `self.extrapolate` is one setting for the whole call, not resolved per
     /// point. Default allocates an output buffer and calls [`Interpolator::batch_interpolate_into`];
-    /// `Interp1D`/`2D`/`3D`/`ND` override [`batch_interpolate_into`] to funnel every point into
+    /// `Interp1D`/`2D`/`3D`/`ND` override [`Self::batch_interpolate_into`] to funnel every point into
     /// at most one call to the strategy instead. Do not override this method.
     fn batch_interpolate(&self, points: &[&[T]]) -> Result<Vec<T>, InterpolateError>
     where
@@ -119,7 +119,7 @@ pub trait Interpolator<T>: DynClone {
     /// valid.
     ///
     /// Default allocates an output buffer and calls [`Interpolator::batch_interpolate_fast_into`].
-    /// `Interp1D`/`2D`/`3D`/`ND` override [`batch_interpolate_fast_into`] instead. Do not override this method.
+    /// `Interp1D`/`2D`/`3D`/`ND` override [`Self::batch_interpolate_fast_into`] instead. Do not override this method.
     fn batch_interpolate_fast(&self, points: &[&[T]]) -> Vec<T>
     where
         T: Num + Copy,
