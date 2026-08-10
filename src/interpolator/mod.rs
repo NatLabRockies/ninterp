@@ -178,16 +178,16 @@ impl<T> Interpolator<T> for Box<dyn Interpolator<T>> {
 }
 
 /// A `Send + Sync`, downcastable counterpart to [`Interpolator<T>`], for storing
-/// heterogeneous interpolators behind `Box<dyn DynInterpolator<T>>`.
+/// heterogeneous interpolators behind `Box<dyn AnyInterpolator<T>>`.
 ///
 /// Not in the [`prelude`](`crate::prelude`); reach for it explicitly
-/// (`ninterp::interpolator::DynInterpolator`).
+/// (`ninterp::interpolator::AnyInterpolator`).
 ///
 /// Implemented for owned `Interp1D`/`2D`/`3D`/`ND` types only:
-/// [`as_any`](DynInterpolator::as_any) requires `Self: 'static`, which the borrowed
+/// [`as_any`](AnyInterpolator::as_any) requires `Self: 'static`, which the borrowed
 /// `Interp*View` types can't satisfy. A viewed interpolator can still be used
 /// through [`Interpolator<T>`].
-pub trait DynInterpolator<T>: Interpolator<T> + Send + Sync {
+pub trait AnyInterpolator<T>: Interpolator<T> + Send + Sync {
     /// Downcast to the concrete interpolator type.
     fn as_any(&self) -> &dyn Any;
 }
@@ -223,17 +223,20 @@ macro_rules! extrapolate_impl {
             D::Elem: PartialEq + Debug,
             S: $Strategy<D> + Clone,
         {
-            /// Check applicability of strategy, data, and extrapolate setting.
-            pub fn check_extrapolate(
+            /// Check that `extrapolate` is applicable to the current strategy.
+            ///
+            /// Only [`Extrapolate::Enable`] can be rejected, and only by a strategy whose
+            /// `allow_extrapolate` returns `false`. Takes the setting as an argument rather
+            /// than reading `self.extrapolate`, so `set_extrapolate` can vet a candidate
+            /// before storing it.
+            pub fn validate_extrapolate(
                 &self,
                 extrapolate: &Extrapolate<D::Elem>,
             ) -> Result<(), ValidateError> {
-                // Check applicability of strategy and extrapolate setting
                 if matches!(extrapolate, Extrapolate::Enable) && !self.strategy.allow_extrapolate()
                 {
                     return Err(ValidateError::InvalidExtrapolate(format!(
-                        "{:?}",
-                        self.extrapolate
+                        "{extrapolate:?}"
                     )));
                 }
                 Ok(())
@@ -296,7 +299,7 @@ macro_rules! interpolate_impl {
                 }
             }
             if !errors.is_empty() {
-                return Err(InterpolateError::ExtrapolateError(errors.join("")));
+                return Err(InterpolateError::OutOfBounds(errors.join("")));
             }
             self.strategy.interpolate(&self.data, point)
         }
@@ -436,7 +439,7 @@ macro_rules! batch_interpolate_into_impl {
                         }
                     }
                     if !errors.is_empty() {
-                        return Err(InterpolateError::ExtrapolateError(errors.join("")));
+                        return Err(InterpolateError::OutOfBounds(errors.join("")));
                     }
                     self.strategy.batch_interpolate_into(&self.data, &in_bounds_points, out)
                 }
@@ -531,7 +534,7 @@ macro_rules! set_strategy_box_impl {
                 strategy: Box<dyn $Strategy<D>>,
             ) -> Result<(), ValidateError> {
                 self.strategy = strategy;
-                self.check_extrapolate(&self.extrapolate)?;
+                self.validate_extrapolate(&self.extrapolate)?;
                 self.validate_strategy()?;
                 self.init_strategy()
             }
@@ -561,7 +564,7 @@ macro_rules! set_strategy_enum_impl {
                 strategy: impl Into<$StrategyEnum>,
             ) -> Result<(), ValidateError> {
                 self.strategy = strategy.into();
-                self.check_extrapolate(&self.extrapolate)?;
+                self.validate_extrapolate(&self.extrapolate)?;
                 self.validate_strategy()?;
                 self.init_strategy()
             }
@@ -609,7 +612,7 @@ macro_rules! interpolator_trait_impl {
             }
 
             fn validate(&self) -> Result<(), ValidateError> {
-                self.check_extrapolate(&self.extrapolate)?;
+                self.validate_extrapolate(&self.extrapolate)?;
                 self.data.validate()?;
                 self.validate_strategy()?;
                 Ok(())
@@ -686,7 +689,7 @@ macro_rules! interpolator_trait_impl {
                 &mut self,
                 extrapolate: Extrapolate<D::Elem>,
             ) -> Result<(), ValidateError> {
-                self.check_extrapolate(&extrapolate)?;
+                self.validate_extrapolate(&extrapolate)?;
                 self.extrapolate = extrapolate;
                 Ok(())
             }
@@ -719,14 +722,14 @@ macro_rules! serialize_nested_impl {
     };
 }
 
-/// Generates the [`DynInterpolator`] impl shared by `Interp1D`/`2D`/`3D`/`ND`'s owned
+/// Generates the [`AnyInterpolator`] impl shared by `Interp1D`/`2D`/`3D`/`ND`'s owned
 /// variants. Bounded on `Float + Euclid` (rather than the `Num + PartialOrd + Euclid +
-/// Copy` the [`Interpolator`] impls use) because that's what [`DynInterpolator`] itself
+/// Copy` the [`Interpolator`] impls use) because that's what [`AnyInterpolator`] itself
 /// requires transitively; only owned types implement it, since `as_any` requires
 /// `Self: 'static`.
-macro_rules! dyn_interpolator_impl {
+macro_rules! any_interpolator_impl {
     ($InterpTypeOwned:ident, $Strategy:ident) => {
-        impl<T, S> DynInterpolator<T> for $InterpTypeOwned<T, S>
+        impl<T, S> AnyInterpolator<T> for $InterpTypeOwned<T, S>
         where
             T: Float + Euclid + Debug + Send + Sync + 'static,
             S: $Strategy<OwnedRepr<T>> + Clone + Send + Sync + 'static,
@@ -737,7 +740,7 @@ macro_rules! dyn_interpolator_impl {
         }
     };
 }
-pub(crate) use dyn_interpolator_impl;
+pub(crate) use any_interpolator_impl;
 
 #[cfg(feature = "serde")]
 pub(crate) use serialize_nested_impl;
@@ -781,7 +784,7 @@ pub(crate) use view_into_owned_impl;
 
 /// Generates all trait impls for an interpolator: `PartialEq`, `SerializeNested`,
 /// `extrapolate_impl`, `Interpolator`, `set_strategy` for `Box<dyn Strategy>`,
-/// `set_strategy` for the strategy enum, and `DynInterpolator`.
+/// `set_strategy` for the strategy enum, and `AnyInterpolator`.
 macro_rules! interp_trait_impls {
     ($InterpType:ident, $InterpTypeOwned:ident, $InterpData:ident, $Strategy:ident, $StrategyEnum:path, $N:expr) => {
         partialeq_impl!($InterpType, $InterpData, $Strategy);
@@ -789,7 +792,7 @@ macro_rules! interp_trait_impls {
         interpolator_trait_impl!($InterpType, $Strategy, $N);
         set_strategy_box_impl!($InterpType, $Strategy);
         set_strategy_enum_impl!($InterpType, $StrategyEnum);
-        dyn_interpolator_impl!($InterpTypeOwned, $Strategy);
+        any_interpolator_impl!($InterpTypeOwned, $Strategy);
         #[cfg(feature = "serde")]
         serialize_nested_impl!($InterpType, $InterpData, $Strategy);
     };

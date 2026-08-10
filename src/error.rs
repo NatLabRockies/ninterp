@@ -31,8 +31,8 @@ impl fmt::Debug for ValidateError {
 #[derive(Error, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum InterpolateError {
-    #[error("attempted to interpolate at point(s) beyond grid data: {0}")]
-    ExtrapolateError(String),
+    #[error("point(s) out of bounds with `Extrapolate::Error` set: {0}")]
+    OutOfBounds(String),
     #[error("supplied point slice should have length {0} for {0}-D interpolation")]
     PointLength(usize),
     #[error("output slice has length {found}, expected {expected}")]

@@ -22,18 +22,18 @@ macro_rules! enum_method_forward {
             }
         }
     };
-    (check_extrapolate) => {
+    (validate_extrapolate) => {
         #[doc = "Check applicability of the current variant's strategy, data, and extrapolate setting."]
-        pub fn check_extrapolate(
+        pub fn validate_extrapolate(
             &self,
             extrapolate: &Extrapolate<D::Elem>,
         ) -> Result<(), ValidateError> {
             match self {
                 InterpolatorEnumBase::Interp0D(_) => Ok(()),
-                InterpolatorEnumBase::Interp1D(interp) => interp.check_extrapolate(extrapolate),
-                InterpolatorEnumBase::Interp2D(interp) => interp.check_extrapolate(extrapolate),
-                InterpolatorEnumBase::Interp3D(interp) => interp.check_extrapolate(extrapolate),
-                InterpolatorEnumBase::InterpND(interp) => interp.check_extrapolate(extrapolate),
+                InterpolatorEnumBase::Interp1D(interp) => interp.validate_extrapolate(extrapolate),
+                InterpolatorEnumBase::Interp2D(interp) => interp.validate_extrapolate(extrapolate),
+                InterpolatorEnumBase::Interp3D(interp) => interp.validate_extrapolate(extrapolate),
+                InterpolatorEnumBase::InterpND(interp) => interp.validate_extrapolate(extrapolate),
             }
         }
     };
@@ -622,7 +622,7 @@ where
 
     enum_method_wrap!(view);
     enum_method_wrap!(into_owned);
-    enum_method_forward!(check_extrapolate);
+    enum_method_forward!(validate_extrapolate);
     enum_method_forward!(validate_strategy);
     enum_method_forward!(mut init_strategy);
 }

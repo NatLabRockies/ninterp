@@ -261,7 +261,7 @@ where
     /// // out of bounds point with `Extrapolate::Error` fails
     /// assert!(matches!(
     ///     interp.interpolate(&[5.5, 5.5, 5.5]).unwrap_err(),
-    ///     ninterp::error::InterpolateError::ExtrapolateError(_)
+    ///     ninterp::error::InterpolateError::OutOfBounds(_)
     /// ));
     /// ```
     pub fn new(
@@ -275,7 +275,7 @@ where
             strategy,
             extrapolate,
         };
-        interpolator.check_extrapolate(&interpolator.extrapolate)?;
+        interpolator.validate_extrapolate(&interpolator.extrapolate)?;
         interpolator.validate_strategy()?;
         interpolator.init_strategy()?;
         Ok(interpolator)
@@ -320,7 +320,7 @@ where
     }
 
     fn validate(&self) -> Result<(), ValidateError> {
-        self.check_extrapolate(&self.extrapolate)?;
+        self.validate_extrapolate(&self.extrapolate)?;
         self.data.validate()?;
         self.validate_strategy()?;
         Ok(())
@@ -377,13 +377,13 @@ where
             }
         }
         if !errors.is_empty() {
-            return Err(InterpolateError::ExtrapolateError(errors.join("")));
+            return Err(InterpolateError::OutOfBounds(errors.join("")));
         }
         self.strategy.interpolate(&self.data, point)
     }
 
     fn set_extrapolate(&mut self, extrapolate: Extrapolate<D::Elem>) -> Result<(), ValidateError> {
-        self.check_extrapolate(&extrapolate)?;
+        self.validate_extrapolate(&extrapolate)?;
         self.extrapolate = extrapolate;
         Ok(())
     }
@@ -515,7 +515,7 @@ where
                     }
                 }
                 if !errors.is_empty() {
-                    return Err(InterpolateError::ExtrapolateError(errors.join("")));
+                    return Err(InterpolateError::OutOfBounds(errors.join("")));
                 }
                 self.strategy
                     .batch_interpolate_into(&self.data, &in_bounds_points, out)
@@ -562,4 +562,4 @@ where
 extrapolate_impl!(InterpNDBase, StrategyND);
 set_strategy_box_impl!(InterpNDBase, StrategyND);
 set_strategy_enum_impl!(InterpNDBase, strategy::enums::StrategyNDEnum);
-dyn_interpolator_impl!(InterpND, StrategyND);
+any_interpolator_impl!(InterpND, StrategyND);

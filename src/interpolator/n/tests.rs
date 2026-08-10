@@ -72,7 +72,7 @@ fn test_dyn_interpolator() {
     .unwrap();
     let points: [&[f64]; 2] = [&[0.05, 0.10, 0.20], &[0.15, 0.30, 0.60]];
 
-    let boxed: Box<dyn DynInterpolator<f64>> = Box::new(interp.clone());
+    let boxed: Box<dyn AnyInterpolator<f64>> = Box::new(interp.clone());
     assert_eq!(
         boxed.interpolate(&[0.05, 0.10, 0.20]).unwrap(),
         interp.interpolate(&[0.05, 0.10, 0.20]).unwrap(),
@@ -417,11 +417,11 @@ fn test_extrapolate_inputs() {
     .unwrap();
     assert!(matches!(
         interp.interpolate(&[-1., -1., -1.]).unwrap_err(),
-        InterpolateError::ExtrapolateError(_)
+        InterpolateError::OutOfBounds(_)
     ));
     assert!(matches!(
         interp.interpolate(&[2., 2., 2.]).unwrap_err(),
-        InterpolateError::ExtrapolateError(_)
+        InterpolateError::OutOfBounds(_)
     ));
 }
 
@@ -591,8 +591,8 @@ fn test_batch_interpolate_error_aggregates_all_points() {
     .unwrap();
     let points: [&[f64]; 3] = [&[0.4, 0.4, 0.4], &[-1., -1., -1.], &[2., 2., 2.]];
     let err = interp.batch_interpolate(&points).unwrap_err();
-    let InterpolateError::ExtrapolateError(message) = err else {
-        panic!("expected ExtrapolateError");
+    let InterpolateError::OutOfBounds(message) = err else {
+        panic!("expected InterpolateError::OutOfBounds");
     };
     assert!(message.contains("point[1]"));
     assert!(message.contains("point[2]"));
@@ -728,9 +728,9 @@ fn test_serde() {
 
 #[test]
 fn test_dyn_interpolator_heterogeneous_storage() {
-    // The motivating use case for `DynInterpolator`: interpolators of differing
-    // dimensionality and strategy, stored behind one `Vec<Box<dyn DynInterpolator<T>>>`.
-    let interp1d: Box<dyn DynInterpolator<f64>> = Box::new(
+    // The motivating use case for `AnyInterpolator`: interpolators of differing
+    // dimensionality and strategy, stored behind one `Vec<Box<dyn AnyInterpolator<T>>>`.
+    let interp1d: Box<dyn AnyInterpolator<f64>> = Box::new(
         Interp1D::new(
             array![0., 1., 2.],
             array![0.0, 0.4, 0.8],
@@ -739,7 +739,7 @@ fn test_dyn_interpolator_heterogeneous_storage() {
         )
         .unwrap(),
     );
-    let interp2d: Box<dyn DynInterpolator<f64>> = Box::new(
+    let interp2d: Box<dyn AnyInterpolator<f64>> = Box::new(
         Interp2D::new(
             array![0., 1.],
             array![0., 1.],
@@ -749,7 +749,7 @@ fn test_dyn_interpolator_heterogeneous_storage() {
         )
         .unwrap(),
     );
-    let interpnd: Box<dyn DynInterpolator<f64>> = Box::new(
+    let interpnd: Box<dyn AnyInterpolator<f64>> = Box::new(
         InterpND::new(
             vec![array![0., 1.]],
             array![0.0, 0.4].into_dyn(),
@@ -759,7 +759,7 @@ fn test_dyn_interpolator_heterogeneous_storage() {
         .unwrap(),
     );
 
-    let interps: Vec<Box<dyn DynInterpolator<f64>>> = vec![interp1d, interp2d, interpnd];
+    let interps: Vec<Box<dyn AnyInterpolator<f64>>> = vec![interp1d, interp2d, interpnd];
     let points: [&[f64]; 3] = [&[1.5], &[0.6, 0.6], &[0.5]];
     let results: Vec<f64> = interps
         .iter()

@@ -50,7 +50,7 @@ fn test_dyn_interpolator() {
     .unwrap();
     let points: [&[f64]; 2] = [&[1.0], &[2.5]];
 
-    let boxed: Box<dyn DynInterpolator<f64>> = Box::new(interp.clone());
+    let boxed: Box<dyn AnyInterpolator<f64>> = Box::new(interp.clone());
     assert_eq!(boxed.interpolate(&[1.0]).unwrap(), 0.4);
     assert_eq!(
         boxed.batch_interpolate(&points).unwrap(),
@@ -304,12 +304,12 @@ fn test_extrapolate_inputs() {
     // Fail to extrapolate below lowest grid value
     assert!(matches!(
         interp.interpolate(&[-1.]).unwrap_err(),
-        InterpolateError::ExtrapolateError(_)
+        InterpolateError::OutOfBounds(_)
     ));
     // Fail to extrapolate above highest grid value
     assert!(matches!(
         interp.interpolate(&[5.]).unwrap_err(),
-        InterpolateError::ExtrapolateError(_)
+        InterpolateError::OutOfBounds(_)
     ));
 }
 
@@ -443,8 +443,8 @@ fn test_batch_interpolate_error_aggregates_all_points() {
     let err = interp
         .batch_interpolate(&[[1.], [-1.], [2.], [5.]])
         .unwrap_err();
-    let InterpolateError::ExtrapolateError(message) = err else {
-        panic!("expected ExtrapolateError");
+    let InterpolateError::OutOfBounds(message) = err else {
+        panic!("expected InterpolateError::OutOfBounds");
     };
     assert!(message.contains("point[1]"));
     assert!(message.contains("point[3]"));

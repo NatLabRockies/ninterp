@@ -44,7 +44,7 @@ Everything below is merged to `main` but not yet tagged/released.
   `Interp1D`/`2D`/`3D` additionally get an inherent `interpolate_fast(&self, &[D::Elem; N])`
   taking the point as a fixed-size array, so the point length is guaranteed by the type
   system instead of checked at runtime.
-- `InterpolatorEnum` gains `check_extrapolate`/`validate_strategy`/`init_strategy`
+- `InterpolatorEnum` gains `validate_extrapolate`/`validate_strategy`/`init_strategy`
   forwarding to the current variant, matching what `Interp1D`/`2D`/`3D`/`ND` already
   expose as public inherent methods.
 - `batch_interpolate`/`batch_interpolate_fast` on `Interpolator<T>` and
@@ -77,9 +77,8 @@ Everything below is merged to `main` but not yet tagged/released.
   than the trait's either. The checked `batch_interpolate` resolves
   `self.extrapolate` once for the whole batch and funnels every point into at most
   one call to the strategy; under `Extrapolate::Error`, it now reports every
-  out-of-range point in one `ExtrapolateError`, not just the first one found.
-- `ExtrapolateError`'s message now reads "point(s)" instead of "point", since a batch
-  error can name more than one offending point.
+  out-of-range point in one `InterpolateError::OutOfBounds`, not just the first one
+  found.
 - `batch_interpolate_into`/`batch_interpolate_fast_into` on `Interpolator<T>`,
   `Strategy1D`/`2D`/`3D`/`ND`, `Interp1D`/`2D`/`3D`/`InterpND`, and `InterpolatorEnum`:
   allocation-free batched interpolation that writes results into a caller-supplied output
@@ -87,15 +86,15 @@ Everything below is merged to `main` but not yet tagged/released.
   counterparts internally, so a strategy author who overrides `batch_interpolate_into`
   for real batch amortization automatically gets that optimization in both paths (no
   drift risk). New `InterpolateError::OutputLength` variant for length mismatches.
-- `interpolator::DynInterpolator<T>: Interpolator<T> + Send + Sync` (not in the
+- `interpolator::AnyInterpolator<T>: Interpolator<T> + Send + Sync` (not in the
   `prelude`): a downcastable counterpart to `Interpolator<T>`, for storing
-  heterogeneous interpolators behind `Box<dyn DynInterpolator<T>>` and recovering the
+  heterogeneous interpolators behind `Box<dyn AnyInterpolator<T>>` and recovering the
   concrete type via `as_any`. Implemented for owned `Interp1D`/`2D`/`3D`/`ND` only,
   since `as_any` requires `Self: 'static` and the borrowed `Interp*View` types can't
   satisfy that; a viewed interpolator can still be used through `Interpolator<T>`.
   `interpolate`/`batch_interpolate` are inherited from the `Interpolator<T>`
-  supertrait rather than duplicated under `DynInterpolator`-specific names: called
-  through `Box<dyn DynInterpolator<T>>` (or generically), nothing shadows them the way
+  supertrait rather than duplicated under `AnyInterpolator`-specific names: called
+  through `Box<dyn AnyInterpolator<T>>` (or generically), nothing shadows them the way
   `Interp1D`/`2D`/`3D`'s own inherent, array-typed `interpolate`/`batch_interpolate`
   do on the concrete, unboxed type.
 
@@ -127,6 +126,9 @@ Everything below is merged to `main` but not yet tagged/released.
     means `InterpDataBase<OwnedRepr<D>, 1>`, so `D` lands in `Elem` position and the
     failure surfaces as an unsatisfied `D::Elem: PartialEq + Debug` bound, or as a
     signature mismatch against `&InterpData1DBase<D>` on a trait impl.
+- **Breaking:** `Interp1D`/`2D`/`3D`/`ND`'s inherent `check_extrapolate` is renamed to
+  `validate_extrapolate`, matching the `validate`/`validate_strategy` naming every other
+  invariant check in the crate already uses.
 - **Breaking:** `InterpolateError` and `ValidateError` are now `#[non_exhaustive]`,
   allowing new error variants to be added without breaking downstream exhaustive
   matches. Any existing exhaustive `match` over one without a `_` arm now needs one.
@@ -159,11 +161,19 @@ Everything below is merged to `main` but not yet tagged/released.
   `Num + PartialOrd`). Other strategies (`Nearest`, `Step`, etc.) keep looser numeric
   bounds after an initial, overly broad `Float` restriction across the whole strategy
   surface was narrowed back down to just the two strategies that actually need it.
-- **Breaking:** `ValidateError` variants renamed for consistency, and no longer read as
-  full sentences: `ExtrapolateSelection` -> `InvalidExtrapolate`, `Monotonicity` ->
-  `NonMonotonic`. `EmptyGrid` is removed outright; a grid dimension with 0 or 1 points
-  is now rejected by the same `InsufficientGridPoints`, since a single point can't
-  bracket a query either.
+- **Breaking:** error variants renamed for consistency, and no longer read as
+  full sentences: `ValidateError::ExtrapolateSelection` -> `InvalidExtrapolate`,
+  `ValidateError::Monotonicity` -> `NonMonotonic`, and
+  `InterpolateError::ExtrapolateError` -> `InterpolateError::OutOfBounds`, which drops
+  the stuttering `Error` suffix no sibling variant carried and names the condition
+  (a query point outside the grid) rather than the setting that turns it into an
+  error. Its message is rewritten to match, from "attempted to interpolate at point(s)
+  beyond grid data" to ``point(s) out of bounds with `Extrapolate::Error` set``, so the
+  variant states the condition and the message states which setting to change. It also
+  reads "point(s)" rather than "point", since a batch error can name more than one
+  offending point. `ValidateError::EmptyGrid` is removed outright; a grid dimension
+  with 0 or 1 points is now rejected by the same `InsufficientGridPoints`, since a
+  single point can't bracket a query either.
 - **Breaking:** the `serde_ndim` Cargo feature is removed. It switched the nested-array
   write format on for every array field crate-wide, and because Cargo features are
   additive and unify across the dependency graph, enabling it anywhere in a binary
@@ -211,6 +221,11 @@ Everything below is merged to `main` but not yet tagged/released.
 - Various documentation and README improvements; CI workflow polish.
 
 ### Fixed
+- `validate_extrapolate` (formerly `check_extrapolate`) tested the setting passed in but
+  formatted `self.extrapolate` into the resulting `ValidateError::InvalidExtrapolate`. On
+  the `set_extrapolate` path, which vets a candidate before storing it, the rejection
+  message therefore named the currently-stored setting rather than the one that was
+  refused.
 - `InterpND` panicked on `n == 0` (the 0-D-via-`InterpND` case, e.g. after
   dimensionality reduction collapses every axis). The ND `Linear` strategy's exact-match
   scan was rewritten from `iter().position()` (which returned `None` on an empty grid
