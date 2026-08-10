@@ -8,11 +8,11 @@ mod tests;
 
 const N: usize = 2;
 
-/// [`InterpData`] generic (base) form for 2-D data.
+/// Generic (base) form for 2-D data; parameterized by data representation.
 pub type InterpData2DBase<D> = InterpDataBase<D, N>;
-/// [`InterpData`] for 2-D data that owns data.
+/// Owned data variant for 2-D data (see [`InterpData2DBase`] for the generic form).
 pub type InterpData2D<T> = InterpData2DBase<OwnedRepr<T>>;
-/// [`InterpData2D`] that views data.
+/// Viewed data variant for 2-D data (see [`InterpData2DBase`] for the generic form).
 pub type InterpData2DView<T> = InterpData2DBase<ViewRepr<T>>;
 
 impl<D> InterpData2DBase<D>

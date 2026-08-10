@@ -45,9 +45,9 @@ where
     #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_fixed"))]
     pub values: ArrayBase<D, Dim<[Ix; N]>>,
 }
-/// [`InterpData`] that views data.
+/// Viewed data variant (see [`InterpDataBase`] for the generic form).
 pub type InterpDataView<T, const N: usize> = InterpDataBase<ViewRepr<T>, N>;
-/// [`InterpData`] that owns data.
+/// Owned data variant (see [`InterpDataBase`] for the generic form).
 pub type InterpDataOwned<T, const N: usize> = InterpDataBase<OwnedRepr<T>, N>;
 
 #[cfg(feature = "serde")]

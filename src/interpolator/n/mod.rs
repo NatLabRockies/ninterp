@@ -10,7 +10,8 @@ mod tests;
 
 /// Interpolator data for N-dimensional interpolators, where N can vary at runtime.
 ///
-/// See [`InterpData`] and its aliases for concrete-dimensionality interpolator data structs.
+/// See [`InterpDataBase`] and its dimension-specific aliases (e.g., [`InterpData1D`], [`InterpData2D`]) for
+/// concrete-dimensionality interpolator data structs.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 #[cfg_attr(

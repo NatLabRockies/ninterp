@@ -8,11 +8,11 @@ mod tests;
 
 const N: usize = 3;
 
-/// [`InterpData`] generic (base) form for 3-D data.
+/// Generic (base) form for 3-D data; parameterized by data representation.
 pub type InterpData3DBase<D> = InterpDataBase<D, N>;
-/// [`InterpData`] for 3-D data that owns data.
+/// Owned data variant for 3-D data (see [`InterpData3DBase`] for the generic form).
 pub type InterpData3D<T> = InterpData3DBase<OwnedRepr<T>>;
-/// [`InterpData3D`] that views data.
+/// Viewed data variant for 3-D data (see [`InterpData3DBase`] for the generic form).
 pub type InterpData3DView<T> = InterpData3DBase<ViewRepr<T>>;
 
 impl<D> InterpData3DBase<D>
