@@ -552,3 +552,13 @@ where
         self.init_strategy()
     }
 }
+
+impl<T, S> DynInterpolator<T> for InterpNDOwned<T, S>
+where
+    T: Float + Euclid + Debug + Send + Sync + 'static,
+    S: StrategyND<OwnedRepr<T>> + Clone + Send + Sync + 'static,
+{
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}

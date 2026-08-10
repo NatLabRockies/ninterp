@@ -80,6 +80,17 @@ Everything below is merged to `main` but not yet tagged/released.
   out-of-range point in one `ExtrapolateError`, not just the first one found.
 - `ExtrapolateError`'s message now reads "point(s)" instead of "point", since a batch
   error can name more than one offending point.
+- `interpolator::DynInterpolator<T>: Interpolator<T> + Send + Sync` (not in the
+  `prelude`): a downcastable counterpart to `Interpolator<T>`, for storing
+  heterogeneous interpolators behind `Box<dyn DynInterpolator<T>>` and recovering the
+  concrete type via `as_any`. Implemented for owned `Interp1D`/`2D`/`3D`/`ND` only,
+  since `as_any` requires `Self: 'static` and the borrowed `Interp*Viewed` types can't
+  satisfy that; a viewed interpolator can still be used through `Interpolator<T>`.
+  `interpolate`/`batch_interpolate` are inherited from the `Interpolator<T>`
+  supertrait rather than duplicated under `DynInterpolator`-specific names: called
+  through `Box<dyn DynInterpolator<T>>` (or generically), nothing shadows them the way
+  `Interp1D`/`2D`/`3D`'s own inherent, array-typed `interpolate`/`batch_interpolate`
+  do on the concrete, unboxed type.
 
 ### Changed
 - **Breaking:** `Strategy1DEnum`/`Strategy2DEnum`/`Strategy3DEnum`/`StrategyNDEnum` are

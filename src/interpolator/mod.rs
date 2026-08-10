@@ -1,5 +1,7 @@
 //! Module for all interpolation types.
 
+use core::any::Any;
+
 use super::*;
 
 mod n;
@@ -99,6 +101,21 @@ impl<T> Interpolator<T> for Box<dyn Interpolator<T>> {
     fn batch_interpolate_fast(&self, points: &[&[T]]) -> Vec<T> {
         (**self).batch_interpolate_fast(points)
     }
+}
+
+/// A `Send + Sync`, downcastable counterpart to [`Interpolator<T>`], for storing
+/// heterogeneous interpolators behind `Box<dyn DynInterpolator<T>>`.
+///
+/// Not in the [`prelude`](`crate::prelude`); reach for it explicitly
+/// (`ninterp::interpolator::DynInterpolator`).
+///
+/// Implemented for owned `Interp1D`/`2D`/`3D`/`ND` types only:
+/// [`as_any`](DynInterpolator::as_any) requires `Self: 'static`, which the borrowed
+/// `Interp*Viewed` types can't satisfy. A viewed interpolator can still be used
+/// through [`Interpolator<T>`].
+pub trait DynInterpolator<T>: Interpolator<T> + Send + Sync {
+    /// Downcast to the concrete interpolator type.
+    fn as_any(&self) -> &dyn Any;
 }
 
 /// Extrapolation strategy

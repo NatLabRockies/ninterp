@@ -53,6 +53,45 @@ fn test_linear() {
 }
 
 #[test]
+fn test_dyn_interpolator() {
+    let interp = InterpND::new(
+        vec![
+            array![0.05, 0.10, 0.15],
+            array![0.10, 0.20, 0.30],
+            array![0.20, 0.40, 0.60],
+        ],
+        array![
+            [[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+            [[9., 10., 11.], [12., 13., 14.], [15., 16., 17.]],
+            [[18., 19., 20.], [21., 22., 23.], [24., 25., 26.]],
+        ]
+        .into_dyn(),
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let points: [&[f64]; 2] = [&[0.05, 0.10, 0.20], &[0.15, 0.30, 0.60]];
+
+    let boxed: Box<dyn DynInterpolator<f64>> = Box::new(interp.clone());
+    assert_eq!(
+        boxed.interpolate(&[0.05, 0.10, 0.20]).unwrap(),
+        interp.interpolate(&[0.05, 0.10, 0.20]).unwrap(),
+    );
+    assert_eq!(
+        boxed.batch_interpolate(&points).unwrap(),
+        interp.batch_interpolate(&points).unwrap(),
+    );
+    assert!(matches!(
+        boxed.interpolate(&[]).unwrap_err(),
+        InterpolateError::PointLength(3)
+    ));
+    assert_eq!(
+        boxed.as_any().downcast_ref::<InterpNDOwned<f64, _>>(),
+        Some(&interp)
+    );
+}
+
+#[test]
 fn test_linear_offset() {
     let interp = InterpND::new(
         vec![array![0., 1.], array![0., 1.], array![0., 1.]],
@@ -685,4 +724,59 @@ fn test_serde() {
     let ser3 = "{\"grid\":[{\"v\":1,\"dim\":[2],\"data\":[0.1,1.1]},{\"v\":1,\"dim\":[2],\"data\":[0.2,1.2]},{\"v\":1,\"dim\":[2],\"data\":[0.3,1.3]}],\"values\":{\"v\":1,\"dim\":[2,2,2],\"data\":[0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0]}}";
     let de3: InterpDataND<_> = serde_json::from_str(ser3).unwrap();
     assert_eq!(interp.data, de3);
+}
+
+#[test]
+fn test_dyn_interpolator_heterogeneous_storage() {
+    // The motivating use case for `DynInterpolator`: interpolators of differing
+    // dimensionality and strategy, stored behind one `Vec<Box<dyn DynInterpolator<T>>>`.
+    let interp1d: Box<dyn DynInterpolator<f64>> = Box::new(
+        Interp1D::new(
+            array![0., 1., 2.],
+            array![0.0, 0.4, 0.8],
+            strategy::Linear,
+            Extrapolate::Error,
+        )
+        .unwrap(),
+    );
+    let interp2d: Box<dyn DynInterpolator<f64>> = Box::new(
+        Interp2D::new(
+            array![0., 1.],
+            array![0., 1.],
+            array![[0., 1.], [2., 3.]],
+            strategy::Nearest,
+            Extrapolate::Error,
+        )
+        .unwrap(),
+    );
+    let interpnd: Box<dyn DynInterpolator<f64>> = Box::new(
+        InterpND::new(
+            vec![array![0., 1.]],
+            array![0.0, 0.4].into_dyn(),
+            strategy::Linear,
+            Extrapolate::Error,
+        )
+        .unwrap(),
+    );
+
+    let interps: Vec<Box<dyn DynInterpolator<f64>>> = vec![interp1d, interp2d, interpnd];
+    let points: [&[f64]; 3] = [&[1.5], &[0.6, 0.6], &[0.5]];
+    let results: Vec<f64> = interps
+        .iter()
+        .zip(&points)
+        .map(|(interp, point)| interp.interpolate(point).unwrap())
+        .collect();
+    assert_approx_eq!(results[0], 0.6);
+    assert_approx_eq!(results[1], 3.);
+    assert_approx_eq!(results[2], 0.2);
+
+    // Downcast back to the concrete type for the first entry.
+    assert!(interps[0]
+        .as_any()
+        .downcast_ref::<Interp1DOwned<f64, strategy::Linear>>()
+        .is_some());
+    assert!(interps[0]
+        .as_any()
+        .downcast_ref::<Interp2DOwned<f64, strategy::Nearest>>()
+        .is_none());
 }
