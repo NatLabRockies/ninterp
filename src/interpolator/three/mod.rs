@@ -138,7 +138,7 @@ where
         Ok(interpolator)
     }
 
-    interpolator_inherent_methods!(
+    interp_inherent_methods!(
         Interp3D,
         Strategy3D,
         Interp3DViewed<&D::Elem, S>,
@@ -146,7 +146,7 @@ where
     );
 }
 
-interpolator_trait_impls!(
+interp_trait_impls!(
     Interp3D,
     Interp3DOwned,
     InterpData3D,

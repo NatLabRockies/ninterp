@@ -112,7 +112,7 @@ where
         Ok(interpolator)
     }
 
-    interpolator_inherent_methods!(
+    interp_inherent_methods!(
         Interp1D,
         Strategy1D,
         Interp1DViewed<&D::Elem, S>,
@@ -120,7 +120,7 @@ where
     );
 }
 
-interpolator_trait_impls!(
+interp_trait_impls!(
     Interp1D,
     Interp1DOwned,
     InterpData1D,

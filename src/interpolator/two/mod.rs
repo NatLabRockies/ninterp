@@ -126,7 +126,7 @@ where
         Ok(interpolator)
     }
 
-    interpolator_inherent_methods!(
+    interp_inherent_methods!(
         Interp2D,
         Strategy2D,
         Interp2DViewed<&D::Elem, S>,
@@ -134,7 +134,7 @@ where
     );
 }
 
-interpolator_trait_impls!(
+interp_trait_impls!(
     Interp2D,
     Interp2DOwned,
     InterpData2D,
