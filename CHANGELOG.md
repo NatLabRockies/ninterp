@@ -100,6 +100,12 @@ Everything below is merged to `main` but not yet tagged/released.
   do on the concrete, unboxed type.
 
 ### Changed
+- **Breaking**: Owned interpolators now the default type (following Rust idioms like `String` vs `&str`):
+  - `Interp{1D,2D,3D,ND}Owned<T, S>` -> `Interp{1D,2D,3D,ND}<T, S>`
+  - `Interp{1D,2D,3D,ND}Viewed<T, S>` -> `Interp{1D,2D,3D,ND}View<T, S>`
+  - Same pattern for data types: `InterpData{1D,2D,3D,ND}` and `InterpData{1D,2D,3D,ND}View`
+  - **Footgun**: Custom strategy implementations using `InterpData{1D,2D,3D,ND}<D>` still compile but
+    silently narrow to owned data. Use `InterpData{1D,2D,3D,ND}Base<D>` instead for generic support.
 - **Breaking:** `InterpolateError` and `ValidateError` are now `#[non_exhaustive]`,
   allowing new error variants to be added without breaking downstream exhaustive
   matches. Any existing exhaustive `match` over one without a `_` arm now needs one.
