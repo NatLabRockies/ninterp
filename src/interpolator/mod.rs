@@ -630,7 +630,7 @@ pub(crate) use partialeq_impl;
 
 /// Generates the entire [`Interpolator<T>`] trait impl shared by `Interp1D`/`2D`/`3D`/`ND`.
 /// Parameterized by interpolator type, strategy trait, and the ndim return value
-/// (a literal for sized types, `self.data.ndim()` for ND). Includes slice-to-array
+/// (a literal for fixed-dimensionality types, `self.data.ndim()` for ND). Includes slice-to-array
 /// conversion logic for `interpolate`/`interpolate_fast`/`batch_interpolate`/`batch_interpolate_fast`.
 macro_rules! interpolator_trait_impl {
     ($InterpType:ident, $Strategy:ident, $NdimExpr:expr) => {
