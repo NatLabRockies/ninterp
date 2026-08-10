@@ -182,7 +182,6 @@ pub type InterpNDViewed<T, S> = InterpND<ViewRepr<T>, S>;
 /// [`InterpND`] that owns data.
 pub type InterpNDOwned<T, S> = InterpND<OwnedRepr<T>, S>;
 
-extrapolate_impl!(InterpND, StrategyND);
 partialeq_impl!(InterpND, InterpDataND, StrategyND);
 #[cfg(feature = "serde")]
 serialize_nested_impl!(InterpND, InterpDataND, StrategyND);
@@ -514,51 +513,7 @@ where
     }
 }
 
-impl<D> InterpND<D, Box<dyn StrategyND<D>>>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialEq + Debug,
-{
-    /// Update strategy at runtime, calling [`StrategyND::init`] on the new strategy
-    /// against the current data.
-    ///
-    /// To swap in a strategy without re-running `init` (e.g. one whose state was
-    /// already established elsewhere), assign the `strategy` field directly instead.
-    pub fn set_strategy(&mut self, strategy: Box<dyn StrategyND<D>>) -> Result<(), ValidateError> {
-        self.strategy = strategy;
-        self.check_extrapolate(&self.extrapolate)?;
-        self.validate_strategy()?;
-        self.init_strategy()
-    }
-}
-
-impl<D> InterpND<D, strategy::enums::StrategyNDEnum>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
-{
-    /// Update strategy at runtime, calling [`StrategyND::init`] on the new strategy
-    /// against the current data.
-    ///
-    /// To swap in a strategy without re-running `init` (e.g. one whose state was
-    /// already established elsewhere), assign the `strategy` field directly instead.
-    pub fn set_strategy(
-        &mut self,
-        strategy: impl Into<strategy::enums::StrategyNDEnum>,
-    ) -> Result<(), ValidateError> {
-        self.strategy = strategy.into();
-        self.check_extrapolate(&self.extrapolate)?;
-        self.validate_strategy()?;
-        self.init_strategy()
-    }
-}
-
-impl<T, S> DynInterpolator<T> for InterpNDOwned<T, S>
-where
-    T: Float + Euclid + Debug + Send + Sync + 'static,
-    S: StrategyND<OwnedRepr<T>> + Clone + Send + Sync + 'static,
-{
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
+extrapolate_impl!(InterpND, StrategyND);
+set_strategy_box_impl!(InterpND, StrategyND);
+set_strategy_enum_impl!(InterpND, strategy::enums::StrategyNDEnum);
+dyn_interpolator_impl!(InterpNDOwned, StrategyND);

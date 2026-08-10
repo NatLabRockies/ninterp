@@ -70,52 +70,10 @@ pub type Interp2DViewed<T, S> = Interp2D<ViewRepr<T>, S>;
 /// [`Interp2D`] that owns data.
 pub type Interp2DOwned<T, S> = Interp2D<OwnedRepr<T>, S>;
 
-extrapolate_impl!(Interp2D, Strategy2D);
-partialeq_impl!(Interp2D, InterpData2D, Strategy2D);
-#[cfg(feature = "serde")]
-serialize_nested_impl!(Interp2D, InterpData2D, Strategy2D);
-
 impl<D, S> Interp2D<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
-    S: Strategy2D<D> + Clone,
-{
-    /// Re-run the strategy's [`Strategy2D::validate`] against the current data.
-    ///
-    /// `new`, `set_strategy`, and [`Interpolator::validate`] already call this
-    /// internally, so this is only needed after mutating the public `data`/`strategy`
-    /// fields directly.
-    pub fn validate_strategy(&self) -> Result<(), ValidateError> {
-        self.strategy.validate(&self.data)
-    }
-
-    /// Re-run the strategy's [`Strategy2D::init`] against the current data.
-    ///
-    /// `new` and `set_strategy` already call this internally, so this is only needed
-    /// after bypassing them: mutating the public `data`/`strategy` fields directly, or
-    /// deserializing an interpolator whose strategy skips its cached state from
-    /// serialization (e.g. via `#[serde(skip)]`, to avoid bloating the wire format with
-    /// a large derived array). `Deserialize` does not call `init`; if the cached state
-    /// is instead stored in ordinary serialized fields, it comes back as-is and this
-    /// isn't needed.
-    pub fn init_strategy(&mut self) -> Result<(), ValidateError> {
-        self.strategy.init(&self.data)
-    }
-
-    /// Interpolate without bounds/extrapolation checks, for use in hot loops where the
-    /// caller has already checked bounds or knows that extrapolation handling is not needed.
-    pub fn interpolate_fast(&self, point: &[D::Elem; 2]) -> D::Elem {
-        self.strategy.interpolate_fast(&self.data, point)
-    }
-
-    batch_interpolate_fast_impl!();
-}
-
-impl<D, S> Interp2D<D, S>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialOrd + Debug,
     S: Strategy2D<D> + Clone,
 {
     /// Construct and validate a 2-D interpolator.
@@ -153,7 +111,10 @@ where
         f_xy: ArrayBase<D, Ix2>,
         strategy: S,
         extrapolate: Extrapolate<D::Elem>,
-    ) -> Result<Self, ValidateError> {
+    ) -> Result<Self, ValidateError>
+    where
+        D::Elem: PartialOrd,
+    {
         let mut interpolator = Self {
             data: InterpData2D::new(x, y, f_xy)?,
             strategy,
@@ -165,163 +126,19 @@ where
         Ok(interpolator)
     }
 
-    /// Return an interpolator with viewed data.
-    pub fn view(&self) -> Interp2DViewed<&D::Elem, S>
-    where
-        S: for<'a> Strategy2D<ViewRepr<&'a D::Elem>>,
-        D::Elem: Clone,
-    {
-        Interp2DViewed {
-            data: self.data.view(),
-            strategy: self.strategy.clone(),
-            extrapolate: self.extrapolate.clone(),
-        }
-    }
-
-    /// Turn the interpolator into an [`Interp2DOwned`], cloning the array elements if necessary.
-    pub fn into_owned(self) -> Interp2DOwned<D::Elem, S>
-    where
-        S: Strategy2D<OwnedRepr<D::Elem>>,
-        D::Elem: Clone,
-    {
-        Interp2DOwned {
-            data: self.data.into_owned(),
-            strategy: self.strategy.clone(),
-            extrapolate: self.extrapolate.clone(),
-        }
-    }
+    interp_inherent_methods!(
+        Interp2D,
+        Strategy2D,
+        Interp2DViewed<&D::Elem, S>,
+        Interp2DOwned<D::Elem, S>
+    );
 }
 
-impl<D, S> Interp2D<D, S>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Euclid + Copy + Debug,
-    S: Strategy2D<D> + Clone,
-{
-    /// Interpolate at the supplied point.
-    ///
-    /// Unlike [`Interpolator::interpolate`], the point length is checked at compile
-    /// time via `N`, so this cannot fail with [`InterpolateError::PointLength`].
-    pub fn interpolate(&self, point: &[D::Elem; N]) -> Result<D::Elem, InterpolateError> {
-        let mut errors = Vec::new();
-        for dim in 0..N {
-            if !(self.data.grid[dim].first().unwrap()..=self.data.grid[dim].last().unwrap())
-                .contains(&&point[dim])
-            {
-                match &self.extrapolate {
-                    Extrapolate::Enable => {}
-                    Extrapolate::Fill(value) => return Ok(*value),
-                    Extrapolate::Clamp => {
-                        let clamped_point = std::array::from_fn(|i| {
-                            *clamp(
-                                &point[i],
-                                self.data.grid[i].first().unwrap(),
-                                self.data.grid[i].last().unwrap(),
-                            )
-                        });
-                        return self.strategy.interpolate(&self.data, &clamped_point);
-                    }
-                    Extrapolate::Wrap => {
-                        let wrapped_point = std::array::from_fn(|i| {
-                            wrap(
-                                point[i],
-                                *self.data.grid[i].first().unwrap(),
-                                *self.data.grid[i].last().unwrap(),
-                            )
-                        });
-                        return self.strategy.interpolate(&self.data, &wrapped_point);
-                    }
-                    Extrapolate::Error => {
-                        errors.push(format!(
-                            "\n    point[{dim}] = {:?} is out of bounds for grid[{dim}] = {:?}",
-                            point[dim], self.data.grid[dim],
-                        ));
-                    }
-                };
-            }
-        }
-        if !errors.is_empty() {
-            return Err(InterpolateError::ExtrapolateError(errors.join("")));
-        }
-        self.strategy.interpolate(&self.data, point)
-    }
-
-    batch_interpolate_impl!();
-}
-
-impl<D, S> Interpolator<D::Elem> for Interp2D<D, S>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Euclid + Copy + Debug,
-    S: Strategy2D<D> + Clone,
-{
-    /// Returns `2`.
-    #[inline]
-    fn ndim(&self) -> usize {
-        N
-    }
-
-    fn validate(&self) -> Result<(), ValidateError> {
-        self.check_extrapolate(&self.extrapolate)?;
-        self.data.validate()?;
-        self.validate_strategy()?;
-        Ok(())
-    }
-
-    sized_interpolate_impl!();
-
-    fn set_extrapolate(&mut self, extrapolate: Extrapolate<D::Elem>) -> Result<(), ValidateError> {
-        self.check_extrapolate(&extrapolate)?;
-        self.extrapolate = extrapolate;
-        Ok(())
-    }
-}
-
-impl<D> Interp2D<D, Box<dyn Strategy2D<D>>>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialEq + Debug,
-{
-    /// Update strategy at runtime, calling [`Strategy2D::init`] on the new strategy
-    /// against the current data.
-    ///
-    /// To swap in a strategy without re-running `init` (e.g. one whose state was
-    /// already established elsewhere), assign the `strategy` field directly instead.
-    pub fn set_strategy(&mut self, strategy: Box<dyn Strategy2D<D>>) -> Result<(), ValidateError> {
-        self.strategy = strategy;
-        self.check_extrapolate(&self.extrapolate)?;
-        self.validate_strategy()?;
-        self.init_strategy()
-    }
-}
-
-impl<D> Interp2D<D, strategy::enums::Strategy2DEnum>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
-{
-    /// Update strategy at runtime, calling [`Strategy2D::init`] on the new strategy
-    /// against the current data.
-    ///
-    /// To swap in a strategy without re-running `init` (e.g. one whose state was
-    /// already established elsewhere), assign the `strategy` field directly instead.
-    pub fn set_strategy(
-        &mut self,
-        strategy: impl Into<strategy::enums::Strategy2DEnum>,
-    ) -> Result<(), ValidateError> {
-        self.strategy = strategy.into();
-        self.check_extrapolate(&self.extrapolate)?;
-        self.validate_strategy()?;
-        self.init_strategy()
-    }
-}
-
-impl<T, S> DynInterpolator<T> for Interp2DOwned<T, S>
-where
-    T: Float + Euclid + Debug + Send + Sync + 'static,
-    S: Strategy2D<OwnedRepr<T>> + Clone + Send + Sync + 'static,
-{
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
+interp_trait_impls!(
+    Interp2D,
+    Interp2DOwned,
+    InterpData2D,
+    Strategy2D,
+    strategy::enums::Strategy2DEnum,
+    N
+);

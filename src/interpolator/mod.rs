@@ -167,6 +167,57 @@ macro_rules! extrapolate_impl {
 }
 pub(crate) use extrapolate_impl;
 
+/// Generates the inherent `validate_strategy`/`init_strategy`, shared by
+/// `Interp1D`/`2D`/`3D`/`ND`. Both only need `D::Elem: PartialEq + Debug` (the struct's
+/// own bound), not the extra bounds of `new`/`interpolate`/etc. Kept on those methods
+/// directly rather than the enclosing impl block, so all inherent methods can share one
+/// block per type instead of being split across several.
+macro_rules! strategy_accessors_impl {
+    ($Strategy:ident) => {
+        #[doc = concat!(
+            " Re-run the strategy's [`", stringify!($Strategy), "::validate`] against the current data.\n",
+            "\n",
+            " `new`, `set_strategy`, and [`Interpolator::validate`] already call this\n",
+            " internally, so this is only needed after mutating the public `data`/`strategy`\n",
+            " fields directly.",
+        )]
+        pub fn validate_strategy(&self) -> Result<(), ValidateError> {
+            self.strategy.validate(&self.data)
+        }
+
+        #[doc = concat!(
+            " Re-run the strategy's [`", stringify!($Strategy), "::init`] against the current data.\n",
+            "\n",
+            " `new` and `set_strategy` already call this internally, so this is only needed\n",
+            " after bypassing them: mutating the public `data`/`strategy` fields directly, or\n",
+            " deserializing an interpolator whose strategy skips its cached state from\n",
+            " serialization (e.g. via `#[serde(skip)]`, to avoid bloating the wire format with\n",
+            " a large derived array). `Deserialize` does not call `init`; if the cached state\n",
+            " is instead stored in ordinary serialized fields, it comes back as-is and this\n",
+            " isn't needed.",
+        )]
+        pub fn init_strategy(&mut self) -> Result<(), ValidateError> {
+            self.strategy.init(&self.data)
+        }
+    };
+}
+pub(crate) use strategy_accessors_impl;
+
+/// Generates the inherent `interpolate_fast` shared by `Interp1D`/`2D`/`3D`: forwards
+/// straight to the strategy, same as [`batch_interpolate_fast_impl`]. `InterpND` has no
+/// fixed-size point array to take by value here, so its `interpolate_fast` lives
+/// directly on its [`Interpolator`] impl instead of as a matching inherent method.
+macro_rules! interpolate_fast_impl {
+    () => {
+        /// Interpolate without bounds/extrapolation checks, for use in hot loops where the
+        /// caller has already checked bounds or knows that extrapolation handling is not needed.
+        pub fn interpolate_fast(&self, point: &[D::Elem; N]) -> D::Elem {
+            self.strategy.interpolate_fast(&self.data, point)
+        }
+    };
+}
+pub(crate) use interpolate_fast_impl;
+
 /// Is `point` out of `grid`'s bounds in any dimension?
 ///
 /// Shared by `Interp1D`/`2D`/`3D`/`ND`'s `batch_interpolate`: both `grid` and `point`
@@ -182,61 +233,6 @@ where
         .zip(point)
         .any(|(axis, coord)| !(axis.first().unwrap()..=axis.last().unwrap()).contains(&coord))
 }
-
-/// Generates the [`Interpolator::interpolate`]/[`Interpolator::interpolate_fast`]/
-/// [`Interpolator::batch_interpolate`]/[`Interpolator::batch_interpolate_fast`]
-/// bodies shared by `Interp1D`/`2D`/`3D`'s trait impls. The trait's slice-based
-/// signature can't fix the point length at compile time the way the type's own
-/// inherent `[D::Elem; N]`-based method can, so each body converts the incoming
-/// slice(s) to that fixed size first, via `?` for the two `Result`-returning
-/// methods, via `.expect(...)` for their `_fast` counterparts, then calls straight
-/// through to the inherent method, which owns all bounds/extrapolation handling from
-/// there. `InterpND` has no fixed `N`, so it can't use this and implements all four
-/// methods by hand instead.
-macro_rules! sized_interpolate_impl {
-    () => {
-        fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
-            let point: &[D::Elem; N] = point
-                .try_into()
-                .map_err(|_| InterpolateError::PointLength(N))?;
-            self.interpolate(point)
-        }
-
-        fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
-            let point: &[D::Elem; N] = point
-                .try_into()
-                .expect("interpolate_fast: point length mismatch");
-            self.interpolate_fast(point)
-        }
-
-        fn batch_interpolate(
-            &self,
-            points: &[&[D::Elem]],
-        ) -> Result<Vec<D::Elem>, InterpolateError> {
-            let points: Vec<[D::Elem; N]> = points
-                .iter()
-                .map(|&point| {
-                    <&[D::Elem; N]>::try_from(point)
-                        .map(|arr| *arr)
-                        .map_err(|_| InterpolateError::PointLength(N))
-                })
-                .collect::<Result<_, _>>()?;
-            self.batch_interpolate(&points)
-        }
-
-        fn batch_interpolate_fast(&self, points: &[&[D::Elem]]) -> Vec<D::Elem> {
-            let points: Vec<[D::Elem; N]> = points
-                .iter()
-                .map(|&point| {
-                    *<&[D::Elem; N]>::try_from(point)
-                        .expect("batch_interpolate_fast: point length mismatch")
-                })
-                .collect();
-            self.batch_interpolate_fast(&points)
-        }
-    };
-}
-pub(crate) use sized_interpolate_impl;
 
 /// Generates the inherent `batch_interpolate_fast` shared by `Interp1D`/`2D`/`3D`:
 /// forwards straight to the strategy, same as the existing hand-written
@@ -269,7 +265,10 @@ macro_rules! batch_interpolate_impl {
         pub fn batch_interpolate(
             &self,
             points: &[[D::Elem; N]],
-        ) -> Result<Vec<D::Elem>, InterpolateError> {
+        ) -> Result<Vec<D::Elem>, InterpolateError>
+        where
+            D::Elem: Num + PartialOrd + Euclid + Copy,
+        {
             match &self.extrapolate {
                 Extrapolate::Enable => self.strategy.batch_interpolate(&self.data, points),
                 Extrapolate::Clamp => {
@@ -359,6 +358,147 @@ macro_rules! batch_interpolate_impl {
 }
 pub(crate) use batch_interpolate_impl;
 
+/// Generates the inherent `interpolate` shared by `Interp1D`/`2D`/`3D`: loops over each
+/// dimension, applying the [`Extrapolate`] setting per axis, then falls through to the
+/// strategy once the point is known to be in-bounds (or already resolved via
+/// `Fill`/`Clamp`/`Wrap`). `InterpND` has no fixed `N` to loop `0..N` over at compile
+/// time, so it implements this by hand directly in its [`Interpolator`] impl instead.
+macro_rules! sized_interpolate_impl {
+    () => {
+        /// Interpolate at the supplied point.
+        ///
+        /// Unlike [`Interpolator::interpolate`], the point length is checked at compile
+        /// time via `N`, so this cannot fail with [`InterpolateError::PointLength`].
+        pub fn interpolate(&self, point: &[D::Elem; N]) -> Result<D::Elem, InterpolateError>
+        where
+            D::Elem: Num + PartialOrd + Euclid + Copy,
+        {
+            let mut errors = Vec::new();
+            for dim in 0..N {
+                if !(self.data.grid[dim].first().unwrap()..=self.data.grid[dim].last().unwrap())
+                    .contains(&&point[dim])
+                {
+                    match &self.extrapolate {
+                        Extrapolate::Enable => {}
+                        Extrapolate::Fill(value) => return Ok(*value),
+                        Extrapolate::Clamp => {
+                            let clamped_point = std::array::from_fn(|i| {
+                                *clamp(
+                                    &point[i],
+                                    self.data.grid[i].first().unwrap(),
+                                    self.data.grid[i].last().unwrap(),
+                                )
+                            });
+                            return self.strategy.interpolate(&self.data, &clamped_point);
+                        }
+                        Extrapolate::Wrap => {
+                            let wrapped_point = std::array::from_fn(|i| {
+                                wrap(
+                                    point[i],
+                                    *self.data.grid[i].first().unwrap(),
+                                    *self.data.grid[i].last().unwrap(),
+                                )
+                            });
+                            return self.strategy.interpolate(&self.data, &wrapped_point);
+                        }
+                        Extrapolate::Error => {
+                            errors.push(format!(
+                                "\n    point[{dim}] = {:?} is out of bounds for grid[{dim}] = {:?}",
+                                point[dim], self.data.grid[dim],
+                            ));
+                        }
+                    };
+                }
+            }
+            if !errors.is_empty() {
+                return Err(InterpolateError::ExtrapolateError(errors.join("")));
+            }
+            self.strategy.interpolate(&self.data, point)
+        }
+    };
+}
+pub(crate) use sized_interpolate_impl;
+
+/// Generates the `Box<dyn $Strategy<D>>`-backed inherent `set_strategy`, shared by
+/// `Interp1D`/`2D`/`3D`/`ND`.
+macro_rules! set_strategy_box_impl {
+    ($InterpType:ident, $Strategy:ident) => {
+        impl<D> $InterpType<D, Box<dyn $Strategy<D>>>
+        where
+            D: Data + RawDataClone + Clone,
+            D::Elem: PartialEq + Debug,
+        {
+            #[doc = concat!(
+                " Update strategy at runtime, calling [`", stringify!($Strategy), "::init`] on the new strategy\n",
+                " against the current data.\n",
+                "\n",
+                " To swap in a strategy without re-running `init` (e.g. one whose state was\n",
+                " already established elsewhere), assign the `strategy` field directly instead.",
+            )]
+            pub fn set_strategy(
+                &mut self,
+                strategy: Box<dyn $Strategy<D>>,
+            ) -> Result<(), ValidateError> {
+                self.strategy = strategy;
+                self.check_extrapolate(&self.extrapolate)?;
+                self.validate_strategy()?;
+                self.init_strategy()
+            }
+        }
+    };
+}
+pub(crate) use set_strategy_box_impl;
+
+/// Generates the `$StrategyEnum`-backed inherent `set_strategy`, shared by
+/// `Interp1D`/`2D`/`3D`/`ND`.
+macro_rules! set_strategy_enum_impl {
+    ($InterpType:ident, $StrategyEnum:path) => {
+        impl<D> $InterpType<D, $StrategyEnum>
+        where
+            D: Data + RawDataClone + Clone,
+            D::Elem: Float + Debug,
+        {
+            #[doc = concat!(
+                " Update strategy at runtime, calling [`", stringify!($StrategyEnum), "::init`] on the new strategy\n",
+                " against the current data.\n",
+                "\n",
+                " To swap in a strategy without re-running `init` (e.g. one whose state was\n",
+                " already established elsewhere), assign the `strategy` field directly instead.",
+            )]
+            pub fn set_strategy(
+                &mut self,
+                strategy: impl Into<$StrategyEnum>,
+            ) -> Result<(), ValidateError> {
+                self.strategy = strategy.into();
+                self.check_extrapolate(&self.extrapolate)?;
+                self.validate_strategy()?;
+                self.init_strategy()
+            }
+        }
+    };
+}
+pub(crate) use set_strategy_enum_impl;
+
+/// Generates the [`DynInterpolator`] impl shared by `Interp1D`/`2D`/`3D`/`ND`'s owned
+/// variants. Bounded on `Float + Euclid` (rather than the `Num + PartialOrd + Euclid +
+/// Copy` the [`Interpolator`] impls use) because that's what [`DynInterpolator`] itself
+/// requires transitively; only owned types implement it, since `as_any` requires
+/// `Self: 'static`.
+macro_rules! dyn_interpolator_impl {
+    ($InterpTypeOwned:ident, $Strategy:ident) => {
+        impl<T, S> DynInterpolator<T> for $InterpTypeOwned<T, S>
+        where
+            T: Float + Euclid + Debug + Send + Sync + 'static,
+            S: $Strategy<OwnedRepr<T>> + Clone + Send + Sync + 'static,
+        {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+        }
+    };
+}
+pub(crate) use dyn_interpolator_impl;
+
 macro_rules! partialeq_impl {
     ($InterpType:ident, $Data:ident, $Strategy:ident) => {
         impl<D, S> PartialEq for $InterpType<D, S>
@@ -401,5 +541,147 @@ macro_rules! serialize_nested_impl {
         }
     };
 }
+/// Generates the entire [`Interpolator<T>`] trait impl shared by `Interp1D`/`2D`/`3D`/`ND`.
+/// Parameterized by interpolator type, strategy trait, and the ndim return value
+/// (a literal for sized types, `self.data.ndim()` for ND). Includes slice-to-array
+/// conversion logic for `interpolate`/`interpolate_fast`/`batch_interpolate`/`batch_interpolate_fast`.
+macro_rules! interpolator_trait_impl {
+    ($InterpType:ident, $Strategy:ident, $NdimExpr:expr) => {
+        impl<D, S> Interpolator<D::Elem> for $InterpType<D, S>
+        where
+            D: Data + RawDataClone + Clone,
+            D::Elem: Num + PartialOrd + Euclid + Copy + Debug,
+            S: $Strategy<D> + Clone,
+        {
+            #[inline]
+            fn ndim(&self) -> usize {
+                $NdimExpr
+            }
+
+            fn validate(&self) -> Result<(), ValidateError> {
+                self.check_extrapolate(&self.extrapolate)?;
+                self.data.validate()?;
+                self.validate_strategy()?;
+                Ok(())
+            }
+
+            fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
+                let point: &[D::Elem; N] = point
+                    .try_into()
+                    .map_err(|_| InterpolateError::PointLength(N))?;
+                self.interpolate(point)
+            }
+
+            fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
+                let point: &[D::Elem; N] = point
+                    .try_into()
+                    .expect("interpolate_fast: point length mismatch");
+                self.interpolate_fast(point)
+            }
+
+            fn batch_interpolate(
+                &self,
+                points: &[&[D::Elem]],
+            ) -> Result<Vec<D::Elem>, InterpolateError> {
+                let points: Vec<[D::Elem; N]> = points
+                    .iter()
+                    .map(|&point| {
+                        <&[D::Elem; N]>::try_from(point)
+                            .map(|arr| *arr)
+                            .map_err(|_| InterpolateError::PointLength(N))
+                    })
+                    .collect::<Result<_, _>>()?;
+                self.batch_interpolate(&points)
+            }
+
+            fn batch_interpolate_fast(&self, points: &[&[D::Elem]]) -> Vec<D::Elem> {
+                let points: Vec<[D::Elem; N]> = points
+                    .iter()
+                    .map(|&point| {
+                        *<&[D::Elem; N]>::try_from(point)
+                            .expect("batch_interpolate_fast: point length mismatch")
+                    })
+                    .collect();
+                self.batch_interpolate_fast(&points)
+            }
+
+            fn set_extrapolate(
+                &mut self,
+                extrapolate: Extrapolate<D::Elem>,
+            ) -> Result<(), ValidateError> {
+                self.check_extrapolate(&extrapolate)?;
+                self.extrapolate = extrapolate;
+                Ok(())
+            }
+        }
+    };
+}
+pub(crate) use interpolator_trait_impl;
+
+/// Generates `view()` and `into_owned()` inherent methods shared by `Interp1D`/`2D`/`3D`.
+/// These methods have identical bodies except for return types, which are passed as parameters.
+macro_rules! view_into_owned_impl {
+    ($InterpType:ident, $Strategy:ident, $Viewed:ty, $Owned:ty) => {
+        /// Return an interpolator with viewed data.
+        pub fn view(&self) -> $Viewed
+        where
+            S: for<'a> $Strategy<ViewRepr<&'a D::Elem>>,
+            D::Elem: Clone,
+        {
+            $InterpType {
+                data: self.data.view(),
+                strategy: self.strategy.clone(),
+                extrapolate: self.extrapolate.clone(),
+            }
+        }
+
+        /// Turn the interpolator into an owned variant, cloning the array elements if necessary.
+        pub fn into_owned(self) -> $Owned
+        where
+            S: $Strategy<OwnedRepr<D::Elem>>,
+            D::Elem: Clone,
+        {
+            $InterpType {
+                data: self.data.into_owned(),
+                strategy: self.strategy.clone(),
+                extrapolate: self.extrapolate.clone(),
+            }
+        }
+    };
+}
+pub(crate) use view_into_owned_impl;
+
 #[cfg(feature = "serde")]
 pub(crate) use serialize_nested_impl;
+
+/// Generates all trait impls for an interpolator: `PartialEq`, `SerializeNested`,
+/// `extrapolate_impl`, `Interpolator`, `set_strategy` for `Box<dyn Strategy>`,
+/// `set_strategy` for the strategy enum, and `DynInterpolator`.
+macro_rules! interp_trait_impls {
+    ($InterpType:ident, $InterpTypeOwned:ident, $InterpData:ident, $Strategy:ident, $StrategyEnum:path, $N:expr) => {
+        partialeq_impl!($InterpType, $InterpData, $Strategy);
+        extrapolate_impl!($InterpType, $Strategy);
+        interpolator_trait_impl!($InterpType, $Strategy, $N);
+        set_strategy_box_impl!($InterpType, $Strategy);
+        set_strategy_enum_impl!($InterpType, $StrategyEnum);
+        dyn_interpolator_impl!($InterpTypeOwned, $Strategy);
+        #[cfg(feature = "serde")]
+        serialize_nested_impl!($InterpType, $InterpData, $Strategy);
+    };
+}
+pub(crate) use interp_trait_impls;
+
+/// Generates inherent methods for an interpolator: strategy accessors, fast paths,
+/// data access (view/into_owned), and batch interpolation. Called inside the
+/// `impl<D, S>` block, leaving `pub fn new()` to be hand-written.
+macro_rules! interp_inherent_methods {
+    ($InterpType:ident, $Strategy:ident, $Viewed:ty, $Owned:ty) => {
+        sized_interpolate_impl!();
+        interpolate_fast_impl!();
+        batch_interpolate_impl!();
+        batch_interpolate_fast_impl!();
+        strategy_accessors_impl!($Strategy);
+        view_into_owned_impl!($InterpType, $Strategy, $Viewed, $Owned);
+    };
+}
+pub(crate) use interp_inherent_methods;
