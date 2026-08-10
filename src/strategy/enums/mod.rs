@@ -49,6 +49,79 @@
 
 use super::*;
 
+/// Generates enum + From impls + trait dispatch, shared by Strategy*DEnum types.
+/// Takes enum name, trait name, data type name, point parameter type, and the list
+/// of strategies (variant name + type pairs). This allows future customization if
+/// strategies are added/removed per dimensionality.
+macro_rules! strategy_enum_impl {
+    (
+        $EnumName:ident,
+        $TraitName:ident,
+        $DataType:ident,
+        $PointType:ty,
+        [$(($Variant:ident, $StrategyType:ty)),* $(,)?]
+    ) => {
+        /// See [enums module](super) documentation.
+        #[allow(missing_docs)]
+        #[derive(Debug, Clone, PartialEq)]
+        #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+        #[cfg_attr(feature = "serde", serde(untagged))]
+        #[non_exhaustive]
+        pub enum $EnumName {
+            $($Variant($StrategyType),)*
+        }
+
+        $(
+            impl From<$StrategyType> for $EnumName {
+                #[inline]
+                fn from(strategy: $StrategyType) -> Self {
+                    Self::$Variant(strategy)
+                }
+            }
+        )*
+
+        impl<D> $TraitName<D> for $EnumName
+        where
+            D: Data + RawDataClone + Clone,
+            D::Elem: Float + Debug,
+        {
+            #[inline]
+            fn validate(&self, data: &$DataType<D>) -> Result<(), ValidateError> {
+                match self {
+                    $(Self::$Variant(strategy) => $TraitName::<D>::validate(strategy, data),)*
+                }
+            }
+
+            #[inline]
+            fn init(&mut self, data: &$DataType<D>) -> Result<(), ValidateError> {
+                match self {
+                    $(Self::$Variant(strategy) => $TraitName::<D>::init(strategy, data),)*
+                }
+            }
+
+            #[inline]
+            fn interpolate(
+                &self,
+                data: &$DataType<D>,
+                point: $PointType,
+            ) -> Result<D::Elem, InterpolateError> {
+                match self {
+                    $(Self::$Variant(strategy) => $TraitName::<D>::interpolate(strategy, data, point),)*
+                }
+            }
+
+            #[inline]
+            fn allow_extrapolate(&self) -> bool {
+                match self {
+                    $(Self::$Variant(strategy) => $TraitName::<D>::allow_extrapolate(strategy),)*
+                }
+            }
+        }
+    };
+}
+#[allow(unused_imports)]
+pub(crate) use strategy_enum_impl;
+
 mod n;
 mod one;
 mod three;
