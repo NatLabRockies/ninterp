@@ -198,6 +198,7 @@ pub trait AnyInterpolator<T>: Interpolator<T> + Send + Sync {
 /// is outside the bounds of the coordinate grid.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[non_exhaustive]
 pub enum Extrapolate<T> {
     /// Evaluate beyond the grid limits. Not applicable for all strategies.
     Enable,
@@ -288,7 +289,7 @@ macro_rules! interpolate_impl {
                             return self.strategy.interpolate(&self.data, &wrapped_point);
                         }
                         Extrapolate::Error => {
-                            errors.push((0, dim));
+                            errors.push(OutOfBoundsAt { index: 0, dim });
                         }
                     };
                 }
@@ -307,7 +308,10 @@ pub(crate) use interpolate_impl;
 pub(crate) fn to_fixed_point<T, const N: usize>(point: &[T]) -> Result<&[T; N], InterpolateError> {
     <&[T; N]>::try_from(point).map_err(|_| InterpolateError::PointLength {
         expected: N,
-        failures: vec![(0, point.len())],
+        failures: vec![WrongLengthAt {
+            index: 0,
+            found: point.len(),
+        }],
     })
 }
 
@@ -322,7 +326,10 @@ pub(crate) fn to_fixed_points<T: Copy, const N: usize>(
     for (i, &point) in points.iter().enumerate() {
         match <&[T; N]>::try_from(point) {
             Ok(arr) => converted.push(*arr),
-            Err(_) => failures.push((i, point.len())),
+            Err(_) => failures.push(WrongLengthAt {
+                index: i,
+                found: point.len(),
+            }),
         }
     }
     if failures.is_empty() {
@@ -462,7 +469,7 @@ macro_rules! batch_interpolate_into_impl {
                                 ..=self.data.grid[dim].last().unwrap())
                                 .contains(&&point[dim])
                             {
-                                point_errors.push((i, dim));
+                                point_errors.push(OutOfBoundsAt { index: i, dim });
                             }
                         }
                         if point_errors.is_empty() {

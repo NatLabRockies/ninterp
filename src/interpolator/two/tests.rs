@@ -407,7 +407,7 @@ fn test_batch_interpolate_error_aggregates_all_points() {
     let InterpolateError::OutOfBounds(failures) = err else {
         panic!("expected InterpolateError::OutOfBounds");
     };
-    let offending: Vec<usize> = failures.iter().map(|(index, _)| *index).collect();
+    let offending: Vec<usize> = failures.iter().map(|at| at.index).collect();
     assert!(offending.contains(&1));
     assert!(offending.contains(&2));
     assert!(!offending.contains(&0));
@@ -582,7 +582,7 @@ fn test_batch_interpolate_into_error_aggregates_all_points() {
     match err {
         InterpolateError::OutOfBounds(failures) => {
             // Should report all out-of-bounds points
-            let offending: Vec<usize> = failures.iter().map(|(index, _)| *index).collect();
+            let offending: Vec<usize> = failures.iter().map(|at| at.index).collect();
             assert!(offending.contains(&1));
             assert!(offending.contains(&2));
         }

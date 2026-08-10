@@ -244,8 +244,8 @@ Interpolation-time (`interpolate`):
 
 | Error | Meaning |
 | --- | --- |
-| `InterpolateError::PointLength` | Query point has wrong dimensionality; carries `(point index, actual length)` per offending point |
-| `InterpolateError::OutOfBounds` | Query point is out of bounds while using `Extrapolate::Error`; carries `(point index, dimension)` per offending coordinate |
+| `InterpolateError::PointLength` | Query point has wrong dimensionality; carries a `WrongLengthAt` per offending point |
+| `InterpolateError::OutOfBounds` | Query point is out of bounds while using `Extrapolate::Error`; carries an `OutOfBoundsAt` per offending coordinate |
 
 ## Using Owned and Borrowed (Viewed) Data
 All interpolators support both owned and borrowed data via the generic `D` bound on

@@ -129,9 +129,11 @@ Everything below is merged to `main` but not yet tagged/released.
 - **Breaking:** `Interp1D`/`2D`/`3D`/`ND`'s inherent `check_extrapolate` is renamed to
   `validate_extrapolate`, matching the `validate`/`validate_strategy` naming every other
   invariant check in the crate already uses.
-- **Breaking:** `InterpolateError` and `ValidateError` are now `#[non_exhaustive]`,
-  allowing new error variants to be added without breaking downstream exhaustive
-  matches. Any existing exhaustive `match` over one without a `_` arm now needs one.
+- **Breaking:** `InterpolateError`, `ValidateError`, and `Extrapolate<T>` are now
+  `#[non_exhaustive]`, allowing new variants to be added without breaking downstream
+  exhaustive matches. Any existing exhaustive `match` over one without a `_` arm now
+  needs one. Constructing existing variants is unaffected, so
+  `Extrapolate::Enable`/`Fill(x)`/etc. still work as before.
 - **Breaking:** `Strategy1DEnum`/`Strategy2DEnum`/`Strategy3DEnum`/`StrategyNDEnum` are
   now `#[non_exhaustive]`, since every new built-in strategy adds a variant. Any
   existing exhaustive `match` over one without a `_` arm now needs one; construction
@@ -165,15 +167,18 @@ Everything below is merged to `main` but not yet tagged/released.
   of prose, and both aggregate across a batch rather than one aggregating and the other
   stopping at the first failure:
   - `InterpolateError::PointLength(usize)` ->
-    `PointLength { expected: usize, failures: Vec<(usize, usize)> }`, where each entry is
-    `(point index, actual length)`. The actual length was available at every construction
+    `PointLength { expected: usize, failures: Vec<WrongLengthAt> }`, where each entry
+    carries `index` and `found`. The actual length was available at every construction
     site and thrown away.
-  - `InterpolateError::OutOfBounds(String)` -> `OutOfBounds(Vec<(usize, usize)>)`, where
-    each entry is `(point index, dimension)`. A point out of bounds in two dimensions
+  - `InterpolateError::OutOfBounds(String)` -> `OutOfBounds(Vec<OutOfBoundsAt>)`, where
+    each entry carries `index` and `dim`. A point out of bounds in two dimensions
     yields two entries. The offending coordinate and grid bounds are no longer echoed
     into the message: they are `D::Elem`, which the error is not generic over, and the
     caller can index the `points` and `grid` it already owns. This also drops one
     `String` allocation per offending coordinate from the batch error path.
+  - Both entry types are `#[non_exhaustive]` structs rather than tuples, so per-failure
+    context can be added later without a breaking change. Read them by field
+    (`at.index`, `at.dim`, `at.found`) and match with `..`.
 
   Both variants render a lone failure as a sentence and several as an indented list, and
   omit point indices entirely when every failure is at index 0, which is every

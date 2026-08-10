@@ -67,7 +67,10 @@ where
         if !point.is_empty() {
             return Err(InterpolateError::PointLength {
                 expected: N,
-                failures: vec![(0, point.len())],
+                failures: vec![WrongLengthAt {
+                    index: 0,
+                    found: point.len(),
+                }],
             });
         }
         Ok(self.0.clone())

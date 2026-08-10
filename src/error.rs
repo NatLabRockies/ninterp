@@ -31,16 +31,15 @@ impl fmt::Debug for ValidateError {
 #[derive(Error, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum InterpolateError {
-    /// `(point index, dimension)` for every coordinate that fell outside the grid. One
-    /// point out of bounds in two dimensions yields two entries. Index the `points` and
-    /// `grid` you supplied to recover the offending coordinate and the bounds it missed.
+    /// One entry per coordinate that fell outside the grid. A single point out of bounds
+    /// in two dimensions yields two entries.
     #[error("{}", fmt_out_of_bounds(.0))]
-    OutOfBounds(Vec<(usize, usize)>),
-    /// `(point index, actual length)` for every offending point.
+    OutOfBounds(Vec<OutOfBoundsAt>),
+    /// One entry per point whose length didn't match the interpolator's dimensionality.
     #[error("{}", fmt_point_length(*expected, failures))]
     PointLength {
         expected: usize,
-        failures: Vec<(usize, usize)>,
+        failures: Vec<WrongLengthAt>,
     },
     #[error("output slice has length {found}, expected {expected}")]
     OutputLength { expected: usize, found: usize },
@@ -52,6 +51,30 @@ impl fmt::Debug for InterpolateError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Display::fmt(self, f)
     }
+}
+
+/// Where a query point left the grid, in [`InterpolateError::OutOfBounds`].
+///
+/// Index the `points` and `grid` you supplied to recover the offending coordinate and
+/// the bounds it missed: those are `D::Elem` values, which the error is not generic over.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct OutOfBoundsAt {
+    /// Position of the point within the batch, or 0 for a single-point call.
+    pub index: usize,
+    /// Dimension whose bounds the point exceeded.
+    pub dim: usize,
+}
+
+/// A misshapen query point, in [`InterpolateError::PointLength`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct WrongLengthAt {
+    /// Position of the point within the batch, or 0 for a single-point call.
+    pub index: usize,
+    /// The length it actually had. The expected length is on the variant, shared by
+    /// every entry.
+    pub found: usize,
 }
 
 /// Renders `point`, or `point[i]` when there is anything to disambiguate. Every
@@ -66,30 +89,35 @@ fn point_at(index: usize, show_index: bool) -> String {
 
 /// Whether point indices are worth printing: only once some failure is at a nonzero
 /// index, which never happens for a single-point call.
-fn show_index(failures: &[(usize, usize)]) -> bool {
-    failures.iter().any(|(index, _)| *index != 0)
+fn show_index(mut indices: impl Iterator<Item = usize>) -> bool {
+    indices.any(|index| index != 0)
 }
 
 /// A lone failure reads as one sentence; several are listed under a summary line.
 /// Shared with [`fmt_point_length`] so both aggregating variants render alike.
-fn fmt_out_of_bounds(failures: &[(usize, usize)]) -> String {
-    let show = show_index(failures);
+fn fmt_out_of_bounds(failures: &[OutOfBoundsAt]) -> String {
+    let show = show_index(failures.iter().map(|at| at.index));
     match failures {
-        [(index, dim)] => format!(
-            "{} is out of bounds in dim {dim} with `Extrapolate::Error` set",
-            point_at(*index, show)
+        [at] => format!(
+            "{} is out of bounds in dim {} with `Extrapolate::Error` set",
+            point_at(at.index, show),
+            at.dim
         ),
         many => {
             // One point can be out of bounds in several dimensions, so the number of
             // failures doesn't decide the plural here; the number of distinct points does.
-            let subject = if many.iter().any(|(index, _)| *index != many[0].0) {
+            let subject = if many.iter().any(|at| at.index != many[0].index) {
                 "points"
             } else {
                 "point"
             };
             let mut s = format!("{subject} out of bounds with `Extrapolate::Error` set:");
-            for (index, dim) in many {
-                s.push_str(&format!("\n    {} in dim {dim}", point_at(*index, show)));
+            for at in many {
+                s.push_str(&format!(
+                    "\n    {} in dim {}",
+                    point_at(at.index, show),
+                    at.dim
+                ));
             }
             s
         }
@@ -97,21 +125,23 @@ fn fmt_out_of_bounds(failures: &[(usize, usize)]) -> String {
 }
 
 /// See [`fmt_out_of_bounds`].
-fn fmt_point_length(expected: usize, failures: &[(usize, usize)]) -> String {
-    let show = show_index(failures);
+fn fmt_point_length(expected: usize, failures: &[WrongLengthAt]) -> String {
+    let show = show_index(failures.iter().map(|at| at.index));
     match failures {
-        [(index, found)] => format!(
-            "{} has length {found}, expected {expected} for {expected}-D interpolation",
-            point_at(*index, show)
+        [at] => format!(
+            "{} has length {}, expected {expected} for {expected}-D interpolation",
+            point_at(at.index, show),
+            at.found
         ),
         many => {
             // Unlike out-of-bounds, each failure here is a distinct point, so reaching
             // this arm always means more than one.
             let mut s = format!("points have the wrong length for {expected}-D interpolation:");
-            for (index, found) in many {
+            for at in many {
                 s.push_str(&format!(
-                    "\n    {} has length {found}",
-                    point_at(*index, show)
+                    "\n    {} has length {}",
+                    point_at(at.index, show),
+                    at.found
                 ));
             }
             s

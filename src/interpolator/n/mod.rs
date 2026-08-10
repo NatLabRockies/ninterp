@@ -331,7 +331,10 @@ where
         if point.len() != n {
             return Err(InterpolateError::PointLength {
                 expected: n,
-                failures: vec![(0, point.len())],
+                failures: vec![WrongLengthAt {
+                    index: 0,
+                    found: point.len(),
+                }],
             });
         }
         let mut errors = Vec::new();
@@ -371,7 +374,7 @@ where
                         return self.strategy.interpolate(&self.data, &wrapped_point);
                     }
                     Extrapolate::Error => {
-                        errors.push((0, dim));
+                        errors.push(OutOfBoundsAt { index: 0, dim });
                     }
                 };
             }
@@ -403,11 +406,14 @@ where
         out: &mut [D::Elem],
     ) -> Result<(), InterpolateError> {
         let n = self.ndim();
-        let failures: Vec<(usize, usize)> = points
+        let failures: Vec<WrongLengthAt> = points
             .iter()
             .enumerate()
             .filter(|(_, point)| point.len() != n)
-            .map(|(i, point)| (i, point.len()))
+            .map(|(i, point)| WrongLengthAt {
+                index: i,
+                found: point.len(),
+            })
             .collect();
         if !failures.is_empty() {
             return Err(InterpolateError::PointLength {
@@ -510,7 +516,7 @@ where
                     for (dim, (axis, &coord)) in self.data.grid.iter().zip(point.iter()).enumerate()
                     {
                         if !(axis.first().unwrap()..=axis.last().unwrap()).contains(&&coord) {
-                            point_errors.push((i, dim));
+                            point_errors.push(OutOfBoundsAt { index: i, dim });
                         }
                     }
                     if point_errors.is_empty() {

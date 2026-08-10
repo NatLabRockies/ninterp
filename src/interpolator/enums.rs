@@ -623,7 +623,7 @@ mod tests {
             InterpolateError::PointLength {
                 expected: 1,
                 ref failures
-            } if failures.as_slice() == [(0, 0)]
+            } if failures.as_slice() == [WrongLengthAt { index: 0, found: 0 }]
         ));
 
         let interp_2d = InterpolatorEnumBase::new_2d(
@@ -639,7 +639,7 @@ mod tests {
             InterpolateError::PointLength {
                 expected: 2,
                 ref failures
-            } if failures.as_slice() == [(0, 0)]
+            } if failures.as_slice() == [WrongLengthAt { index: 0, found: 0 }]
         ));
 
         let interp_3d = InterpolatorEnumBase::new_3d(
@@ -656,7 +656,7 @@ mod tests {
             InterpolateError::PointLength {
                 expected: 3,
                 ref failures
-            } if failures.as_slice() == [(0, 0)]
+            } if failures.as_slice() == [WrongLengthAt { index: 0, found: 0 }]
         ));
     }
 
@@ -719,7 +719,7 @@ mod tests {
             InterpolateError::PointLength {
                 expected: 2,
                 ref failures
-            } if failures.as_slice() == [(0, 1)]
+            } if failures.as_slice() == [WrongLengthAt { index: 0, found: 1 }]
         ));
     }
 
