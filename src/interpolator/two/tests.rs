@@ -460,6 +460,158 @@ fn test_dyn_interpolator() {
 }
 
 #[test]
+fn test_batch_interpolate_into_matches_interpolate() {
+    let interp = Interp2D::new(
+        array![0.05, 0.10, 0.15],
+        array![0.10, 0.20, 0.30],
+        array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let points = [[0.075, 0.25], [0.05, 0.10]];
+    let batched = interp.batch_interpolate(&points).unwrap();
+    let mut out = vec![0.0; points.len()];
+    interp.batch_interpolate_into(&points, &mut out).unwrap();
+    assert_eq!(out, batched);
+}
+
+#[test]
+fn test_batch_interpolate_into_output_length_error() {
+    let interp = Interp2D::new(
+        array![0.05, 0.10, 0.15],
+        array![0.10, 0.20, 0.30],
+        array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let mut out = vec![0.0; 1];
+    assert!(matches!(
+        interp.batch_interpolate_into(&[[0.075, 0.25], [0.05, 0.10]], &mut out),
+        Err(InterpolateError::OutputLength {
+            expected: 2,
+            found: 1
+        })
+    ));
+}
+
+#[test]
+fn test_batch_interpolate_fast_into_matches_interpolate() {
+    let interp = Interp2D::new(
+        array![0.05, 0.10, 0.15],
+        array![0.10, 0.20, 0.30],
+        array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let batched_fast = interp.batch_interpolate_fast(&[[0.075, 0.25], [0.05, 0.10]]);
+    let mut out = vec![0.0; 2];
+    interp.batch_interpolate_fast_into(&[[0.075, 0.25], [0.05, 0.10]], &mut out);
+    assert_eq!(out, batched_fast);
+}
+
+#[test]
+#[should_panic(expected = "batch_interpolate_fast_into: length mismatch")]
+fn test_batch_interpolate_fast_into_length_mismatch() {
+    let interp = Interp2D::new(
+        array![0.05, 0.10, 0.15],
+        array![0.10, 0.20, 0.30],
+        array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let mut out = vec![0.0; 1];
+    interp.batch_interpolate_fast_into(&[[0.075, 0.25], [0.05, 0.10]], &mut out);
+}
+
+#[test]
+fn test_batch_interpolate_into_clamp() {
+    let interp = Interp2D::new(
+        array![0.05, 0.10, 0.15],
+        array![0.10, 0.20, 0.30],
+        array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+        strategy::Linear,
+        Extrapolate::Clamp,
+    )
+    .unwrap();
+    let batched = interp.batch_interpolate(&[[-1., -1.], [2., 2.]]).unwrap();
+    let mut out = vec![0.0; 2];
+    interp
+        .batch_interpolate_into(&[[-1., -1.], [2., 2.]], &mut out)
+        .unwrap();
+    assert_eq!(out, batched);
+}
+
+#[test]
+fn test_batch_interpolate_into_fill() {
+    let interp = Interp2D::new(
+        array![0.05, 0.10, 0.15],
+        array![0.10, 0.20, 0.30],
+        array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+        strategy::Linear,
+        Extrapolate::Fill(99.0),
+    )
+    .unwrap();
+    let mut out = vec![0.0; 3];
+    interp
+        .batch_interpolate_into(&[[0.075, 0.25], [-1., -1.], [0.05, 0.10]], &mut out)
+        .unwrap();
+    assert_eq!(out[0], 3.0); // in-bounds
+    assert_eq!(out[1], 99.0); // out-of-bounds, filled
+    assert_eq!(out[2], 0.0); // in-bounds
+}
+
+#[test]
+fn test_batch_interpolate_into_error_aggregates_all_points() {
+    let interp = Interp2D::new(
+        array![0.05, 0.10, 0.15],
+        array![0.10, 0.20, 0.30],
+        array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let mut out = vec![0.0; 3];
+    let err = interp
+        .batch_interpolate_into(&[[0.5, 0.5], [-1., -1.], [2., 2.]], &mut out)
+        .unwrap_err();
+    match err {
+        InterpolateError::ExtrapolateError(s) => {
+            // Should mention all out-of-bounds points
+            assert!(s.contains("point[1]"));
+            assert!(s.contains("point[2]"));
+        }
+        _ => panic!("Expected ExtrapolateError"),
+    }
+}
+
+#[test]
+fn test_batch_interpolate_into_dyn() {
+    let interp = Interp2D::new(
+        array![0.05, 0.10, 0.15],
+        array![0.10, 0.20, 0.30],
+        array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let boxed: Box<dyn Interpolator<_>> = Box::new(interp.clone());
+    let points: [&[f64]; 2] = [&[0.075, 0.25], &[0.05, 0.10]];
+    let batched = boxed.batch_interpolate(&points).unwrap();
+    let mut out = vec![0.0; points.len()];
+    boxed.batch_interpolate_into(&points, &mut out).unwrap();
+    assert_eq!(out, batched);
+
+    let mut out_fast = vec![0.0; points.len()];
+    boxed.batch_interpolate_fast_into(&points, &mut out_fast);
+    let batched_fast = boxed.batch_interpolate_fast(&points);
+    assert_eq!(out_fast, batched_fast);
+}
+
+#[test]
 fn test_partialeq() {
     #[derive(PartialEq)]
     #[allow(unused)]

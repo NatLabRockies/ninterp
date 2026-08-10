@@ -54,26 +54,83 @@ pub trait Interpolator<T>: DynClone {
             .expect("interpolate_fast: invalid point or data")
     }
 
+    /// Interpolate at each of several points, writing results into `out` instead of
+    /// allocating. `out.len()` must equal `points.len()`.
+    ///
+    /// `self.extrapolate` is one setting for the whole call, not resolved per
+    /// point. Default just loops [`Interpolator::interpolate`] into `out`;
+    /// `Interp1D`/`2D`/`3D`/`ND` override this to funnel every point into at most
+    /// one call to the strategy instead.
+    fn batch_interpolate_into(
+        &self,
+        points: &[&[T]],
+        out: &mut [T],
+    ) -> Result<(), InterpolateError> {
+        if out.len() != points.len() {
+            return Err(InterpolateError::OutputLength {
+                expected: points.len(),
+                found: out.len(),
+            });
+        }
+        for (o, point) in out.iter_mut().zip(points) {
+            *o = self.interpolate(point)?;
+        }
+        Ok(())
+    }
+
+    /// Unchecked [`Interpolator::batch_interpolate_into`], assuming every point is valid.
+    ///
+    /// Default loops [`Interpolator::interpolate_fast`] into `out`, panicking on
+    /// length mismatch. `Interp1D`/`2D`/`3D`/`ND` override this the same way as
+    /// [`Interpolator::batch_interpolate_into`].
+    ///
+    /// # Panics
+    /// Panics if `out.len() != points.len()`.
+    fn batch_interpolate_fast_into(&self, points: &[&[T]], out: &mut [T]) {
+        assert_eq!(
+            out.len(),
+            points.len(),
+            "batch_interpolate_fast_into: length mismatch"
+        );
+        for (o, point) in out.iter_mut().zip(points) {
+            *o = self.interpolate_fast(point);
+        }
+    }
+
     /// Interpolate at each of several points, sharing one grid across all of them.
     ///
     /// `self.extrapolate` is one setting for the whole call, not resolved per
-    /// point. Default just loops [`Interpolator::interpolate`]; `Interp1D`/`2D`/
-    /// `3D`/`ND` override this to funnel every point into at most one call to the
-    /// strategy instead.
-    fn batch_interpolate(&self, points: &[&[T]]) -> Result<Vec<T>, InterpolateError> {
-        points.iter().map(|point| self.interpolate(point)).collect()
+    /// point. Default allocates an output buffer and calls [`Interpolator::batch_interpolate_into`];
+    /// `Interp1D`/`2D`/`3D`/`ND` override [`Self::batch_interpolate_into`] to funnel every point into
+    /// at most one call to the strategy instead. Do not override this method.
+    fn batch_interpolate(&self, points: &[&[T]]) -> Result<Vec<T>, InterpolateError>
+    where
+        T: Num,
+    {
+        let mut out = Vec::with_capacity(points.len());
+        for _ in 0..points.len() {
+            out.push(T::zero());
+        }
+        self.batch_interpolate_into(points, &mut out)?;
+        Ok(out)
     }
 
     /// Batched [`Interpolator::interpolate_fast`], assuming every point is already
     /// valid.
     ///
-    /// Default just loops [`Interpolator::interpolate_fast`]. `Interp1D`/`2D`/`3D`/
-    /// `ND` override this the same way as [`Interpolator::batch_interpolate`].
-    fn batch_interpolate_fast(&self, points: &[&[T]]) -> Vec<T> {
-        points
-            .iter()
-            .map(|point| self.interpolate_fast(point))
-            .collect()
+    /// Default allocates an output buffer and calls [`Interpolator::batch_interpolate_fast_into`].
+    /// Do not override this method. If you need to amortize work across the batch, override
+    /// [`Self::batch_interpolate_into`] instead; the fast variant is rarely optimized.
+    fn batch_interpolate_fast(&self, points: &[&[T]]) -> Vec<T>
+    where
+        T: Num + Copy,
+    {
+        let mut out = Vec::with_capacity(points.len());
+        for _ in 0..points.len() {
+            out.push(T::zero());
+        }
+        self.batch_interpolate_fast_into(points, &mut out);
+        out
     }
 }
 
@@ -95,10 +152,26 @@ impl<T> Interpolator<T> for Box<dyn Interpolator<T>> {
     fn interpolate_fast(&self, point: &[T]) -> T {
         (**self).interpolate_fast(point)
     }
-    fn batch_interpolate(&self, points: &[&[T]]) -> Result<Vec<T>, InterpolateError> {
+    fn batch_interpolate_into(
+        &self,
+        points: &[&[T]],
+        out: &mut [T],
+    ) -> Result<(), InterpolateError> {
+        (**self).batch_interpolate_into(points, out)
+    }
+    fn batch_interpolate_fast_into(&self, points: &[&[T]], out: &mut [T]) {
+        (**self).batch_interpolate_fast_into(points, out)
+    }
+    fn batch_interpolate(&self, points: &[&[T]]) -> Result<Vec<T>, InterpolateError>
+    where
+        T: Num,
+    {
         (**self).batch_interpolate(points)
     }
-    fn batch_interpolate_fast(&self, points: &[&[T]]) -> Vec<T> {
+    fn batch_interpolate_fast(&self, points: &[&[T]]) -> Vec<T>
+    where
+        T: Num + Copy,
+    {
         (**self).batch_interpolate_fast(points)
     }
 }
@@ -246,28 +319,39 @@ where
         .any(|(axis, coord)| !(axis.first().unwrap()..=axis.last().unwrap()).contains(&coord))
 }
 
-/// Generates the inherent `batch_interpolate` shared by `Interp1D`/`2D`/`3D`:
+/// Generates the inherent `batch_interpolate_into` shared by `Interp1D`/`2D`/`3D`:
 /// resolves `self.extrapolate` once for the whole batch (see the extrapolate-mode
 /// partitioning table in issue #21), then funnels every point into at most one call
-/// to the strategy, rather than calling the existing hand-written `interpolate` once
-/// per point.
-macro_rules! batch_interpolate_impl {
+/// to the strategy, writing results into the provided output slice rather than
+/// allocating a Vec.
+macro_rules! batch_interpolate_into_impl {
     () => {
-        /// Interpolate at each of several points, sharing one grid across all of
-        /// them.
+        /// Interpolate at each of several points, writing results into `out` instead of
+        /// allocating.
         ///
         /// `self.extrapolate` is one setting for the whole call, not resolved per
         /// point: every point still funnels into at most one call to the strategy,
         /// rather than calling [`Self::interpolate`] once per point.
-        pub fn batch_interpolate(
+        ///
+        /// # Errors
+        /// Returns [`InterpolateError::OutputLength`] if `out.len() != points.len()`.
+        /// Returns other interpolation errors from the strategy or extrapolation check.
+        pub fn batch_interpolate_into(
             &self,
             points: &[[D::Elem; N]],
-        ) -> Result<Vec<D::Elem>, InterpolateError>
+            out: &mut [D::Elem],
+        ) -> Result<(), InterpolateError>
         where
             D::Elem: Num + PartialOrd + Euclid + Copy,
         {
+            if out.len() != points.len() {
+                return Err(InterpolateError::OutputLength {
+                    expected: points.len(),
+                    found: out.len(),
+                });
+            }
             match &self.extrapolate {
-                Extrapolate::Enable => self.strategy.batch_interpolate(&self.data, points),
+                Extrapolate::Enable => self.strategy.batch_interpolate_into(&self.data, points, out),
                 Extrapolate::Clamp => {
                     // Clamping an in-bounds point is already identity, so every point
                     // can be clamped unconditionally.
@@ -283,7 +367,7 @@ macro_rules! batch_interpolate_impl {
                             })
                         })
                         .collect();
-                    self.strategy.batch_interpolate(&self.data, &clamped)
+                    self.strategy.batch_interpolate_into(&self.data, &clamped, out)
                 }
                 Extrapolate::Wrap => {
                     // Unlike `Clamp`, `wrap()` isn't identity exactly at the
@@ -304,10 +388,14 @@ macro_rules! batch_interpolate_impl {
                             }
                         })
                         .collect();
-                    self.strategy.batch_interpolate(&self.data, &wrapped)
+                    self.strategy.batch_interpolate_into(&self.data, &wrapped, out)
                 }
                 Extrapolate::Fill(value) => {
-                    let mut results = vec![*value; points.len()];
+                    // Pre-fill output with the fill value, then scatter interpolated
+                    // results from in-bounds points into their corresponding indices.
+                    for o in out.iter_mut() {
+                        *o = *value;
+                    }
                     let (in_bounds_indices, in_bounds_points): (Vec<usize>, Vec<[D::Elem; N]>) =
                         points
                             .iter()
@@ -315,12 +403,14 @@ macro_rules! batch_interpolate_impl {
                             .filter(|(_, point)| !out_of_bounds(&self.data.grid, *point))
                             .map(|(i, point)| (i, *point))
                             .unzip();
-                    let interpolated =
-                        self.strategy.batch_interpolate(&self.data, &in_bounds_points)?;
-                    for (i, value) in in_bounds_indices.into_iter().zip(interpolated) {
-                        results[i] = value;
+                    if !in_bounds_indices.is_empty() {
+                        let mut scratch = vec![D::Elem::zero(); in_bounds_indices.len()];
+                        self.strategy.batch_interpolate_into(&self.data, &in_bounds_points, &mut scratch)?;
+                        for (idx, value) in in_bounds_indices.into_iter().zip(scratch) {
+                            out[idx] = value;
+                        }
                     }
-                    Ok(results)
+                    Ok(())
                 }
                 Extrapolate::Error => {
                     let mut errors = Vec::new();
@@ -347,9 +437,35 @@ macro_rules! batch_interpolate_impl {
                     if !errors.is_empty() {
                         return Err(InterpolateError::ExtrapolateError(errors.join("")));
                     }
-                    self.strategy.batch_interpolate(&self.data, &in_bounds_points)
+                    self.strategy.batch_interpolate_into(&self.data, &in_bounds_points, out)
                 }
             }
+        }
+    };
+}
+pub(crate) use batch_interpolate_into_impl;
+
+/// Generates the inherent `batch_interpolate` shared by `Interp1D`/`2D`/`3D`:
+/// allocates an output buffer and delegates to [`batch_interpolate_into`].
+macro_rules! batch_interpolate_impl {
+    () => {
+        /// Interpolate at each of several points, sharing one grid across all of
+        /// them.
+        ///
+        /// Allocates an output buffer and calls [`Self::batch_interpolate_into`],
+        /// which handles `self.extrapolate` resolution and funnels every point into
+        /// at most one call to the strategy rather than calling [`Self::interpolate`]
+        /// once per point.
+        pub fn batch_interpolate(
+            &self,
+            points: &[[D::Elem; N]],
+        ) -> Result<Vec<D::Elem>, InterpolateError>
+        where
+            D::Elem: Num + PartialOrd + Euclid + Copy,
+        {
+            let mut out = vec![D::Elem::zero(); points.len()];
+            self.batch_interpolate_into(points, &mut out)?;
+            Ok(out)
         }
     };
 }
@@ -512,6 +628,33 @@ macro_rules! interpolator_trait_impl {
                 self.interpolate_fast(point)
             }
 
+            fn batch_interpolate_into(
+                &self,
+                points: &[&[D::Elem]],
+                out: &mut [D::Elem],
+            ) -> Result<(), InterpolateError> {
+                let points: Vec<[D::Elem; N]> = points
+                    .iter()
+                    .map(|&point| {
+                        <&[D::Elem; N]>::try_from(point)
+                            .map(|arr| *arr)
+                            .map_err(|_| InterpolateError::PointLength(N))
+                    })
+                    .collect::<Result<_, _>>()?;
+                self.batch_interpolate_into(&points, out)
+            }
+
+            fn batch_interpolate_fast_into(&self, points: &[&[D::Elem]], out: &mut [D::Elem]) {
+                let points: Vec<[D::Elem; N]> = points
+                    .iter()
+                    .map(|&point| {
+                        *<&[D::Elem; N]>::try_from(point)
+                            .expect("batch_interpolate_fast_into: point length mismatch")
+                    })
+                    .collect();
+                self.batch_interpolate_fast_into(&points, out)
+            }
+
             fn batch_interpolate(
                 &self,
                 points: &[&[D::Elem]],
@@ -663,12 +806,35 @@ macro_rules! interp_inherent_methods {
         pub fn interpolate_fast(&self, point: &[D::Elem; N]) -> D::Elem {
             self.strategy.interpolate_fast(&self.data, point)
         }
+        batch_interpolate_into_impl!();
         batch_interpolate_impl!();
+        /// Unchecked batched [`Self::interpolate_fast`], assuming every point is valid
+        /// and `out.len() == points.len()`.
+        ///
+        /// # Panics
+        /// Panics if `out.len() != points.len()`.
+        pub fn batch_interpolate_fast_into(&self, points: &[[D::Elem; N]], out: &mut [D::Elem]) {
+            assert_eq!(
+                out.len(),
+                points.len(),
+                "batch_interpolate_fast_into: length mismatch"
+            );
+            self.strategy
+                .batch_interpolate_fast_into(&self.data, points, out)
+        }
         /// Batched [`Self::interpolate_fast`], for use in hot loops where the caller
-        /// has already checked bounds or knows that extrapolation handling is not
-        /// needed.
-        pub fn batch_interpolate_fast(&self, points: &[[D::Elem; N]]) -> Vec<D::Elem> {
-            self.strategy.batch_interpolate_fast(&self.data, points)
+        /// has already checked bounds. Allocates an output buffer and calls
+        /// [`Self::batch_interpolate_fast_into`].
+        pub fn batch_interpolate_fast(&self, points: &[[D::Elem; N]]) -> Vec<D::Elem>
+        where
+            D::Elem: Num + Copy,
+        {
+            let mut out = Vec::with_capacity(points.len());
+            for _ in 0..points.len() {
+                out.push(D::Elem::zero());
+            }
+            self.batch_interpolate_fast_into(points, &mut out);
+            out
         }
         strategy_accessors_impl!($Strategy);
         view_into_owned_impl!($InterpType, $Strategy, $Viewed, $Owned);

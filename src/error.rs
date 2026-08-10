@@ -6,6 +6,7 @@ use thiserror::Error;
 /// Error in interpolator data validation
 #[allow(missing_docs)]
 #[derive(Error, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum ValidateError {
     #[error("selected `Extrapolate` variant ({0}) is unimplemented/inapplicable for interpolator")]
     InvalidExtrapolate(String),
@@ -28,11 +29,14 @@ impl fmt::Debug for ValidateError {
 /// Error in interpolation call
 #[allow(missing_docs)]
 #[derive(Error, Clone, PartialEq)]
+#[non_exhaustive]
 pub enum InterpolateError {
     #[error("attempted to interpolate at point(s) beyond grid data: {0}")]
     ExtrapolateError(String),
     #[error("supplied point slice should have length {0} for {0}-D interpolation")]
     PointLength(usize),
+    #[error("output slice has length {found}, expected {expected}")]
+    OutputLength { expected: usize, found: usize },
     #[error("{0}")]
     Other(String),
 }

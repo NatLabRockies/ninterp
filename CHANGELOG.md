@@ -80,6 +80,13 @@ Everything below is merged to `main` but not yet tagged/released.
   out-of-range point in one `ExtrapolateError`, not just the first one found.
 - `ExtrapolateError`'s message now reads "point(s)" instead of "point", since a batch
   error can name more than one offending point.
+- `batch_interpolate_into`/`batch_interpolate_fast_into` on `Interpolator<T>`,
+  `Strategy1D`/`2D`/`3D`/`ND`, `Interp1D`/`2D`/`3D`/`InterpND`, and `InterpolatorEnum`:
+  allocation-free batched interpolation that writes results into a caller-supplied output
+  slice. `batch_interpolate` and `batch_interpolate_fast` now defer to their `_into`
+  counterparts internally, so a strategy author who overrides `batch_interpolate_into`
+  for real batch amortization automatically gets that optimization in both paths (no
+  drift risk). New `InterpolateError::OutputLength` variant for length mismatches.
 - `interpolator::DynInterpolator<T>: Interpolator<T> + Send + Sync` (not in the
   `prelude`): a downcastable counterpart to `Interpolator<T>`, for storing
   heterogeneous interpolators behind `Box<dyn DynInterpolator<T>>` and recovering the
@@ -93,6 +100,9 @@ Everything below is merged to `main` but not yet tagged/released.
   do on the concrete, unboxed type.
 
 ### Changed
+- **Breaking:** `InterpolateError` and `ValidateError` are now `#[non_exhaustive]`,
+  allowing new error variants to be added without breaking downstream exhaustive
+  matches. Any existing exhaustive `match` over one without a `_` arm now needs one.
 - **Breaking:** `Strategy1DEnum`/`Strategy2DEnum`/`Strategy3DEnum`/`StrategyNDEnum` are
   now `#[non_exhaustive]`, since every new built-in strategy adds a variant. Any
   existing exhaustive `match` over one without a `_` arm now needs one; construction
