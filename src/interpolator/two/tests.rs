@@ -120,7 +120,7 @@ fn test_step() {
     let values = array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]];
 
     // Uniform Lower (floor) in all dimensions
-    let interp = Interp2D::new(
+    let interp = Interp2DView::new(
         grid_x.view(),
         grid_y.view(),
         values.view(),
@@ -139,7 +139,7 @@ fn test_step() {
     assert_eq!(interp.interpolate(&[0.7, 1.4]).unwrap(), f[[0, 1]]); // floor x→0, floor y→1
     assert_eq!(interp.interpolate(&[1.9, 0.1]).unwrap(), f[[1, 0]]); // floor x→1, floor y→0
 
-    let interp_lower = Interp2D::new(
+    let interp_lower = Interp2DView::new(
         grid_x.view(),
         grid_y.view(),
         values.view(),
@@ -149,7 +149,7 @@ fn test_step() {
     .unwrap();
     assert_eq!(interp_lower.interpolate(&[0.7, 1.4]).unwrap(), f[[0, 1]]);
 
-    let interp_upper = Interp2D::new(
+    let interp_upper = Interp2DView::new(
         grid_x.view(),
         grid_y.view(),
         values.view(),
@@ -160,7 +160,7 @@ fn test_step() {
     assert_eq!(interp_upper.interpolate(&[0.7, 1.4]).unwrap(), f[[1, 2]]);
 
     // Per-dimension: Lower in x, Upper in y
-    let interp_mixed = Interp2D::new(
+    let interp_mixed = Interp2DView::new(
         grid_x.view(),
         grid_y.view(),
         values.view(),
@@ -175,7 +175,7 @@ fn test_step() {
     assert_eq!(interp_mixed.interpolate(&[1.3, 0.8]).unwrap(), f[[1, 1]]); // floor x→1, ceil y→1
 
     // Invalid: 3 directions for 2-D
-    assert!(Interp2D::new(
+    assert!(Interp2DView::new(
         grid_x.view(),
         grid_y.view(),
         values.view(),
@@ -615,7 +615,7 @@ fn test_batch_interpolate_into_dyn() {
 fn test_partialeq() {
     #[derive(PartialEq)]
     #[allow(unused)]
-    struct MyStruct(InterpData2DOwned<f64>);
+    struct MyStruct(InterpData2D<f64>);
 
     #[derive(PartialEq)]
     #[allow(unused)]

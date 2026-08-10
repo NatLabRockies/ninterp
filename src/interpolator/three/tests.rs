@@ -417,7 +417,7 @@ fn test_batch_interpolate_error_aggregates_all_points() {
 fn test_partialeq() {
     #[derive(PartialEq)]
     #[allow(unused)]
-    struct MyStruct(InterpData3DOwned<f64>);
+    struct MyStruct(InterpData3D<f64>);
 
     #[derive(PartialEq)]
     #[allow(unused)]

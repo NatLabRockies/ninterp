@@ -668,7 +668,7 @@ fn test_mismatched_grid() {
 fn test_partialeq() {
     #[derive(PartialEq)]
     #[allow(unused)]
-    struct MyStruct(InterpDataNDOwned<f64>);
+    struct MyStruct(InterpDataND<f64>);
 
     #[derive(PartialEq)]
     #[allow(unused)]

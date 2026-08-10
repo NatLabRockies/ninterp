@@ -472,7 +472,7 @@ fn test_batch_interpolate_dyn() {
 fn test_partialeq() {
     #[derive(PartialEq)]
     #[allow(unused)]
-    struct MyStruct(InterpData1DOwned<f64>);
+    struct MyStruct(InterpData1D<f64>);
 
     #[derive(PartialEq)]
     #[allow(unused)]
