@@ -15,7 +15,7 @@ where
         // meaning by now, point is within grid bounds or extrapolation is enabled
         match locate_axis(data.grid[0].view(), &point[0]) {
             AxisLocation::Exact(i) => Ok(data.values[i]),
-            AxisLocation::Interp { lower, frac } => {
+            AxisLocation::Between { lower, frac } => {
                 let upper = lower + 1;
                 Ok(data.values[lower] * (D::Elem::one() - frac) + data.values[upper] * frac)
             }

@@ -48,7 +48,7 @@ pub enum AxisLocation<T> {
     /// `point` coincides exactly with `grid[_]` at this index.
     Exact(usize),
     /// `point` falls strictly between two grid coordinates.
-    Interp {
+    Between {
         /// Index of the lower bracketing grid coordinate.
         lower: usize,
         /// Fractional position of `point` between `grid[lower]` and `grid[lower + 1]`, in `[0, 1)`.
@@ -66,7 +66,7 @@ pub fn locate_axis<T: Float>(grid: ArrayView1<T>, point: &T) -> AxisLocation<T> 
         Some(idx) => AxisLocation::Exact(idx),
         None => {
             let frac = (*point - grid[lower]) / (grid[lower + 1] - grid[lower]);
-            AxisLocation::Interp { lower, frac }
+            AxisLocation::Between { lower, frac }
         }
     }
 }

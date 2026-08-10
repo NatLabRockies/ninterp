@@ -23,7 +23,7 @@ where
             (AxisLocation::Exact(i), AxisLocation::Exact(j)) => Ok(data.values[[i, j]]),
             (
                 AxisLocation::Exact(i),
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: y_l,
                     frac: y_diff,
                 },
@@ -33,7 +33,7 @@ where
                     + data.values[[i, y_u]] * y_diff)
             }
             (
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: x_l,
                     frac: x_diff,
                 },
@@ -44,11 +44,11 @@ where
                     + data.values[[x_u, j]] * x_diff)
             }
             (
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: x_l,
                     frac: x_diff,
                 },
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: y_l,
                     frac: y_diff,
                 },
