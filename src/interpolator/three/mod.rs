@@ -177,33 +177,7 @@ where
     batch_interpolate_impl!();
 }
 
-impl<D, S> Interpolator<D::Elem> for Interp3D<D, S>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Num + PartialOrd + Euclid + Copy + Debug,
-    S: Strategy3D<D> + Clone,
-{
-    /// Returns `3`.
-    #[inline]
-    fn ndim(&self) -> usize {
-        N
-    }
-
-    fn validate(&self) -> Result<(), ValidateError> {
-        self.check_extrapolate(&self.extrapolate)?;
-        self.data.validate()?;
-        self.validate_strategy()?;
-        Ok(())
-    }
-
-    sized_interpolate_impl!();
-
-    fn set_extrapolate(&mut self, extrapolate: Extrapolate<D::Elem>) -> Result<(), ValidateError> {
-        self.check_extrapolate(&extrapolate)?;
-        self.extrapolate = extrapolate;
-        Ok(())
-    }
-}
+interpolator_trait_impl!(Interp3D, Strategy3D, N);
 
 set_strategy_box_impl!(Interp3D, Strategy3D);
 set_strategy_enum_impl!(Interp3D, strategy::enums::Strategy3DEnum);

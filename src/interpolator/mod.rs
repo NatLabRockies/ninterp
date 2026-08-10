@@ -234,61 +234,6 @@ where
         .any(|(axis, coord)| !(axis.first().unwrap()..=axis.last().unwrap()).contains(&coord))
 }
 
-/// Generates the [`Interpolator::interpolate`]/[`Interpolator::interpolate_fast`]/
-/// [`Interpolator::batch_interpolate`]/[`Interpolator::batch_interpolate_fast`]
-/// bodies shared by `Interp1D`/`2D`/`3D`'s trait impls. The trait's slice-based
-/// signature can't fix the point length at compile time the way the type's own
-/// inherent `[D::Elem; N]`-based method can, so each body converts the incoming
-/// slice(s) to that fixed size first, via `?` for the two `Result`-returning
-/// methods, via `.expect(...)` for their `_fast` counterparts, then calls straight
-/// through to the inherent method, which owns all bounds/extrapolation handling from
-/// there. `InterpND` has no fixed `N`, so it can't use this and implements all four
-/// methods by hand instead.
-macro_rules! sized_interpolate_impl {
-    () => {
-        fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
-            let point: &[D::Elem; N] = point
-                .try_into()
-                .map_err(|_| InterpolateError::PointLength(N))?;
-            self.interpolate(point)
-        }
-
-        fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
-            let point: &[D::Elem; N] = point
-                .try_into()
-                .expect("interpolate_fast: point length mismatch");
-            self.interpolate_fast(point)
-        }
-
-        fn batch_interpolate(
-            &self,
-            points: &[&[D::Elem]],
-        ) -> Result<Vec<D::Elem>, InterpolateError> {
-            let points: Vec<[D::Elem; N]> = points
-                .iter()
-                .map(|&point| {
-                    <&[D::Elem; N]>::try_from(point)
-                        .map(|arr| *arr)
-                        .map_err(|_| InterpolateError::PointLength(N))
-                })
-                .collect::<Result<_, _>>()?;
-            self.batch_interpolate(&points)
-        }
-
-        fn batch_interpolate_fast(&self, points: &[&[D::Elem]]) -> Vec<D::Elem> {
-            let points: Vec<[D::Elem; N]> = points
-                .iter()
-                .map(|&point| {
-                    *<&[D::Elem; N]>::try_from(point)
-                        .expect("batch_interpolate_fast: point length mismatch")
-                })
-                .collect();
-            self.batch_interpolate_fast(&points)
-        }
-    };
-}
-pub(crate) use sized_interpolate_impl;
-
 /// Generates the inherent `batch_interpolate_fast` shared by `Interp1D`/`2D`/`3D`:
 /// forwards straight to the strategy, same as the existing hand-written
 /// `interpolate_fast` does.
@@ -596,5 +541,82 @@ macro_rules! serialize_nested_impl {
         }
     };
 }
+/// Generates the entire [`Interpolator<T>`] trait impl shared by `Interp1D`/`2D`/`3D`/`ND`.
+/// Parameterized by interpolator type, strategy trait, and the ndim return value
+/// (a literal for sized types, `self.data.ndim()` for ND). Includes slice-to-array
+/// conversion logic for `interpolate`/`interpolate_fast`/`batch_interpolate`/`batch_interpolate_fast`.
+macro_rules! interpolator_trait_impl {
+    ($InterpType:ident, $Strategy:ident, $NdimExpr:expr) => {
+        impl<D, S> Interpolator<D::Elem> for $InterpType<D, S>
+        where
+            D: Data + RawDataClone + Clone,
+            D::Elem: Num + PartialOrd + Euclid + Copy + Debug,
+            S: $Strategy<D> + Clone,
+        {
+            #[inline]
+            fn ndim(&self) -> usize {
+                $NdimExpr
+            }
+
+            fn validate(&self) -> Result<(), ValidateError> {
+                self.check_extrapolate(&self.extrapolate)?;
+                self.data.validate()?;
+                self.validate_strategy()?;
+                Ok(())
+            }
+
+            fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
+                let point: &[D::Elem; N] = point
+                    .try_into()
+                    .map_err(|_| InterpolateError::PointLength(N))?;
+                self.interpolate(point)
+            }
+
+            fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
+                let point: &[D::Elem; N] = point
+                    .try_into()
+                    .expect("interpolate_fast: point length mismatch");
+                self.interpolate_fast(point)
+            }
+
+            fn batch_interpolate(
+                &self,
+                points: &[&[D::Elem]],
+            ) -> Result<Vec<D::Elem>, InterpolateError> {
+                let points: Vec<[D::Elem; N]> = points
+                    .iter()
+                    .map(|&point| {
+                        <&[D::Elem; N]>::try_from(point)
+                            .map(|arr| *arr)
+                            .map_err(|_| InterpolateError::PointLength(N))
+                    })
+                    .collect::<Result<_, _>>()?;
+                self.batch_interpolate(&points)
+            }
+
+            fn batch_interpolate_fast(&self, points: &[&[D::Elem]]) -> Vec<D::Elem> {
+                let points: Vec<[D::Elem; N]> = points
+                    .iter()
+                    .map(|&point| {
+                        *<&[D::Elem; N]>::try_from(point)
+                            .expect("batch_interpolate_fast: point length mismatch")
+                    })
+                    .collect();
+                self.batch_interpolate_fast(&points)
+            }
+
+            fn set_extrapolate(
+                &mut self,
+                extrapolate: Extrapolate<D::Elem>,
+            ) -> Result<(), ValidateError> {
+                self.check_extrapolate(&extrapolate)?;
+                self.extrapolate = extrapolate;
+                Ok(())
+            }
+        }
+    };
+}
+pub(crate) use interpolator_trait_impl;
+
 #[cfg(feature = "serde")]
 pub(crate) use serialize_nested_impl;
