@@ -359,6 +359,144 @@ macro_rules! batch_interpolate_impl {
 }
 pub(crate) use batch_interpolate_impl;
 
+/// Generates the inherent `interpolate` shared by `Interp1D`/`2D`/`3D`: loops over each
+/// dimension, applying the [`Extrapolate`] setting per axis, then falls through to the
+/// strategy once the point is known to be in-bounds (or already resolved via
+/// `Fill`/`Clamp`/`Wrap`). `InterpND` has no fixed `N` to loop `0..N` over at compile
+/// time, so it implements this by hand directly in its [`Interpolator`] impl instead.
+macro_rules! interpolate_impl {
+    () => {
+        /// Interpolate at the supplied point.
+        ///
+        /// Unlike [`Interpolator::interpolate`], the point length is checked at compile
+        /// time via `N`, so this cannot fail with [`InterpolateError::PointLength`].
+        pub fn interpolate(&self, point: &[D::Elem; N]) -> Result<D::Elem, InterpolateError> {
+            let mut errors = Vec::new();
+            for dim in 0..N {
+                if !(self.data.grid[dim].first().unwrap()..=self.data.grid[dim].last().unwrap())
+                    .contains(&&point[dim])
+                {
+                    match &self.extrapolate {
+                        Extrapolate::Enable => {}
+                        Extrapolate::Fill(value) => return Ok(*value),
+                        Extrapolate::Clamp => {
+                            let clamped_point = std::array::from_fn(|i| {
+                                *clamp(
+                                    &point[i],
+                                    self.data.grid[i].first().unwrap(),
+                                    self.data.grid[i].last().unwrap(),
+                                )
+                            });
+                            return self.strategy.interpolate(&self.data, &clamped_point);
+                        }
+                        Extrapolate::Wrap => {
+                            let wrapped_point = std::array::from_fn(|i| {
+                                wrap(
+                                    point[i],
+                                    *self.data.grid[i].first().unwrap(),
+                                    *self.data.grid[i].last().unwrap(),
+                                )
+                            });
+                            return self.strategy.interpolate(&self.data, &wrapped_point);
+                        }
+                        Extrapolate::Error => {
+                            errors.push(format!(
+                                "\n    point[{dim}] = {:?} is out of bounds for grid[{dim}] = {:?}",
+                                point[dim], self.data.grid[dim],
+                            ));
+                        }
+                    };
+                }
+            }
+            if !errors.is_empty() {
+                return Err(InterpolateError::ExtrapolateError(errors.join("")));
+            }
+            self.strategy.interpolate(&self.data, point)
+        }
+    };
+}
+pub(crate) use interpolate_impl;
+
+/// Generates the `Box<dyn $Strategy<D>>`-backed inherent `set_strategy`, shared by
+/// `Interp1D`/`2D`/`3D`/`ND`.
+macro_rules! set_strategy_box_impl {
+    ($InterpType:ident, $Strategy:ident) => {
+        impl<D> $InterpType<D, Box<dyn $Strategy<D>>>
+        where
+            D: Data + RawDataClone + Clone,
+            D::Elem: PartialEq + Debug,
+        {
+            #[doc = concat!(
+                " Update strategy at runtime, calling [`", stringify!($Strategy), "::init`] on the new strategy\n",
+                " against the current data.\n",
+                "\n",
+                " To swap in a strategy without re-running `init` (e.g. one whose state was\n",
+                " already established elsewhere), assign the `strategy` field directly instead.",
+            )]
+            pub fn set_strategy(
+                &mut self,
+                strategy: Box<dyn $Strategy<D>>,
+            ) -> Result<(), ValidateError> {
+                self.strategy = strategy;
+                self.check_extrapolate(&self.extrapolate)?;
+                self.validate_strategy()?;
+                self.init_strategy()
+            }
+        }
+    };
+}
+pub(crate) use set_strategy_box_impl;
+
+/// Generates the `$StrategyEnum`-backed inherent `set_strategy`, shared by
+/// `Interp1D`/`2D`/`3D`/`ND`.
+macro_rules! set_strategy_enum_impl {
+    ($InterpType:ident, $StrategyEnum:path) => {
+        impl<D> $InterpType<D, $StrategyEnum>
+        where
+            D: Data + RawDataClone + Clone,
+            D::Elem: Float + Debug,
+        {
+            #[doc = concat!(
+                " Update strategy at runtime, calling [`", stringify!($StrategyEnum), "::init`] on the new strategy\n",
+                " against the current data.\n",
+                "\n",
+                " To swap in a strategy without re-running `init` (e.g. one whose state was\n",
+                " already established elsewhere), assign the `strategy` field directly instead.",
+            )]
+            pub fn set_strategy(
+                &mut self,
+                strategy: impl Into<$StrategyEnum>,
+            ) -> Result<(), ValidateError> {
+                self.strategy = strategy.into();
+                self.check_extrapolate(&self.extrapolate)?;
+                self.validate_strategy()?;
+                self.init_strategy()
+            }
+        }
+    };
+}
+pub(crate) use set_strategy_enum_impl;
+
+/// Generates the [`DynInterpolator`] impl shared by `Interp1D`/`2D`/`3D`/`ND`'s owned
+/// variants. Bounded on `Float + Euclid` (rather than the `Num + PartialOrd + Euclid +
+/// Copy` the [`Interpolator`] impls use) because that's what [`DynInterpolator`] itself
+/// requires transitively; only owned types implement it, since `as_any` requires
+/// `Self: 'static`.
+macro_rules! dyn_interpolator_impl {
+    ($InterpTypeOwned:ident, $Strategy:ident) => {
+        impl<T, S> DynInterpolator<T> for $InterpTypeOwned<T, S>
+        where
+            T: Float + Euclid + Debug + Send + Sync + 'static,
+            S: $Strategy<OwnedRepr<T>> + Clone + Send + Sync + 'static,
+        {
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+        }
+    };
+}
+pub(crate) use dyn_interpolator_impl;
+
 macro_rules! partialeq_impl {
     ($InterpType:ident, $Data:ident, $Strategy:ident) => {
         impl<D, S> PartialEq for $InterpType<D, S>

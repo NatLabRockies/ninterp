@@ -184,44 +184,7 @@ where
     D::Elem: Num + PartialOrd + Euclid + Copy + Debug,
     S: Strategy1D<D> + Clone,
 {
-    /// Interpolate at the supplied point.
-    ///
-    /// Unlike [`Interpolator::interpolate`], the point length is checked at compile
-    /// time via `N`, so this cannot fail with [`InterpolateError::PointLength`].
-    pub fn interpolate(&self, point: &[D::Elem; N]) -> Result<D::Elem, InterpolateError> {
-        if !(self.data.grid[0].first().unwrap()..=self.data.grid[0].last().unwrap())
-            .contains(&&point[0])
-        {
-            match &self.extrapolate {
-                Extrapolate::Enable => {}
-                Extrapolate::Fill(value) => return Ok(*value),
-                Extrapolate::Clamp => {
-                    let clamped_point = [*clamp(
-                        &point[0],
-                        self.data.grid[0].first().unwrap(),
-                        self.data.grid[0].last().unwrap(),
-                    )];
-                    return self.strategy.interpolate(&self.data, &clamped_point);
-                }
-                Extrapolate::Wrap => {
-                    let wrapped_point = [wrap(
-                        point[0],
-                        *self.data.grid[0].first().unwrap(),
-                        *self.data.grid[0].last().unwrap(),
-                    )];
-                    return self.strategy.interpolate(&self.data, &wrapped_point);
-                }
-                Extrapolate::Error => {
-                    return Err(InterpolateError::ExtrapolateError(format!(
-                        "\n    point[0] = {:?} is out of bounds for grid[0] = {:?}",
-                        point[0], self.data.grid[0]
-                    )))
-                }
-            }
-        };
-        self.strategy.interpolate(&self.data, point)
-    }
-
+    interpolate_impl!();
     batch_interpolate_impl!();
 }
 
@@ -253,51 +216,6 @@ where
     }
 }
 
-impl<D> Interp1D<D, Box<dyn Strategy1D<D>>>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialEq + Debug,
-{
-    /// Update strategy at runtime, calling [`Strategy1D::init`] on the new strategy
-    /// against the current data.
-    ///
-    /// To swap in a strategy without re-running `init` (e.g. one whose state was
-    /// already established elsewhere), assign the `strategy` field directly instead.
-    pub fn set_strategy(&mut self, strategy: Box<dyn Strategy1D<D>>) -> Result<(), ValidateError> {
-        self.strategy = strategy;
-        self.check_extrapolate(&self.extrapolate)?;
-        self.validate_strategy()?;
-        self.init_strategy()
-    }
-}
-
-impl<D> Interp1D<D, strategy::enums::Strategy1DEnum>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
-{
-    /// Update strategy at runtime, calling [`Strategy1D::init`] on the new strategy
-    /// against the current data.
-    ///
-    /// To swap in a strategy without re-running `init` (e.g. one whose state was
-    /// already established elsewhere), assign the `strategy` field directly instead.
-    pub fn set_strategy(
-        &mut self,
-        strategy: impl Into<strategy::enums::Strategy1DEnum>,
-    ) -> Result<(), ValidateError> {
-        self.strategy = strategy.into();
-        self.check_extrapolate(&self.extrapolate)?;
-        self.validate_strategy()?;
-        self.init_strategy()
-    }
-}
-
-impl<T, S> DynInterpolator<T> for Interp1DOwned<T, S>
-where
-    T: Float + Euclid + Debug + Send + Sync + 'static,
-    S: Strategy1D<OwnedRepr<T>> + Clone + Send + Sync + 'static,
-{
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
+set_strategy_box_impl!(Interp1D, Strategy1D);
+set_strategy_enum_impl!(Interp1D, strategy::enums::Strategy1DEnum);
+dyn_interpolator_impl!(Interp1DOwned, Strategy1D);

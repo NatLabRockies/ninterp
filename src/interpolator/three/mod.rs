@@ -210,54 +210,7 @@ where
     D::Elem: Num + PartialOrd + Euclid + Copy + Debug,
     S: Strategy3D<D> + Clone,
 {
-    /// Interpolate at the supplied point.
-    ///
-    /// Unlike [`Interpolator::interpolate`], the point length is checked at compile
-    /// time via `N`, so this cannot fail with [`InterpolateError::PointLength`].
-    pub fn interpolate(&self, point: &[D::Elem; N]) -> Result<D::Elem, InterpolateError> {
-        let mut errors = Vec::new();
-        for dim in 0..N {
-            if !(self.data.grid[dim].first().unwrap()..=self.data.grid[dim].last().unwrap())
-                .contains(&&point[dim])
-            {
-                match &self.extrapolate {
-                    Extrapolate::Enable => {}
-                    Extrapolate::Fill(value) => return Ok(*value),
-                    Extrapolate::Clamp => {
-                        let clamped_point = std::array::from_fn(|i| {
-                            *clamp(
-                                &point[i],
-                                self.data.grid[i].first().unwrap(),
-                                self.data.grid[i].last().unwrap(),
-                            )
-                        });
-                        return self.strategy.interpolate(&self.data, &clamped_point);
-                    }
-                    Extrapolate::Wrap => {
-                        let wrapped_point = std::array::from_fn(|i| {
-                            wrap(
-                                point[i],
-                                *self.data.grid[i].first().unwrap(),
-                                *self.data.grid[i].last().unwrap(),
-                            )
-                        });
-                        return self.strategy.interpolate(&self.data, &wrapped_point);
-                    }
-                    Extrapolate::Error => {
-                        errors.push(format!(
-                            "\n    point[{dim}] = {:?} is out of bounds for grid[{dim}] = {:?}",
-                            point[dim], self.data.grid[dim],
-                        ));
-                    }
-                };
-            }
-        }
-        if !errors.is_empty() {
-            return Err(InterpolateError::ExtrapolateError(errors.join("")));
-        }
-        self.strategy.interpolate(&self.data, point)
-    }
-
+    interpolate_impl!();
     batch_interpolate_impl!();
 }
 
@@ -289,51 +242,6 @@ where
     }
 }
 
-impl<D> Interp3D<D, Box<dyn Strategy3D<D>>>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialEq + Debug,
-{
-    /// Update strategy at runtime, calling [`Strategy3D::init`] on the new strategy
-    /// against the current data.
-    ///
-    /// To swap in a strategy without re-running `init` (e.g. one whose state was
-    /// already established elsewhere), assign the `strategy` field directly instead.
-    pub fn set_strategy(&mut self, strategy: Box<dyn Strategy3D<D>>) -> Result<(), ValidateError> {
-        self.strategy = strategy;
-        self.check_extrapolate(&self.extrapolate)?;
-        self.validate_strategy()?;
-        self.init_strategy()
-    }
-}
-
-impl<D> Interp3D<D, strategy::enums::Strategy3DEnum>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
-{
-    /// Update strategy at runtime, calling [`Strategy3D::init`] on the new strategy
-    /// against the current data.
-    ///
-    /// To swap in a strategy without re-running `init` (e.g. one whose state was
-    /// already established elsewhere), assign the `strategy` field directly instead.
-    pub fn set_strategy(
-        &mut self,
-        strategy: impl Into<strategy::enums::Strategy3DEnum>,
-    ) -> Result<(), ValidateError> {
-        self.strategy = strategy.into();
-        self.check_extrapolate(&self.extrapolate)?;
-        self.validate_strategy()?;
-        self.init_strategy()
-    }
-}
-
-impl<T, S> DynInterpolator<T> for Interp3DOwned<T, S>
-where
-    T: Float + Euclid + Debug + Send + Sync + 'static,
-    S: Strategy3D<OwnedRepr<T>> + Clone + Send + Sync + 'static,
-{
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
+set_strategy_box_impl!(Interp3D, Strategy3D);
+set_strategy_enum_impl!(Interp3D, strategy::enums::Strategy3DEnum);
+dyn_interpolator_impl!(Interp3DOwned, Strategy3D);
