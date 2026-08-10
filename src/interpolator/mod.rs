@@ -363,7 +363,7 @@ pub(crate) use batch_interpolate_impl;
 /// strategy once the point is known to be in-bounds (or already resolved via
 /// `Fill`/`Clamp`/`Wrap`). `InterpND` has no fixed `N` to loop `0..N` over at compile
 /// time, so it implements this by hand directly in its [`Interpolator`] impl instead.
-macro_rules! interpolate_impl {
+macro_rules! sized_interpolate_impl {
     () => {
         /// Interpolate at the supplied point.
         ///
@@ -417,7 +417,7 @@ macro_rules! interpolate_impl {
         }
     };
 }
-pub(crate) use interpolate_impl;
+pub(crate) use sized_interpolate_impl;
 
 /// Generates the `Box<dyn $Strategy<D>>`-backed inherent `set_strategy`, shared by
 /// `Interp1D`/`2D`/`3D`/`ND`.
@@ -653,3 +653,37 @@ pub(crate) use view_into_owned_impl;
 
 #[cfg(feature = "serde")]
 pub(crate) use serialize_nested_impl;
+
+/// Generates all trait impls for an interpolator: `PartialEq`, `SerializeNested`,
+/// `extrapolate_impl`, `Interpolator`, `set_strategy` for `Box<dyn Strategy>`,
+/// `set_strategy` for the strategy enum, and `DynInterpolator`.
+macro_rules! interpolator_trait_impls {
+    ($InterpType:ident, $InterpTypeOwned:ident, $InterpData:ident, $Strategy:ident, $StrategyEnum:path, $N:expr) => {
+        partialeq_impl!($InterpType, $InterpData, $Strategy);
+        #[cfg(feature = "serde")]
+        serialize_nested_impl!($InterpType, $InterpData, $Strategy);
+
+        extrapolate_impl!($InterpType, $Strategy);
+        interpolator_trait_impl!($InterpType, $Strategy, $N);
+        set_strategy_box_impl!($InterpType, $Strategy);
+        set_strategy_enum_impl!($InterpType, $StrategyEnum);
+        dyn_interpolator_impl!($InterpTypeOwned, $Strategy);
+    };
+}
+pub(crate) use interpolator_trait_impls;
+
+/// Generates inherent methods for an interpolator: strategy accessors, fast paths,
+/// data access (view/into_owned), and batch interpolation. Called inside the
+/// `impl<D, S>` block, leaving `pub fn new()` to be hand-written.
+macro_rules! interpolator_inherent_methods {
+    ($InterpType:ident, $Strategy:ident, $Viewed:ty, $Owned:ty) => {
+        strategy_accessors_impl!($Strategy);
+        interpolate_fast_impl!();
+        batch_interpolate_fast_impl!();
+
+        view_into_owned_impl!($InterpType, $Strategy, $Viewed, $Owned);
+        sized_interpolate_impl!();
+        batch_interpolate_impl!();
+    };
+}
+pub(crate) use interpolator_inherent_methods;

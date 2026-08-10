@@ -182,7 +182,6 @@ pub type InterpNDViewed<T, S> = InterpND<ViewRepr<T>, S>;
 /// [`InterpND`] that owns data.
 pub type InterpNDOwned<T, S> = InterpND<OwnedRepr<T>, S>;
 
-extrapolate_impl!(InterpND, StrategyND);
 partialeq_impl!(InterpND, InterpDataND, StrategyND);
 #[cfg(feature = "serde")]
 serialize_nested_impl!(InterpND, InterpDataND, StrategyND);
@@ -514,6 +513,7 @@ where
     }
 }
 
+extrapolate_impl!(InterpND, StrategyND);
 set_strategy_box_impl!(InterpND, StrategyND);
 set_strategy_enum_impl!(InterpND, strategy::enums::StrategyNDEnum);
 dyn_interpolator_impl!(InterpNDOwned, StrategyND);

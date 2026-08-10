@@ -71,21 +71,12 @@ pub type Interp3DViewed<T, S> = Interp3D<ViewRepr<T>, S>;
 /// [`Interp3D`] that owns data.
 pub type Interp3DOwned<T, S> = Interp3D<OwnedRepr<T>, S>;
 
-extrapolate_impl!(Interp3D, Strategy3D);
-partialeq_impl!(Interp3D, InterpData3D, Strategy3D);
-#[cfg(feature = "serde")]
-serialize_nested_impl!(Interp3D, InterpData3D, Strategy3D);
-
 impl<D, S> Interp3D<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
     S: Strategy3D<D> + Clone,
 {
-    strategy_accessors_impl!(Strategy3D);
-    interpolate_fast_impl!();
-    batch_interpolate_fast_impl!();
-
     /// Construct and validate a 3-D interpolator.
     ///
     /// # Example:
@@ -147,14 +138,19 @@ where
         Ok(interpolator)
     }
 
-    view_into_owned_impl!(Interp3D, Strategy3D, Interp3DViewed<&D::Elem, S>, Interp3DOwned<D::Elem, S>);
-
-    interpolate_impl!();
-    batch_interpolate_impl!();
+    interpolator_inherent_methods!(
+        Interp3D,
+        Strategy3D,
+        Interp3DViewed<&D::Elem, S>,
+        Interp3DOwned<D::Elem, S>
+    );
 }
 
-interpolator_trait_impl!(Interp3D, Strategy3D, N);
-
-set_strategy_box_impl!(Interp3D, Strategy3D);
-set_strategy_enum_impl!(Interp3D, strategy::enums::Strategy3DEnum);
-dyn_interpolator_impl!(Interp3DOwned, Strategy3D);
+interpolator_trait_impls!(
+    Interp3D,
+    Interp3DOwned,
+    InterpData3D,
+    Strategy3D,
+    strategy::enums::Strategy3DEnum,
+    N
+);

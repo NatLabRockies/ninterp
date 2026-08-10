@@ -70,21 +70,12 @@ pub type Interp2DViewed<T, S> = Interp2D<ViewRepr<T>, S>;
 /// [`Interp2D`] that owns data.
 pub type Interp2DOwned<T, S> = Interp2D<OwnedRepr<T>, S>;
 
-extrapolate_impl!(Interp2D, Strategy2D);
-partialeq_impl!(Interp2D, InterpData2D, Strategy2D);
-#[cfg(feature = "serde")]
-serialize_nested_impl!(Interp2D, InterpData2D, Strategy2D);
-
 impl<D, S> Interp2D<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
     S: Strategy2D<D> + Clone,
 {
-    strategy_accessors_impl!(Strategy2D);
-    interpolate_fast_impl!();
-    batch_interpolate_fast_impl!();
-
     /// Construct and validate a 2-D interpolator.
     ///
     /// # Example:
@@ -135,14 +126,19 @@ where
         Ok(interpolator)
     }
 
-    view_into_owned_impl!(Interp2D, Strategy2D, Interp2DViewed<&D::Elem, S>, Interp2DOwned<D::Elem, S>);
-
-    interpolate_impl!();
-    batch_interpolate_impl!();
+    interpolator_inherent_methods!(
+        Interp2D,
+        Strategy2D,
+        Interp2DViewed<&D::Elem, S>,
+        Interp2DOwned<D::Elem, S>
+    );
 }
 
-interpolator_trait_impl!(Interp2D, Strategy2D, N);
-
-set_strategy_box_impl!(Interp2D, Strategy2D);
-set_strategy_enum_impl!(Interp2D, strategy::enums::Strategy2DEnum);
-dyn_interpolator_impl!(Interp2DOwned, Strategy2D);
+interpolator_trait_impls!(
+    Interp2D,
+    Interp2DOwned,
+    InterpData2D,
+    Strategy2D,
+    strategy::enums::Strategy2DEnum,
+    N
+);
