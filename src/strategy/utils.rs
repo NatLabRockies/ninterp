@@ -121,7 +121,7 @@ pub fn exact_index<T: PartialOrd>(grid: ArrayView1<T>, lower: usize, point: &T) 
 /// Computes the lower bracket index for a uniformly-spaced grid in O(1).
 ///
 /// Equivalent to [`locate_lower_index`] but replaces binary search with direct arithmetic.
-/// Only valid when the grid spacing is uniform; validate with [`check_uniform_grid`] first.
+/// Only valid when the grid spacing is uniform; validate with [`validate_uniform_grid`] first.
 pub fn locate_lower_index_uniform<T: Float>(grid0: T, step: T, n: usize, point: T) -> usize {
     let t = (point - grid0) / step;
     if t < T::zero() {
@@ -131,27 +131,36 @@ pub fn locate_lower_index_uniform<T: Float>(grid0: T, step: T, n: usize, point: 
     }
 }
 
-/// Validates that `grid` is uniformly spaced within floating-point tolerance.
+/// Validates that `grid` is uniformly spaced within `tolerance`.
 ///
-/// Uses a relative tolerance of 1024 × ε to accommodate accumulated floating-point rounding
-/// error in grids constructed from repeated arithmetic. Pair with [`locate_lower_index_uniform`]
-/// for the matching O(1) lookup.
-pub fn check_uniform_grid<T: Float>(grid: ArrayView1<T>, dim: usize) -> Result<(), ValidateError> {
+/// `tolerance` is an absolute bound, in the same units as `grid`, on how far a interval
+/// may drift from the grid's first interval (either wider or narrower). Pass `None` for a
+/// sensible default: a relative tolerance of 1024 × ε, scaled by the grid's own step
+/// size, loose enough to absorb the rounding error that accumulates in grids built from
+/// repeated arithmetic (e.g. `Array::linspace`) while still catching a grid that was
+/// never meant to be uniform. Pass `Some(_)` when a strategy's precision needs differ
+/// from that default.
+///
+/// Pair with [`locate_lower_index_uniform`] for the matching O(1) lookup.
+pub fn validate_uniform_grid<T: Float>(
+    grid: ArrayView1<T>,
+    dim: usize,
+    tolerance: Option<T>,
+) -> Result<(), ValidateError> {
     let step = grid[1] - grid[0];
-    // 1024 * epsilon via 10 doublings, avoids numeric literal casting
-    let tolerance = {
+    let tolerance = tolerance.unwrap_or_else(|| {
+        // 1024 * epsilon via 10 doublings, avoids numeric literal casting
         let mut tol = T::epsilon();
         for _ in 0..10 {
             tol = tol + tol;
         }
         step.abs() * tol
-    };
+    });
     for i in 1..grid.len() - 1 {
-        let gap = grid[i + 1] - grid[i];
-        if (gap - step).abs() > tolerance {
-            return Err(ValidateError::Other(format!(
-                "grid[{dim}] is not uniformly spaced (gap at index {i})"
-            )));
+        // Wider or narrower than the first interval both count as non-uniform.
+        let spacing = grid[i + 1] - grid[i];
+        if (spacing - step).abs() > tolerance {
+            return Err(ValidateError::NonUniform { dim, index: i });
         }
     }
     Ok(())

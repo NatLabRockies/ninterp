@@ -642,7 +642,10 @@ fn test_mismatched_grid() {
             Extrapolate::Error,
         )
         .unwrap_err(),
-        ValidateError::Other(_)
+        ValidateError::GridLength {
+            expected: 2,
+            found: 3
+        }
     ));
     assert!(InterpND::new(
         vec![array![]],
@@ -661,7 +664,11 @@ fn test_mismatched_grid() {
             Extrapolate::Error,
         )
         .unwrap_err(),
-        ValidateError::Other(_)
+        // A single value reads as 0-D, so a non-empty grid has one axis too many
+        ValidateError::GridLength {
+            expected: 0,
+            found: 1
+        }
     ));
 }
 

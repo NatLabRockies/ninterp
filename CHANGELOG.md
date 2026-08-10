@@ -31,11 +31,16 @@ Everything below is merged to `main` but not yet tagged/released.
   format on non-`is_human_readable` (binary) serializers, since there's nothing to nest
   there and those formats can't read it back anyway.
 - `strategy::utils::exact_index`, `locate_step_index`, `locate_lower_index_uniform`,
-  `check_uniform_grid`, and `AxisLocation`/`locate_axis` are now `pub` (previously
+  `validate_uniform_grid`, and `AxisLocation`/`locate_axis` are now `pub` (previously
   `pub(crate)`). They're the same per-axis primitives `Linear`/`LinearUniform`/`Step`/
   `StepLower`/`StepUpper` are built from, now reusable from custom strategies instead of
-  needing to be reimplemented. `check_uniform_grid`'s error message no longer hardcodes
-  `"LinearUniform:"`, since other strategies can call it directly now too.
+  needing to be reimplemented. `validate_uniform_grid` (named for consistency with the
+  rest of the crate's `validate_*` invariant checks) takes a `tolerance: Option<T>`:
+  `None` keeps the existing default of 1024 × ε scaled by the grid's own step size,
+  `Some(t)` overrides it for a strategy whose precision needs differ. On failure it
+  raises the dedicated `ValidateError::NonUniform { dim, index }` rather than a
+  formatted string, so every strategy that calls it, not just `LinearUniform`, reports
+  a non-uniform grid identically and a caller can match on it instead of parsing text.
 - `interpolate_fast` on `Strategy1D`/`2D`/`3D`/`ND` and `Interpolator<T>` (both
   default-provided, non-breaking): a `Result`-free interpolation path for hot loops
   where the caller has already checked the point is in-bounds and knows extrapolation
@@ -150,7 +155,7 @@ Everything below is merged to `main` but not yet tagged/released.
 - **Breaking:** `find_nearest_index` is renamed to `locate_lower_index` and, along with
   the other grid/index search helpers (`step_index` -> `locate_step_index`,
   `uniform_lower_index` -> `locate_lower_index_uniform`, `exact_index`,
-  `check_uniform_grid`), moves from `strategy::traits` to a new `strategy::utils`
+  `validate_uniform_grid`), moves from `strategy::traits` to a new `strategy::utils`
   module; `traits` now holds only the `Strategy1D`/`2D`/`3D`/`ND` trait definitions.
   No deprecation shim, matching the other breaking renames in this release.
   `locate_lower_index` also now clamps out-of-range points to `[0, len - 2]` itself,
@@ -187,6 +192,12 @@ Everything below is merged to `main` but not yet tagged/released.
   `ExtrapolateUnsupported`. Only `Extrapolate::Enable` can ever be rejected, and only by
   a strategy whose `allow_extrapolate` returns `false`, so the stringified setting the
   variant used to carry said nothing the variant name doesn't.
+- New `ValidateError::GridLength { expected: usize, found: usize }`, for an `InterpDataND`
+  whose grid axis count doesn't match its values' dimensionality. Previously fell through
+  to `ValidateError::Other(String)`; `Other` remains for conditions the crate doesn't
+  model, e.g. a custom strategy validating its own configuration (`Step`'s
+  direction-count check stays `Other` for exactly this reason: it describes the
+  strategy's own arguments, not the data).
 - **Breaking:** error variants renamed for consistency, and no longer read as
   full sentences: `ValidateError::Monotonicity` -> `NonMonotonic`, and
   `InterpolateError::ExtrapolateError` -> `InterpolateError::OutOfBounds`, which drops

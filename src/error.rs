@@ -14,8 +14,22 @@ pub enum ValidateError {
     InsufficientGridPoints(usize),
     #[error("supplied coordinates must be monotonically increasing: dim {0}")]
     NonMonotonic(usize),
+    /// Raised by [`crate::strategy::utils::validate_uniform_grid`], so any strategy
+    /// requiring uniform spacing reports it the same way, not just `LinearUniform`.
+    ///
+    /// `index` is the first coordinate whose following interval, `grid[index + 1] -
+    /// grid[index]`, differs from the grid's first interval, in either direction.
+    #[error("grid[{dim}] is not uniformly spaced (spacing changes at index {index})")]
+    NonUniform { dim: usize, index: usize },
     #[error("supplied grid and values are not compatible shapes: dim {0}")]
     IncompatibleShapes(usize),
+    /// Number of grid axes doesn't match the dimensionality of `values`. Only reachable
+    /// for `InterpDataND`, whose axis count isn't fixed by the type. Distinct from
+    /// [`ValidateError::IncompatibleShapes`], which compares extents within one axis.
+    #[error("grid has {found} axes, expected {expected} to match the values")]
+    GridLength { expected: usize, found: usize },
+    /// Escape hatch for conditions this crate doesn't model, chiefly custom strategies
+    /// validating their own configuration.
     #[error("{0}")]
     Other(String),
 }

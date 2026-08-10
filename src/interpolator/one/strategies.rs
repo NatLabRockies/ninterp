@@ -35,7 +35,7 @@ where
 {
     /// Ensures the grid is uniformly spaced.
     fn validate(&self, data: &InterpData1DBase<D>) -> Result<(), ValidateError> {
-        check_uniform_grid(data.grid[0].view(), 0)
+        validate_uniform_grid(data.grid[0].view(), 0, None)
     }
 
     fn interpolate(
@@ -90,13 +90,7 @@ where
 {
     /// Ensures the number of provided step directions matches the interpolator dimensionality.
     fn validate(&self, _data: &InterpData1DBase<D>) -> Result<(), ValidateError> {
-        if self.0.len() != 1 {
-            return Err(ValidateError::Other(format!(
-                "Step strategy has {} directions but interpolator is 1-D (expected 1)",
-                self.0.len()
-            )));
-        }
-        Ok(())
+        self.validate_len(1)
     }
 
     fn interpolate(

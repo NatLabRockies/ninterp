@@ -95,11 +95,10 @@ where
         let n = self.ndim();
         if (self.grid.len() != n) && !(n == 0 && self.grid.iter().all(|g| g.is_empty())) {
             // Only possible for `InterpDataND`
-            return Err(ValidateError::Other(format!(
-                "grid length {} does not match dimensionality {}",
-                self.grid.len(),
-                n,
-            )));
+            return Err(ValidateError::GridLength {
+                expected: n,
+                found: self.grid.len(),
+            });
         }
         for i in 0..n {
             let i_grid_len = self.grid[i].len();

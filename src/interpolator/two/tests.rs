@@ -310,7 +310,8 @@ fn test_set_strategy_runs_validate() {
     .unwrap();
     assert!(matches!(
         interp.set_strategy(strategy::LinearUniform).unwrap_err(),
-        ValidateError::Other(_)
+        // grid[0] = [0., 1., 5.]: the interval after index 1 is 4, not 1
+        ValidateError::NonUniform { dim: 0, index: 1 }
     ));
 }
 

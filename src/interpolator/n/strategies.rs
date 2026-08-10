@@ -94,7 +94,7 @@ where
     /// Ensures grid uniformity in all dimensions
     fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
         for (dim, grid) in data.grid.iter().enumerate() {
-            check_uniform_grid(grid.view(), dim)?;
+            validate_uniform_grid(grid.view(), dim, None)?;
         }
         Ok(())
     }
@@ -181,14 +181,7 @@ where
 {
     /// Ensures the number of provided step directions matches the dimensionality of the interpolator
     fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
-        let n = data.values.ndim();
-        if self.0.len() != 1 && self.0.len() != n {
-            return Err(ValidateError::Other(format!(
-                "Step strategy has {} step directions but interpolator is {n}-D (expected 1 or {n})",
-                self.0.len()
-            )));
-        }
-        Ok(())
+        self.validate_len(data.values.ndim())
     }
 
     fn interpolate(
