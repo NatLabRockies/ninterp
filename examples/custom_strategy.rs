@@ -38,8 +38,8 @@ where
     fn validate(&self, data: &InterpData2DBase<D>) -> Result<(), ninterp::error::ValidateError> {
         // Dummy invariant: reject non-uniformly-spaced grids. `strategy::utils` has a
         // ready-made helper for exactly this, used by the built-in `LinearUniform` strategy.
-        ninterp::strategy::utils::check_uniform_grid(data.grid[0].view(), 0)?;
-        ninterp::strategy::utils::check_uniform_grid(data.grid[1].view(), 1)?;
+        ninterp::strategy::utils::validate_uniform_grid(data.grid[0].view(), 0, None)?;
+        ninterp::strategy::utils::validate_uniform_grid(data.grid[1].view(), 1, None)?;
         println!("validated!");
         Ok(())
     }

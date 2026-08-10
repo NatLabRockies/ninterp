@@ -22,18 +22,18 @@ macro_rules! enum_method_forward {
             }
         }
     };
-    (check_extrapolate) => {
-        #[doc = "Check applicability of the current variant's strategy, data, and extrapolate setting."]
-        pub fn check_extrapolate(
+    (validate_extrapolate) => {
+        #[doc = "Check that `extrapolate` is applicable to the current variant's strategy.\n\nForwards to the variant's own `validate_extrapolate`; `Interp0D` accepts any\nsetting, since it never extrapolates."]
+        pub fn validate_extrapolate(
             &self,
             extrapolate: &Extrapolate<D::Elem>,
         ) -> Result<(), ValidateError> {
             match self {
                 InterpolatorEnumBase::Interp0D(_) => Ok(()),
-                InterpolatorEnumBase::Interp1D(interp) => interp.check_extrapolate(extrapolate),
-                InterpolatorEnumBase::Interp2D(interp) => interp.check_extrapolate(extrapolate),
-                InterpolatorEnumBase::Interp3D(interp) => interp.check_extrapolate(extrapolate),
-                InterpolatorEnumBase::InterpND(interp) => interp.check_extrapolate(extrapolate),
+                InterpolatorEnumBase::Interp1D(interp) => interp.validate_extrapolate(extrapolate),
+                InterpolatorEnumBase::Interp2D(interp) => interp.validate_extrapolate(extrapolate),
+                InterpolatorEnumBase::Interp3D(interp) => interp.validate_extrapolate(extrapolate),
+                InterpolatorEnumBase::InterpND(interp) => interp.validate_extrapolate(extrapolate),
             }
         }
     };
@@ -126,21 +126,15 @@ macro_rules! slice_to_array_forward {
         fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
             match self {
                 InterpolatorEnumBase::Interp0D(interp) => interp.interpolate(point),
-                InterpolatorEnumBase::Interp1D(interp) => interp.interpolate(
-                    point
-                        .try_into()
-                        .map_err(|_| InterpolateError::PointLength(1))?,
-                ),
-                InterpolatorEnumBase::Interp2D(interp) => interp.interpolate(
-                    point
-                        .try_into()
-                        .map_err(|_| InterpolateError::PointLength(2))?,
-                ),
-                InterpolatorEnumBase::Interp3D(interp) => interp.interpolate(
-                    point
-                        .try_into()
-                        .map_err(|_| InterpolateError::PointLength(3))?,
-                ),
+                InterpolatorEnumBase::Interp1D(interp) => {
+                    interp.interpolate(to_fixed_point(point)?)
+                }
+                InterpolatorEnumBase::Interp2D(interp) => {
+                    interp.interpolate(to_fixed_point(point)?)
+                }
+                InterpolatorEnumBase::Interp3D(interp) => {
+                    interp.interpolate(to_fixed_point(point)?)
+                }
                 InterpolatorEnumBase::InterpND(interp) => interp.interpolate(point),
             }
         }
@@ -178,37 +172,13 @@ macro_rules! slice_to_array_forward {
                     Interpolator::batch_interpolate(interp, points)
                 }
                 InterpolatorEnumBase::Interp1D(interp) => {
-                    let points: Vec<[D::Elem; 1]> = points
-                        .iter()
-                        .map(|&point| {
-                            point
-                                .try_into()
-                                .map_err(|_| InterpolateError::PointLength(1))
-                        })
-                        .collect::<Result<_, _>>()?;
-                    interp.batch_interpolate(&points)
+                    interp.batch_interpolate(&to_fixed_points(points)?)
                 }
                 InterpolatorEnumBase::Interp2D(interp) => {
-                    let points: Vec<[D::Elem; 2]> = points
-                        .iter()
-                        .map(|&point| {
-                            point
-                                .try_into()
-                                .map_err(|_| InterpolateError::PointLength(2))
-                        })
-                        .collect::<Result<_, _>>()?;
-                    interp.batch_interpolate(&points)
+                    interp.batch_interpolate(&to_fixed_points(points)?)
                 }
                 InterpolatorEnumBase::Interp3D(interp) => {
-                    let points: Vec<[D::Elem; 3]> = points
-                        .iter()
-                        .map(|&point| {
-                            point
-                                .try_into()
-                                .map_err(|_| InterpolateError::PointLength(3))
-                        })
-                        .collect::<Result<_, _>>()?;
-                    interp.batch_interpolate(&points)
+                    interp.batch_interpolate(&to_fixed_points(points)?)
                 }
                 InterpolatorEnumBase::InterpND(interp) => interp.batch_interpolate(points),
             }
@@ -275,37 +245,13 @@ macro_rules! slice_to_array_forward {
                     Ok(())
                 }
                 InterpolatorEnumBase::Interp1D(interp) => {
-                    let points: Vec<[D::Elem; 1]> = points
-                        .iter()
-                        .map(|&point| {
-                            point
-                                .try_into()
-                                .map_err(|_| InterpolateError::PointLength(1))
-                        })
-                        .collect::<Result<_, _>>()?;
-                    interp.batch_interpolate_into(&points, out)
+                    interp.batch_interpolate_into(&to_fixed_points(points)?, out)
                 }
                 InterpolatorEnumBase::Interp2D(interp) => {
-                    let points: Vec<[D::Elem; 2]> = points
-                        .iter()
-                        .map(|&point| {
-                            point
-                                .try_into()
-                                .map_err(|_| InterpolateError::PointLength(2))
-                        })
-                        .collect::<Result<_, _>>()?;
-                    interp.batch_interpolate_into(&points, out)
+                    interp.batch_interpolate_into(&to_fixed_points(points)?, out)
                 }
                 InterpolatorEnumBase::Interp3D(interp) => {
-                    let points: Vec<[D::Elem; 3]> = points
-                        .iter()
-                        .map(|&point| {
-                            point
-                                .try_into()
-                                .map_err(|_| InterpolateError::PointLength(3))
-                        })
-                        .collect::<Result<_, _>>()?;
-                    interp.batch_interpolate_into(&points, out)
+                    interp.batch_interpolate_into(&to_fixed_points(points)?, out)
                 }
                 InterpolatorEnumBase::InterpND(interp) => {
                     interp.batch_interpolate_into(points, out)
@@ -622,7 +568,7 @@ where
 
     enum_method_wrap!(view);
     enum_method_wrap!(into_owned);
-    enum_method_forward!(check_extrapolate);
+    enum_method_forward!(validate_extrapolate);
     enum_method_forward!(validate_strategy);
     enum_method_forward!(mut init_strategy);
 }
@@ -668,7 +614,10 @@ mod tests {
         .unwrap();
         assert!(matches!(
             interp_1d.interpolate(&[]).unwrap_err(),
-            InterpolateError::PointLength(1)
+            InterpolateError::PointLength {
+                expected: 1,
+                ref failures
+            } if failures.as_slice() == [WrongLengthAt { index: 0, found: 0 }]
         ));
 
         let interp_2d = InterpolatorEnumBase::new_2d(
@@ -681,7 +630,10 @@ mod tests {
         .unwrap();
         assert!(matches!(
             interp_2d.interpolate(&[]).unwrap_err(),
-            InterpolateError::PointLength(2)
+            InterpolateError::PointLength {
+                expected: 2,
+                ref failures
+            } if failures.as_slice() == [WrongLengthAt { index: 0, found: 0 }]
         ));
 
         let interp_3d = InterpolatorEnumBase::new_3d(
@@ -695,7 +647,10 @@ mod tests {
         .unwrap();
         assert!(matches!(
             interp_3d.interpolate(&[]).unwrap_err(),
-            InterpolateError::PointLength(3)
+            InterpolateError::PointLength {
+                expected: 3,
+                ref failures
+            } if failures.as_slice() == [WrongLengthAt { index: 0, found: 0 }]
         ));
     }
 
@@ -755,7 +710,10 @@ mod tests {
         let points: [&[f64]; 1] = [&[0.075]];
         assert!(matches!(
             interp.batch_interpolate(&points).unwrap_err(),
-            InterpolateError::PointLength(2)
+            InterpolateError::PointLength {
+                expected: 2,
+                ref failures
+            } if failures.as_slice() == [WrongLengthAt { index: 0, found: 1 }]
         ));
     }
 

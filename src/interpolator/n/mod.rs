@@ -95,11 +95,10 @@ where
         let n = self.ndim();
         if (self.grid.len() != n) && !(n == 0 && self.grid.iter().all(|g| g.is_empty())) {
             // Only possible for `InterpDataND`
-            return Err(ValidateError::Other(format!(
-                "grid length {} does not match dimensionality {}",
-                self.grid.len(),
-                n,
-            )));
+            return Err(ValidateError::GridLength {
+                expected: n,
+                found: self.grid.len(),
+            });
         }
         for i in 0..n {
             let i_grid_len = self.grid[i].len();
@@ -261,7 +260,7 @@ where
     /// // out of bounds point with `Extrapolate::Error` fails
     /// assert!(matches!(
     ///     interp.interpolate(&[5.5, 5.5, 5.5]).unwrap_err(),
-    ///     ninterp::error::InterpolateError::ExtrapolateError(_)
+    ///     ninterp::error::InterpolateError::OutOfBounds(_)
     /// ));
     /// ```
     pub fn new(
@@ -275,7 +274,7 @@ where
             strategy,
             extrapolate,
         };
-        interpolator.check_extrapolate(&interpolator.extrapolate)?;
+        interpolator.validate_extrapolate(&interpolator.extrapolate)?;
         interpolator.validate_strategy()?;
         interpolator.init_strategy()?;
         Ok(interpolator)
@@ -320,7 +319,7 @@ where
     }
 
     fn validate(&self) -> Result<(), ValidateError> {
-        self.check_extrapolate(&self.extrapolate)?;
+        self.validate_extrapolate(&self.extrapolate)?;
         self.data.validate()?;
         self.validate_strategy()?;
         Ok(())
@@ -329,7 +328,13 @@ where
     fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
         let n = self.ndim();
         if point.len() != n {
-            return Err(InterpolateError::PointLength(n));
+            return Err(InterpolateError::PointLength {
+                expected: n,
+                failures: vec![WrongLengthAt {
+                    index: 0,
+                    found: point.len(),
+                }],
+            });
         }
         let mut errors = Vec::new();
         for dim in 0..n {
@@ -368,22 +373,19 @@ where
                         return self.strategy.interpolate(&self.data, &wrapped_point);
                     }
                     Extrapolate::Error => {
-                        errors.push(format!(
-                            "\n    point[{dim}] = {:?} is out of bounds for grid[{dim}] = {:?}",
-                            point[dim], self.data.grid[dim],
-                        ));
+                        errors.push(OutOfBoundsAt { index: 0, dim });
                     }
                 };
             }
         }
         if !errors.is_empty() {
-            return Err(InterpolateError::ExtrapolateError(errors.join("")));
+            return Err(InterpolateError::OutOfBounds(errors));
         }
         self.strategy.interpolate(&self.data, point)
     }
 
     fn set_extrapolate(&mut self, extrapolate: Extrapolate<D::Elem>) -> Result<(), ValidateError> {
-        self.check_extrapolate(&extrapolate)?;
+        self.validate_extrapolate(&extrapolate)?;
         self.extrapolate = extrapolate;
         Ok(())
     }
@@ -403,10 +405,20 @@ where
         out: &mut [D::Elem],
     ) -> Result<(), InterpolateError> {
         let n = self.ndim();
-        for point in points {
-            if point.len() != n {
-                return Err(InterpolateError::PointLength(n));
-            }
+        let failures: Vec<WrongLengthAt> = points
+            .iter()
+            .enumerate()
+            .filter(|(_, point)| point.len() != n)
+            .map(|(i, point)| WrongLengthAt {
+                index: i,
+                found: point.len(),
+            })
+            .collect();
+        if !failures.is_empty() {
+            return Err(InterpolateError::PointLength {
+                expected: n,
+                failures,
+            });
         }
         if out.len() != points.len() {
             return Err(InterpolateError::OutputLength {
@@ -503,9 +515,7 @@ where
                     for (dim, (axis, &coord)) in self.data.grid.iter().zip(point.iter()).enumerate()
                     {
                         if !(axis.first().unwrap()..=axis.last().unwrap()).contains(&&coord) {
-                            point_errors.push(format!(
-                                "\n    point[{i}][{dim}] = {coord:?} is out of bounds for grid[{dim}] = {axis:?}",
-                            ));
+                            point_errors.push(OutOfBoundsAt { index: i, dim });
                         }
                     }
                     if point_errors.is_empty() {
@@ -515,7 +525,7 @@ where
                     }
                 }
                 if !errors.is_empty() {
-                    return Err(InterpolateError::ExtrapolateError(errors.join("")));
+                    return Err(InterpolateError::OutOfBounds(errors));
                 }
                 self.strategy
                     .batch_interpolate_into(&self.data, &in_bounds_points, out)
@@ -562,4 +572,4 @@ where
 extrapolate_impl!(InterpNDBase, StrategyND);
 set_strategy_box_impl!(InterpNDBase, StrategyND);
 set_strategy_enum_impl!(InterpNDBase, strategy::enums::StrategyNDEnum);
-dyn_interpolator_impl!(InterpND, StrategyND);
+any_interpolator_impl!(InterpND, StrategyND);

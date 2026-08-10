@@ -136,6 +136,28 @@ impl From<StepDirection> for Step {
 }
 
 impl Step {
+    /// Checks the stored direction count against an interpolator's dimensionality: one
+    /// direction broadcasts to every dimension, otherwise there must be exactly one per
+    /// dimension. Shared by the `Strategy1D`/`2D`/`3D`/`ND` impls so all four report it
+    /// identically.
+    ///
+    /// Stays a [`ValidateError::Other`] rather than earning a variant: it describes how
+    /// this strategy was configured, not anything about the data.
+    pub(crate) fn validate_len(&self, ndim: usize) -> Result<(), ValidateError> {
+        let found = self.0.len();
+        if found == 1 || found == ndim {
+            return Ok(());
+        }
+        let expected = if ndim == 1 {
+            "1".to_string()
+        } else {
+            format!("1 or {ndim}")
+        };
+        Err(ValidateError::Other(format!(
+            "Step strategy has {found} directions but interpolator is {ndim}-D (expected {expected})"
+        )))
+    }
+
     /// Returns the direction for dimension `dim`.
     /// A single stored direction broadcasts to all dimensions.
     pub(crate) fn dir(&self, dim: usize) -> StepDirection {

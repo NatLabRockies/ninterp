@@ -237,15 +237,17 @@ Validation-time (`new` / `validate`):
 | --- | --- |
 | `ValidateError::InsufficientGridPoints` | Fewer than 2 grid coordinates in a dimension |
 | `ValidateError::NonMonotonic` | Non-monotonic coordinates |
+| `ValidateError::NonUniform` | Non-uniformly-spaced grid, required by `LinearUniform` and any strategy calling `validate_uniform_grid` |
 | `ValidateError::IncompatibleShapes` | Grid/value shape mismatch |
-| `ValidateError::InvalidExtrapolate` | Inapplicable extrapolation setting |
+| `ValidateError::GridLength` | `InterpDataND` grid axis count doesn't match the dimensionality of `values` |
+| `ValidateError::ExtrapolateUnsupported` | `Extrapolate::Enable` on a strategy that can't extrapolate |
 
 Interpolation-time (`interpolate`):
 
 | Error | Meaning |
 | --- | --- |
-| `InterpolateError::PointLength` | Query point has wrong dimensionality |
-| `InterpolateError::ExtrapolateError` | Query point is out of bounds while using `Extrapolate::Error` |
+| `InterpolateError::PointLength` | Query point has wrong dimensionality; carries a `WrongLengthAt` per offending point |
+| `InterpolateError::OutOfBounds` | Query point is out of bounds while using `Extrapolate::Error`; carries an `OutOfBoundsAt` per offending coordinate |
 
 ## Using Owned and Borrowed (Viewed) Data
 All interpolators support both owned and borrowed data via the generic `D` bound on

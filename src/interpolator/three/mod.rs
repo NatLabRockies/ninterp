@@ -112,7 +112,7 @@ where
     /// // out of bounds point with `Extrapolate::Error` fails
     /// assert!(matches!(
     ///     interp.interpolate(&[5.5, 5.5, 5.5]).unwrap_err(),
-    ///     ninterp::error::InterpolateError::ExtrapolateError(_)
+    ///     ninterp::error::InterpolateError::OutOfBounds(_)
     /// ));
     /// ```
     pub fn new(
@@ -131,7 +131,7 @@ where
             strategy,
             extrapolate,
         };
-        interpolator.check_extrapolate(&interpolator.extrapolate)?;
+        interpolator.validate_extrapolate(&interpolator.extrapolate)?;
         interpolator.validate_strategy()?;
         interpolator.init_strategy()?;
         Ok(interpolator)

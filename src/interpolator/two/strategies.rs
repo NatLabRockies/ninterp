@@ -23,7 +23,7 @@ where
             (AxisLocation::Exact(i), AxisLocation::Exact(j)) => Ok(data.values[[i, j]]),
             (
                 AxisLocation::Exact(i),
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: y_l,
                     frac: y_diff,
                 },
@@ -33,7 +33,7 @@ where
                     + data.values[[i, y_u]] * y_diff)
             }
             (
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: x_l,
                     frac: x_diff,
                 },
@@ -44,11 +44,11 @@ where
                     + data.values[[x_u, j]] * x_diff)
             }
             (
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: x_l,
                     frac: x_diff,
                 },
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: y_l,
                     frac: y_diff,
                 },
@@ -79,8 +79,8 @@ where
 {
     /// Ensures all grid dimensions are uniformly spaced.
     fn validate(&self, data: &InterpData2DBase<D>) -> Result<(), ValidateError> {
-        check_uniform_grid(data.grid[0].view(), 0)?;
-        check_uniform_grid(data.grid[1].view(), 1)
+        validate_uniform_grid(data.grid[0].view(), 0, None)?;
+        validate_uniform_grid(data.grid[1].view(), 1, None)
     }
 
     fn interpolate(
@@ -152,13 +152,7 @@ where
 {
     /// Ensures the number of provided step directions matches the interpolator dimensionality.
     fn validate(&self, _data: &InterpData2DBase<D>) -> Result<(), ValidateError> {
-        if self.0.len() != 1 && self.0.len() != 2 {
-            return Err(ValidateError::Other(format!(
-                "Step strategy has {} directions but interpolator is 2-D (expected 1 or 2)",
-                self.0.len()
-            )));
-        }
-        Ok(())
+        self.validate_len(2)
     }
 
     fn interpolate(

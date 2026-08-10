@@ -14,7 +14,7 @@ fn test_invalid_args() {
     // generic/`dyn` callers passing a real slice) still catches it at runtime.
     assert!(matches!(
         Interpolator::interpolate(&interp, &[]).unwrap_err(),
-        InterpolateError::PointLength(_)
+        InterpolateError::PointLength { .. }
     ));
     assert_eq!(interp.interpolate(&[1.0]).unwrap(), 0.4);
 }
@@ -34,7 +34,7 @@ fn test_invalid_args_dyn() {
     // reachable, so a wrong-length point still fails at runtime, not compile time.
     assert!(matches!(
         interp.interpolate(&[]).unwrap_err(),
-        InterpolateError::PointLength(_)
+        InterpolateError::PointLength { .. }
     ));
     assert_eq!(interp.interpolate(&[1.0]).unwrap(), 0.4);
 }
@@ -50,7 +50,7 @@ fn test_dyn_interpolator() {
     .unwrap();
     let points: [&[f64]; 2] = [&[1.0], &[2.5]];
 
-    let boxed: Box<dyn DynInterpolator<f64>> = Box::new(interp.clone());
+    let boxed: Box<dyn AnyInterpolator<f64>> = Box::new(interp.clone());
     assert_eq!(boxed.interpolate(&[1.0]).unwrap(), 0.4);
     assert_eq!(
         boxed.batch_interpolate(&points).unwrap(),
@@ -58,7 +58,7 @@ fn test_dyn_interpolator() {
     );
     assert!(matches!(
         boxed.interpolate(&[]).unwrap_err(),
-        InterpolateError::PointLength(1)
+        InterpolateError::PointLength { expected: 1, .. }
     ));
     assert_eq!(
         boxed.as_any().downcast_ref::<Interp1D<f64, _>>(),
@@ -290,7 +290,7 @@ fn test_extrapolate_inputs() {
             Extrapolate::Enable,
         )
         .unwrap_err(),
-        ValidateError::InvalidExtrapolate(_)
+        ValidateError::ExtrapolateUnsupported
     ));
 
     // Extrapolate::Error
@@ -304,12 +304,12 @@ fn test_extrapolate_inputs() {
     // Fail to extrapolate below lowest grid value
     assert!(matches!(
         interp.interpolate(&[-1.]).unwrap_err(),
-        InterpolateError::ExtrapolateError(_)
+        InterpolateError::OutOfBounds(_)
     ));
     // Fail to extrapolate above highest grid value
     assert!(matches!(
         interp.interpolate(&[5.]).unwrap_err(),
-        InterpolateError::ExtrapolateError(_)
+        InterpolateError::OutOfBounds(_)
     ));
 }
 
@@ -443,13 +443,14 @@ fn test_batch_interpolate_error_aggregates_all_points() {
     let err = interp
         .batch_interpolate(&[[1.], [-1.], [2.], [5.]])
         .unwrap_err();
-    let InterpolateError::ExtrapolateError(message) = err else {
-        panic!("expected ExtrapolateError");
+    let InterpolateError::OutOfBounds(failures) = err else {
+        panic!("expected InterpolateError::OutOfBounds");
     };
-    assert!(message.contains("point[1]"));
-    assert!(message.contains("point[3]"));
-    assert!(!message.contains("point[0]"));
-    assert!(!message.contains("point[2]"));
+    let offending: Vec<usize> = failures.iter().map(|at| at.index).collect();
+    assert!(offending.contains(&1));
+    assert!(offending.contains(&3));
+    assert!(!offending.contains(&0));
+    assert!(!offending.contains(&2));
 }
 
 #[test]

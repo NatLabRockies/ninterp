@@ -15,7 +15,7 @@ fn test_invalid_args() {
     // generic/`dyn` callers passing a real slice) still catches it at runtime.
     assert!(matches!(
         Interpolator::interpolate(&interp, &[]).unwrap_err(),
-        InterpolateError::PointLength(_)
+        InterpolateError::PointLength { .. }
     ));
     assert_eq!(interp.interpolate(&[0.075, 0.25]).unwrap(), 3.);
 }
@@ -201,7 +201,7 @@ fn test_extrapolate_inputs() {
             Extrapolate::Enable,
         )
         .unwrap_err(),
-        ValidateError::InvalidExtrapolate(_)
+        ValidateError::ExtrapolateUnsupported
     ));
     // Extrapolate::Error
     let interp = Interp2D::new(
@@ -214,11 +214,11 @@ fn test_extrapolate_inputs() {
     .unwrap();
     assert!(matches!(
         interp.interpolate(&[-1., -1.]).unwrap_err(),
-        InterpolateError::ExtrapolateError(_)
+        InterpolateError::OutOfBounds(_)
     ));
     assert!(matches!(
         interp.interpolate(&[2., 2.]).unwrap_err(),
-        InterpolateError::ExtrapolateError(_)
+        InterpolateError::OutOfBounds(_)
     ));
 }
 
@@ -310,7 +310,8 @@ fn test_set_strategy_runs_validate() {
     .unwrap();
     assert!(matches!(
         interp.set_strategy(strategy::LinearUniform).unwrap_err(),
-        ValidateError::Other(_)
+        // grid[0] = [0., 1., 5.]: the interval after index 1 is 4, not 1
+        ValidateError::NonUniform { dim: 0, index: 1 }
     ));
 }
 
@@ -404,12 +405,13 @@ fn test_batch_interpolate_error_aggregates_all_points() {
     let err = interp
         .batch_interpolate(&[[0.5, 0.5], [-1., -1.], [2., 2.]])
         .unwrap_err();
-    let InterpolateError::ExtrapolateError(message) = err else {
-        panic!("expected ExtrapolateError");
+    let InterpolateError::OutOfBounds(failures) = err else {
+        panic!("expected InterpolateError::OutOfBounds");
     };
-    assert!(message.contains("point[1]"));
-    assert!(message.contains("point[2]"));
-    assert!(!message.contains("point[0]"));
+    let offending: Vec<usize> = failures.iter().map(|at| at.index).collect();
+    assert!(offending.contains(&1));
+    assert!(offending.contains(&2));
+    assert!(!offending.contains(&0));
 }
 
 #[test]
@@ -441,7 +443,7 @@ fn test_dyn_interpolator() {
     .unwrap();
     let points: [&[f64]; 2] = [&[0.075, 0.25], &[0.05, 0.10]];
 
-    let boxed: Box<dyn DynInterpolator<f64>> = Box::new(interp.clone());
+    let boxed: Box<dyn AnyInterpolator<f64>> = Box::new(interp.clone());
     assert_eq!(boxed.interpolate(&[0.075, 0.25]).unwrap(), 3.);
     assert_eq!(
         boxed.batch_interpolate(&points).unwrap(),
@@ -451,7 +453,7 @@ fn test_dyn_interpolator() {
     );
     assert!(matches!(
         boxed.interpolate(&[]).unwrap_err(),
-        InterpolateError::PointLength(2)
+        InterpolateError::PointLength { expected: 2, .. }
     ));
     assert_eq!(
         boxed.as_any().downcast_ref::<Interp2D<f64, _>>(),
@@ -579,12 +581,13 @@ fn test_batch_interpolate_into_error_aggregates_all_points() {
         .batch_interpolate_into(&[[0.5, 0.5], [-1., -1.], [2., 2.]], &mut out)
         .unwrap_err();
     match err {
-        InterpolateError::ExtrapolateError(s) => {
-            // Should mention all out-of-bounds points
-            assert!(s.contains("point[1]"));
-            assert!(s.contains("point[2]"));
+        InterpolateError::OutOfBounds(failures) => {
+            // Should report all out-of-bounds points
+            let offending: Vec<usize> = failures.iter().map(|at| at.index).collect();
+            assert!(offending.contains(&1));
+            assert!(offending.contains(&2));
         }
-        _ => panic!("Expected ExtrapolateError"),
+        _ => panic!("expected InterpolateError::OutOfBounds"),
     }
 }
 

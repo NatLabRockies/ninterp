@@ -5,7 +5,7 @@ use super::*;
 /// Generates a fixed-dimensionality strategy trait (`Strategy1D`/`2D`/`3D`) plus its
 /// `impl … for Box<dyn …>` forwarding impl. `StrategyND` takes points as `&[D::Elem]`
 /// instead of `&[D::Elem; N]`, so it can't share this shape and stays hand-written below.
-macro_rules! sized_strategy_trait {
+macro_rules! fixed_strategy_trait {
     ($Trait:ident, $InterpData:ident, $N:literal, $doc:literal) => {
         #[doc = $doc]
         pub trait $Trait<D>: Debug + DynClone
@@ -244,19 +244,19 @@ macro_rules! sized_strategy_trait {
     };
 }
 
-sized_strategy_trait!(
+fixed_strategy_trait!(
     Strategy1D,
     InterpData1DBase,
     1,
     "1-D interpolation strategy."
 );
-sized_strategy_trait!(
+fixed_strategy_trait!(
     Strategy2D,
     InterpData2DBase,
     2,
     "2-D interpolation strategy."
 );
-sized_strategy_trait!(
+fixed_strategy_trait!(
     Strategy3D,
     InterpData3DBase,
     3,

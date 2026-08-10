@@ -119,7 +119,7 @@ where
             strategy,
             extrapolate,
         };
-        interpolator.check_extrapolate(&interpolator.extrapolate)?;
+        interpolator.validate_extrapolate(&interpolator.extrapolate)?;
         interpolator.validate_strategy()?;
         interpolator.init_strategy()?;
         Ok(interpolator)

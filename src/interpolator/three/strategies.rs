@@ -27,7 +27,7 @@ where
             (
                 AxisLocation::Exact(i),
                 AxisLocation::Exact(j),
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: z_l,
                     frac: z_diff,
                 },
@@ -38,7 +38,7 @@ where
             }
             (
                 AxisLocation::Exact(i),
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: y_l,
                     frac: y_diff,
                 },
@@ -49,7 +49,7 @@ where
                     + data.values[[i, y_u, k]] * y_diff)
             }
             (
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: x_l,
                     frac: x_diff,
                 },
@@ -62,11 +62,11 @@ where
             }
             (
                 AxisLocation::Exact(i),
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: y_l,
                     frac: y_diff,
                 },
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: z_l,
                     frac: z_diff,
                 },
@@ -80,12 +80,12 @@ where
                 Ok(f0 * (D::Elem::one() - z_diff) + f1 * z_diff)
             }
             (
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: x_l,
                     frac: x_diff,
                 },
                 AxisLocation::Exact(j),
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: z_l,
                     frac: z_diff,
                 },
@@ -99,11 +99,11 @@ where
                 Ok(f0 * (D::Elem::one() - z_diff) + f1 * z_diff)
             }
             (
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: x_l,
                     frac: x_diff,
                 },
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: y_l,
                     frac: y_diff,
                 },
@@ -118,15 +118,15 @@ where
                 Ok(f0 * (D::Elem::one() - y_diff) + f1 * y_diff)
             }
             (
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: x_l,
                     frac: x_diff,
                 },
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: y_l,
                     frac: y_diff,
                 },
-                AxisLocation::Interp {
+                AxisLocation::Between {
                     lower: z_l,
                     frac: z_diff,
                 },
@@ -165,9 +165,9 @@ where
 {
     /// Ensures all grid dimensions are uniformly spaced.
     fn validate(&self, data: &InterpData3DBase<D>) -> Result<(), ValidateError> {
-        check_uniform_grid(data.grid[0].view(), 0)?;
-        check_uniform_grid(data.grid[1].view(), 1)?;
-        check_uniform_grid(data.grid[2].view(), 2)
+        validate_uniform_grid(data.grid[0].view(), 0, None)?;
+        validate_uniform_grid(data.grid[1].view(), 1, None)?;
+        validate_uniform_grid(data.grid[2].view(), 2, None)
     }
 
     fn interpolate(
@@ -257,13 +257,7 @@ where
 {
     /// Ensures the number of provided step directions matches the interpolator dimensionality.
     fn validate(&self, _data: &InterpData3DBase<D>) -> Result<(), ValidateError> {
-        if self.0.len() != 1 && self.0.len() != 3 {
-            return Err(ValidateError::Other(format!(
-                "Step strategy has {} directions but interpolator is 3-D (expected 1 or 3)",
-                self.0.len()
-            )));
-        }
-        Ok(())
+        self.validate_len(3)
     }
 
     fn interpolate(
