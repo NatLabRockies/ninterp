@@ -8,6 +8,203 @@ use super::*;
 
 use strategy::enums::*;
 
+/// Generates all five `From` impls for InterpolatorEnum variants.
+macro_rules! from_impls {
+    () => {
+        impl<D> From<Interp0D<D::Elem>> for InterpolatorEnum<D>
+        where
+            D: Data + RawDataClone + Clone,
+            D::Elem: Float + Debug,
+        {
+            #[inline]
+            fn from(interpolator: Interp0D<D::Elem>) -> Self {
+                InterpolatorEnum::Interp0D(interpolator)
+            }
+        }
+
+        impl<D> From<Interp1D<D, Strategy1DEnum>> for InterpolatorEnum<D>
+        where
+            D: Data + RawDataClone + Clone,
+            D::Elem: Float + Debug,
+        {
+            #[inline]
+            fn from(interpolator: Interp1D<D, Strategy1DEnum>) -> Self {
+                InterpolatorEnum::Interp1D(interpolator)
+            }
+        }
+
+        impl<D> From<Interp2D<D, Strategy2DEnum>> for InterpolatorEnum<D>
+        where
+            D: Data + RawDataClone + Clone,
+            D::Elem: Float + Debug,
+        {
+            #[inline]
+            fn from(interpolator: Interp2D<D, Strategy2DEnum>) -> Self {
+                InterpolatorEnum::Interp2D(interpolator)
+            }
+        }
+
+        impl<D> From<Interp3D<D, Strategy3DEnum>> for InterpolatorEnum<D>
+        where
+            D: Data + RawDataClone + Clone,
+            D::Elem: Float + Debug,
+        {
+            #[inline]
+            fn from(interpolator: Interp3D<D, Strategy3DEnum>) -> Self {
+                InterpolatorEnum::Interp3D(interpolator)
+            }
+        }
+
+        impl<D> From<InterpND<D, StrategyNDEnum>> for InterpolatorEnum<D>
+        where
+            D: Data + RawDataClone + Clone,
+            D::Elem: Float + Debug,
+        {
+            #[inline]
+            fn from(interpolator: InterpND<D, StrategyNDEnum>) -> Self {
+                InterpolatorEnum::InterpND(interpolator)
+            }
+        }
+    };
+}
+
+/// Generates trait impl methods with slice-to-array conversion and doc comments built in.
+macro_rules! slice_to_array_forward {
+    (interpolate) => {
+        fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
+            match self {
+                InterpolatorEnum::Interp0D(interp) => interp.interpolate(point),
+                InterpolatorEnum::Interp1D(interp) => interp.interpolate(
+                    point
+                        .try_into()
+                        .map_err(|_| InterpolateError::PointLength(1))?,
+                ),
+                InterpolatorEnum::Interp2D(interp) => interp.interpolate(
+                    point
+                        .try_into()
+                        .map_err(|_| InterpolateError::PointLength(2))?,
+                ),
+                InterpolatorEnum::Interp3D(interp) => interp.interpolate(
+                    point
+                        .try_into()
+                        .map_err(|_| InterpolateError::PointLength(3))?,
+                ),
+                InterpolatorEnum::InterpND(interp) => interp.interpolate(point),
+            }
+        }
+    };
+    (interpolate_fast) => {
+        fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
+            match self {
+                InterpolatorEnum::Interp0D(interp) => interp.0,
+                InterpolatorEnum::Interp1D(interp) => interp.interpolate_fast(
+                    point
+                        .try_into()
+                        .expect("interpolate_fast: point length mismatch"),
+                ),
+                InterpolatorEnum::Interp2D(interp) => interp.interpolate_fast(
+                    point
+                        .try_into()
+                        .expect("interpolate_fast: point length mismatch"),
+                ),
+                InterpolatorEnum::Interp3D(interp) => interp.interpolate_fast(
+                    point
+                        .try_into()
+                        .expect("interpolate_fast: point length mismatch"),
+                ),
+                InterpolatorEnum::InterpND(interp) => interp.interpolate_fast(point),
+            }
+        }
+    };
+    (batch_interpolate) => {
+        fn batch_interpolate(
+            &self,
+            points: &[&[D::Elem]],
+        ) -> Result<Vec<D::Elem>, InterpolateError> {
+            match self {
+                InterpolatorEnum::Interp0D(interp) => {
+                    Interpolator::batch_interpolate(interp, points)
+                }
+                InterpolatorEnum::Interp1D(interp) => {
+                    let points: Vec<[D::Elem; 1]> = points
+                        .iter()
+                        .map(|&point| {
+                            point
+                                .try_into()
+                                .map_err(|_| InterpolateError::PointLength(1))
+                        })
+                        .collect::<Result<_, _>>()?;
+                    interp.batch_interpolate(&points)
+                }
+                InterpolatorEnum::Interp2D(interp) => {
+                    let points: Vec<[D::Elem; 2]> = points
+                        .iter()
+                        .map(|&point| {
+                            point
+                                .try_into()
+                                .map_err(|_| InterpolateError::PointLength(2))
+                        })
+                        .collect::<Result<_, _>>()?;
+                    interp.batch_interpolate(&points)
+                }
+                InterpolatorEnum::Interp3D(interp) => {
+                    let points: Vec<[D::Elem; 3]> = points
+                        .iter()
+                        .map(|&point| {
+                            point
+                                .try_into()
+                                .map_err(|_| InterpolateError::PointLength(3))
+                        })
+                        .collect::<Result<_, _>>()?;
+                    interp.batch_interpolate(&points)
+                }
+                InterpolatorEnum::InterpND(interp) => interp.batch_interpolate(points),
+            }
+        }
+    };
+    (batch_interpolate_fast) => {
+        fn batch_interpolate_fast(&self, points: &[&[D::Elem]]) -> Vec<D::Elem> {
+            match self {
+                InterpolatorEnum::Interp0D(interp) => vec![interp.0; points.len()],
+                InterpolatorEnum::Interp1D(interp) => {
+                    let points: Vec<[D::Elem; 1]> = points
+                        .iter()
+                        .map(|&point| {
+                            point
+                                .try_into()
+                                .expect("batch_interpolate_fast: point length mismatch")
+                        })
+                        .collect();
+                    interp.batch_interpolate_fast(&points)
+                }
+                InterpolatorEnum::Interp2D(interp) => {
+                    let points: Vec<[D::Elem; 2]> = points
+                        .iter()
+                        .map(|&point| {
+                            point
+                                .try_into()
+                                .expect("batch_interpolate_fast: point length mismatch")
+                        })
+                        .collect();
+                    interp.batch_interpolate_fast(&points)
+                }
+                InterpolatorEnum::Interp3D(interp) => {
+                    let points: Vec<[D::Elem; 3]> = points
+                        .iter()
+                        .map(|&point| {
+                            point
+                                .try_into()
+                                .expect("batch_interpolate_fast: point length mismatch")
+                        })
+                        .collect();
+                    interp.batch_interpolate_fast(&points)
+                }
+                InterpolatorEnum::InterpND(interp) => interp.batch_interpolate_fast(points),
+            }
+        }
+    };
+}
+
 /// This is an alternative to using a `Box<dyn Interpolator<_>>` with a few key differences:
 /// - Better runtime performance
 /// - Compatible with serde
@@ -298,209 +495,34 @@ where
         }
     }
 
-    #[inline]
     fn validate(&self) -> Result<(), ValidateError> {
         match self {
-            InterpolatorEnum::Interp0D(_) => Ok(()),
-            InterpolatorEnum::Interp1D(interp) => interp.validate(),
-            InterpolatorEnum::Interp2D(interp) => interp.validate(),
-            InterpolatorEnum::Interp3D(interp) => interp.validate(),
-            InterpolatorEnum::InterpND(interp) => interp.validate(),
+            Self::Interp0D(_) => Ok(()),
+            Self::Interp1D(i) => i.validate(),
+            Self::Interp2D(i) => i.validate(),
+            Self::Interp3D(i) => i.validate(),
+            Self::InterpND(i) => i.validate(),
         }
     }
 
-    #[inline]
-    fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
-        match self {
-            InterpolatorEnum::Interp0D(interp) => interp.interpolate(point),
-            InterpolatorEnum::Interp1D(interp) => interp.interpolate(
-                point
-                    .try_into()
-                    .map_err(|_| InterpolateError::PointLength(1))?,
-            ),
-            InterpolatorEnum::Interp2D(interp) => interp.interpolate(
-                point
-                    .try_into()
-                    .map_err(|_| InterpolateError::PointLength(2))?,
-            ),
-            InterpolatorEnum::Interp3D(interp) => interp.interpolate(
-                point
-                    .try_into()
-                    .map_err(|_| InterpolateError::PointLength(3))?,
-            ),
-            InterpolatorEnum::InterpND(interp) => interp.interpolate(point),
-        }
-    }
+    slice_to_array_forward!(interpolate);
 
-    #[inline]
     fn set_extrapolate(&mut self, extrapolate: Extrapolate<D::Elem>) -> Result<(), ValidateError> {
         match self {
-            InterpolatorEnum::Interp0D(_) => Ok(()),
-            InterpolatorEnum::Interp1D(interp) => interp.set_extrapolate(extrapolate),
-            InterpolatorEnum::Interp2D(interp) => interp.set_extrapolate(extrapolate),
-            InterpolatorEnum::Interp3D(interp) => interp.set_extrapolate(extrapolate),
-            InterpolatorEnum::InterpND(interp) => interp.set_extrapolate(extrapolate),
+            Self::Interp0D(_) => Ok(()),
+            Self::Interp1D(i) => i.set_extrapolate(extrapolate),
+            Self::Interp2D(i) => i.set_extrapolate(extrapolate),
+            Self::Interp3D(i) => i.set_extrapolate(extrapolate),
+            Self::InterpND(i) => i.set_extrapolate(extrapolate),
         }
     }
 
-    #[inline]
-    fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
-        match self {
-            InterpolatorEnum::Interp0D(interp) => interp.0,
-            InterpolatorEnum::Interp1D(interp) => interp.interpolate_fast(
-                point
-                    .try_into()
-                    .expect("interpolate_fast: point length mismatch"),
-            ),
-            InterpolatorEnum::Interp2D(interp) => interp.interpolate_fast(
-                point
-                    .try_into()
-                    .expect("interpolate_fast: point length mismatch"),
-            ),
-            InterpolatorEnum::Interp3D(interp) => interp.interpolate_fast(
-                point
-                    .try_into()
-                    .expect("interpolate_fast: point length mismatch"),
-            ),
-            InterpolatorEnum::InterpND(interp) => interp.interpolate_fast(point),
-        }
-    }
-
-    fn batch_interpolate(&self, points: &[&[D::Elem]]) -> Result<Vec<D::Elem>, InterpolateError> {
-        match self {
-            InterpolatorEnum::Interp0D(interp) => Interpolator::batch_interpolate(interp, points),
-            InterpolatorEnum::Interp1D(interp) => {
-                let points: Vec<[D::Elem; 1]> = points
-                    .iter()
-                    .map(|&point| {
-                        point
-                            .try_into()
-                            .map_err(|_| InterpolateError::PointLength(1))
-                    })
-                    .collect::<Result<_, _>>()?;
-                interp.batch_interpolate(&points)
-            }
-            InterpolatorEnum::Interp2D(interp) => {
-                let points: Vec<[D::Elem; 2]> = points
-                    .iter()
-                    .map(|&point| {
-                        point
-                            .try_into()
-                            .map_err(|_| InterpolateError::PointLength(2))
-                    })
-                    .collect::<Result<_, _>>()?;
-                interp.batch_interpolate(&points)
-            }
-            InterpolatorEnum::Interp3D(interp) => {
-                let points: Vec<[D::Elem; 3]> = points
-                    .iter()
-                    .map(|&point| {
-                        point
-                            .try_into()
-                            .map_err(|_| InterpolateError::PointLength(3))
-                    })
-                    .collect::<Result<_, _>>()?;
-                interp.batch_interpolate(&points)
-            }
-            InterpolatorEnum::InterpND(interp) => interp.batch_interpolate(points),
-        }
-    }
-
-    fn batch_interpolate_fast(&self, points: &[&[D::Elem]]) -> Vec<D::Elem> {
-        match self {
-            InterpolatorEnum::Interp0D(interp) => vec![interp.0; points.len()],
-            InterpolatorEnum::Interp1D(interp) => {
-                let points: Vec<[D::Elem; 1]> = points
-                    .iter()
-                    .map(|&point| {
-                        point
-                            .try_into()
-                            .expect("batch_interpolate_fast: point length mismatch")
-                    })
-                    .collect();
-                interp.batch_interpolate_fast(&points)
-            }
-            InterpolatorEnum::Interp2D(interp) => {
-                let points: Vec<[D::Elem; 2]> = points
-                    .iter()
-                    .map(|&point| {
-                        point
-                            .try_into()
-                            .expect("batch_interpolate_fast: point length mismatch")
-                    })
-                    .collect();
-                interp.batch_interpolate_fast(&points)
-            }
-            InterpolatorEnum::Interp3D(interp) => {
-                let points: Vec<[D::Elem; 3]> = points
-                    .iter()
-                    .map(|&point| {
-                        point
-                            .try_into()
-                            .expect("batch_interpolate_fast: point length mismatch")
-                    })
-                    .collect();
-                interp.batch_interpolate_fast(&points)
-            }
-            InterpolatorEnum::InterpND(interp) => interp.batch_interpolate_fast(points),
-        }
-    }
+    slice_to_array_forward!(interpolate_fast);
+    slice_to_array_forward!(batch_interpolate);
+    slice_to_array_forward!(batch_interpolate_fast);
 }
 
-impl<D> From<Interp0D<D::Elem>> for InterpolatorEnum<D>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
-{
-    #[inline]
-    fn from(interpolator: Interp0D<D::Elem>) -> Self {
-        InterpolatorEnum::Interp0D(interpolator)
-    }
-}
-
-impl<D> From<Interp1D<D, Strategy1DEnum>> for InterpolatorEnum<D>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
-{
-    #[inline]
-    fn from(interpolator: Interp1D<D, Strategy1DEnum>) -> Self {
-        InterpolatorEnum::Interp1D(interpolator)
-    }
-}
-
-impl<D> From<Interp2D<D, Strategy2DEnum>> for InterpolatorEnum<D>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
-{
-    #[inline]
-    fn from(interpolator: Interp2D<D, Strategy2DEnum>) -> Self {
-        InterpolatorEnum::Interp2D(interpolator)
-    }
-}
-
-impl<D> From<Interp3D<D, Strategy3DEnum>> for InterpolatorEnum<D>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
-{
-    #[inline]
-    fn from(interpolator: Interp3D<D, Strategy3DEnum>) -> Self {
-        InterpolatorEnum::Interp3D(interpolator)
-    }
-}
-
-impl<D> From<InterpND<D, StrategyNDEnum>> for InterpolatorEnum<D>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
-{
-    #[inline]
-    fn from(interpolator: InterpND<D, StrategyNDEnum>) -> Self {
-        InterpolatorEnum::InterpND(interpolator)
-    }
-}
+from_impls!();
 
 mod tests {
     #[allow(unused_imports)]
