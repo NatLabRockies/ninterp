@@ -103,22 +103,16 @@ impl<T> Interpolator<T> for Box<dyn Interpolator<T>> {
     }
 }
 
-/// A `Send + Sync`, downcastable counterpart to [`Interpolator<T>`], implemented for
-/// owned `Interp1D`/`2D`/`3D`/`ND` types.
+/// A `Send + Sync`, downcastable counterpart to [`Interpolator<T>`], for storing
+/// heterogeneous interpolators behind `Box<dyn DynInterpolator<T>>`.
 ///
 /// Not in the [`prelude`](`crate::prelude`); reach for it explicitly
-/// (`ninterp::interpolator::DynInterpolator`) when erasing heterogeneous
-/// interpolators into `Box<dyn DynInterpolator<T>>`.
+/// (`ninterp::interpolator::DynInterpolator`).
 ///
-/// `Send + Sync` is per-impl rather than on [`Interpolator<T>`] itself, since a custom
-/// strategy may hold non-thread-safe state. [`as_any`](DynInterpolator::as_any) is
-/// likewise per-impl: it requires `Self: 'static`, which the borrowed `Interp*Viewed`
-/// types can't satisfy. A viewed interpolator can still be used through
-/// [`Interpolator<T>`], and `interpolate`/`batch_interpolate` are inherited from it
-/// here rather than duplicated under different names: unlike calling them on a
-/// concretely-typed `Interp1D`/`2D`/`3D` value, nothing shadows them when called
-/// through `Box<dyn DynInterpolator<T>>` or a generic `impl DynInterpolator<T>`, since
-/// only trait methods are reachable that way.
+/// Implemented for owned `Interp1D`/`2D`/`3D`/`ND` types only:
+/// [`as_any`](DynInterpolator::as_any) requires `Self: 'static`, which the borrowed
+/// `Interp*Viewed` types can't satisfy. A viewed interpolator can still be used
+/// through [`Interpolator<T>`].
 pub trait DynInterpolator<T>: Interpolator<T> + Send + Sync {
     /// Downcast to the concrete interpolator type.
     fn as_any(&self) -> &dyn Any;
