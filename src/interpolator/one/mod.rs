@@ -121,31 +121,7 @@ where
         Ok(interpolator)
     }
 
-    /// Return an interpolator with viewed data.
-    pub fn view(&self) -> Interp1DViewed<&D::Elem, S>
-    where
-        S: for<'a> Strategy1D<ViewRepr<&'a D::Elem>>,
-        D::Elem: Clone,
-    {
-        Interp1DViewed {
-            data: self.data.view(),
-            strategy: self.strategy.clone(),
-            extrapolate: self.extrapolate.clone(),
-        }
-    }
-
-    /// Turn the interpolator into an [`Interp1DOwned`], cloning the array elements if necessary.
-    pub fn into_owned(self) -> Interp1DOwned<D::Elem, S>
-    where
-        S: Strategy1D<OwnedRepr<D::Elem>>,
-        D::Elem: Clone,
-    {
-        Interp1DOwned {
-            data: self.data.into_owned(),
-            strategy: self.strategy.clone(),
-            extrapolate: self.extrapolate.clone(),
-        }
-    }
+    view_into_owned_impl!(Interp1D, Strategy1D, Interp1DViewed<&D::Elem, S>, Interp1DOwned<D::Elem, S>);
 
     interpolate_impl!();
     batch_interpolate_impl!();

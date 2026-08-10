@@ -618,5 +618,38 @@ macro_rules! interpolator_trait_impl {
 }
 pub(crate) use interpolator_trait_impl;
 
+/// Generates `view()` and `into_owned()` inherent methods shared by `Interp1D`/`2D`/`3D`.
+/// These methods have identical bodies except for return types, which are passed as parameters.
+macro_rules! view_into_owned_impl {
+    ($InterpType:ident, $Strategy:ident, $Viewed:ty, $Owned:ty) => {
+        /// Return an interpolator with viewed data.
+        pub fn view(&self) -> $Viewed
+        where
+            S: for<'a> $Strategy<ViewRepr<&'a D::Elem>>,
+            D::Elem: Clone,
+        {
+            $InterpType {
+                data: self.data.view(),
+                strategy: self.strategy.clone(),
+                extrapolate: self.extrapolate.clone(),
+            }
+        }
+
+        /// Turn the interpolator into an owned variant, cloning the array elements if necessary.
+        pub fn into_owned(self) -> $Owned
+        where
+            S: $Strategy<OwnedRepr<D::Elem>>,
+            D::Elem: Clone,
+        {
+            $InterpType {
+                data: self.data.into_owned(),
+                strategy: self.strategy.clone(),
+                extrapolate: self.extrapolate.clone(),
+            }
+        }
+    };
+}
+pub(crate) use view_into_owned_impl;
+
 #[cfg(feature = "serde")]
 pub(crate) use serialize_nested_impl;
