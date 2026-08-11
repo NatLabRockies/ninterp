@@ -7,7 +7,9 @@
 The `ninterp` crate provides [multivariate interpolation](https://en.wikipedia.org/wiki/Multivariate_interpolation#Regular_grid) over rectilinear grids of any dimensionality.
 
 It is built on [`ndarray`](https://crates.io/crates/ndarray) and uses ndarray arrays/views throughout its API.
-`ndarray` is re-exposed as `ninterp::ndarray` for convenience.
+`ndarray` and [`num_traits`](https://crates.io/crates/num_traits) are re-exposed as `ninterp::ndarray` and
+`ninterp::num_traits` for convenience, so `use ninterp::ndarray::prelude::*;` works just as well as a direct
+`ndarray` dependency.
 
 Hard-coded interpolators are provided for N = 1, 2, and 3, based on the observed runtime tradeoff versus a general N-D implementation.
 For higher dimensionalities (N >= 4), use `InterpND`.
@@ -249,16 +251,6 @@ Interpolation-time (`interpolate`):
 ## Using Owned and Borrowed (Viewed) Data
 All interpolators support both owned and borrowed data via the generic `D` bound on
 [`ndarray::Data`](https://docs.rs/ndarray/latest/ndarray/trait.Data.html).
-
-The crate also re-exports [`ndarray`](https://docs.rs/ninterp/latest/ninterp/ndarray/index.html)
-(and [`num_traits`](https://docs.rs/ninterp/latest/ninterp/num_traits/index.html)),
-so either of these import styles are valid:
-
-```rust
-use ninterp::ndarray::prelude::*;
-// or
-use ndarray::prelude::*;
-```
 
 Type aliases in the [`prelude`](https://docs.rs/ninterp/latest/ninterp/prelude/index.html)
 follow Rust idioms (like `String` vs `&str` and `Vec` vs `&[T]`), making ownership intent explicit.
