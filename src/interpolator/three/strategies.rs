@@ -277,7 +277,7 @@ where
     }
 }
 
-impl<D> Strategy3D<D> for CubicSpline<D::Elem>
+impl<D> Strategy3D<D> for CubicC2<D::Elem>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
@@ -289,12 +289,16 @@ where
         Ok(())
     }
 
+    /// Precomputes the full corner-derivative tensor via [`compute_corner_cache`], so
+    /// [`interpolate`](Self::interpolate) is an O(1) Hermite-patch lookup instead of
+    /// re-solving the outer axes on every call.
     fn init(&mut self, data: &InterpData3DBase<D>) -> Result<(), ValidateError> {
-        self.m_cache = compute_m_inner_cache(
-            data.grid[2].view(),
+        let grids: Vec<ArrayView1<D::Elem>> = data.grid.iter().map(|g| g.view()).collect();
+        self.cache = compute_corner_cache(
+            &grids,
             data.values.view().into_dyn(),
-            self.bc_for_dim(2),
-        )?;
+            &self.boundary_conditions,
+        );
         Ok(())
     }
 
@@ -304,13 +308,7 @@ where
         point: &[D::Elem; 3],
     ) -> Result<D::Elem, InterpolateError> {
         let grids: Vec<ArrayView1<D::Elem>> = data.grid.iter().map(|g| g.view()).collect();
-        spline_eval_nd_cached(
-            &grids,
-            data.values.view().into_dyn(),
-            self.m_cache.view(),
-            point,
-            &self.boundary_conditions,
-        )
+        Ok(spline_eval_corner_cached(&grids, self.cache.view(), point))
     }
 
     /// Returns `true`: the boundary cubic polynomials extend naturally.

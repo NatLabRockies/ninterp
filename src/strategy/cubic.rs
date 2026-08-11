@@ -1,6 +1,7 @@
-//! Cubic spline algorithms shared across all dimensionalities.
+//! Cubic interpolation algorithms shared across all dimensionalities, for [`CubicC2`].
 
 use super::*;
+use ndarray::Zip;
 
 /// Thomas algorithm (tridiagonal matrix algorithm). Solves `A * x = rhs`.
 /// `sub.len() == sup.len() == diag.len() - 1`.
@@ -58,13 +59,13 @@ pub(crate) fn cyclic_thomas<T: Float>(
 
 /// Computes the second-derivative vector `M[0..=n]` for the given cubic spline BC.
 ///
-/// Used by [`Strategy1D::init`] (stored in `CubicSpline::m_cache`) and
+/// Used by [`Strategy1D::init`] (stored in `CubicC2::cache`) and
 /// [`spline_eval_1d`] (on the fly).
 pub(crate) fn compute_m<T: Float>(
     x: ArrayView1<T>,
     y: ArrayView1<T>,
-    bc: &CubicBC<T>,
-) -> Result<Vec<T>, ValidateError> {
+    bc: &CubicBoundaryConditions<T>,
+) -> Vec<T> {
     let n = x.len() - 1;
     let two = T::one() + T::one();
     let six = two + two + two;
@@ -74,13 +75,10 @@ pub(crate) fn compute_m<T: Float>(
         .map(|k| six * (slopes[k + 1] - slopes[k]))
         .collect();
 
-    Ok(match bc {
-        CubicBC::NotAKnot => {
-            if n < 3 {
-                return Err(ValidateError::Other(
-                    "CubicSpline with NotAKnot requires at least 4 data points".into(),
-                ));
-            }
+    match bc {
+        CubicBoundaryConditions::NotAKnot => {
+            // n >= 3 (grid_len >= 4) is validated by `validate_bc_min_points` before
+            // this is ever reached through the normal `validate()` -> `init()` path.
             let mut sub: Vec<T> = h[1..n - 2].to_vec();
             sub.push(h[n - 2] * h[n - 2] - h[n - 1] * h[n - 1]);
             let mut sup = vec![h[1] * h[1] - h[0] * h[0]];
@@ -103,7 +101,7 @@ pub(crate) fn compute_m<T: Float>(
             m.push(mn);
             m
         }
-        CubicBC::Natural => {
+        CubicBoundaryConditions::Natural => {
             let mut sub = h[..n.saturating_sub(1)].to_vec();
             sub.push(T::zero());
             let mut diag = vec![T::one()];
@@ -118,7 +116,7 @@ pub(crate) fn compute_m<T: Float>(
             rhs.push(T::zero());
             thomas(&sub, &diag, &sup, &rhs)
         }
-        CubicBC::Clamped { left, right } => {
+        CubicBoundaryConditions::Clamped { left, right } => {
             let (l, r) = (*left, *right);
             let mut diag = vec![two * h[0]];
             for k in 0..n.saturating_sub(1) {
@@ -130,12 +128,10 @@ pub(crate) fn compute_m<T: Float>(
             rhs.push(six * (r - slopes[n - 1]));
             thomas(&h, &diag, &h, &rhs)
         }
-        CubicBC::Periodic => {
-            if y[0] != y[n] {
-                return Err(ValidateError::Other(
-                    "CubicSpline with Periodic BC requires values[0] == values[n]".into(),
-                ));
-            }
+        CubicBoundaryConditions::Periodic => {
+            // `y[n]` is never read below: the cyclic solve only uses `y[0..n]`, treating
+            // the axis as wrapping from index `n-1` back to `0`. By convention `y[n]`
+            // should equal `y[0]`, but nothing here depends on or checks that.
             if n < 2 {
                 vec![T::zero(); n + 1]
             } else {
@@ -153,7 +149,7 @@ pub(crate) fn compute_m<T: Float>(
                 m_vals
             }
         }
-    })
+    }
 }
 
 /// Evaluates the M-form cubic spline at `point` using precomputed second derivatives `m`.
@@ -185,24 +181,25 @@ pub(crate) fn spline_eval_1d<T: Float>(
     x: ArrayView1<T>,
     y: ArrayView1<T>,
     point: T,
-    bc: &CubicBC<T>,
-) -> Result<T, InterpolateError> {
-    let m = compute_m(x, y, bc).map_err(|e| InterpolateError::Other(e.to_string()))?;
-    Ok(eval_spline_from_m(x, y, ArrayView1::from(&m), point))
+    bc: &CubicBoundaryConditions<T>,
+) -> T {
+    let m = compute_m(x, y, bc);
+    eval_spline_from_m(x, y, ArrayView1::from(&m), point)
 }
 
 /// Checks `grid_len` against boundary condition `bc`'s minimum point requirement (e.g.
-/// [`CubicBC::NotAKnot`] needs at least 4), ahead of the real work in [`compute_m`].
+/// [`CubicBoundaryConditions::NotAKnot`] needs at least 4), ahead of the real work in
+/// [`compute_m`].
 ///
 /// Pure, no mutation; used by each dimensionality's `Strategy*D::validate`.
 pub(crate) fn validate_bc_min_points<T>(
-    bc: &CubicBC<T>,
+    bc: &CubicBoundaryConditions<T>,
     grid_len: usize,
     dim: usize,
 ) -> Result<(), ValidateError> {
-    if matches!(bc, CubicBC::NotAKnot) && grid_len < 4 {
+    if matches!(bc, CubicBoundaryConditions::NotAKnot) && grid_len < 4 {
         return Err(ValidateError::Other(format!(
-            "CubicSpline: dim {dim} has {grid_len} grid points; NotAKnot requires at least 4"
+            "CubicC2: dim {dim} has {grid_len} grid points; NotAKnot requires at least 4"
         )));
     }
     Ok(())
@@ -220,8 +217,8 @@ pub(crate) fn validate_bc_min_points<T>(
 pub(crate) fn compute_m_inner_cache<T: Float>(
     inner_grid: ArrayView1<T>,
     values: ArrayViewD<T>,
-    bc: &CubicBC<T>,
-) -> Result<ArrayD<T>, ValidateError> {
+    bc: &CubicBoundaryConditions<T>,
+) -> ArrayD<T> {
     let last_axis = Axis(values.ndim() - 1);
     let mut out_shape = values.shape().to_vec();
     out_shape[values.ndim() - 1] = inner_grid.len();
@@ -231,10 +228,10 @@ pub(crate) fn compute_m_inner_cache<T: Float>(
         .into_iter()
         .zip(cache.lanes_mut(last_axis))
     {
-        let m = compute_m(inner_grid, y, bc)?;
+        let m = compute_m(inner_grid, y, bc);
         out_lane.assign(&ArrayView1::from(&m));
     }
-    Ok(cache)
+    cache
 }
 
 /// Recursively evaluates an N-D cubic spline via sequential 1-D slicing, respecting `bcs`.
@@ -247,7 +244,7 @@ pub(crate) fn spline_eval_nd_cached<T: Float>(
     values: ArrayViewD<T>,
     m_cache: ArrayViewD<T>,
     point: &[T],
-    bcs: &[CubicBC<T>],
+    bcs: &[CubicBoundaryConditions<T>],
 ) -> Result<T, InterpolateError> {
     debug_assert_eq!(grids.len(), point.len());
     debug_assert!(!bcs.is_empty());
@@ -282,5 +279,175 @@ pub(crate) fn spline_eval_nd_cached<T: Float>(
         })
         .collect::<Result<Vec<T>, _>>()?;
 
-    spline_eval_1d(grids[0], ArrayView1::from(&g), point[0], current_bc)
+    Ok(spline_eval_1d(
+        grids[0],
+        ArrayView1::from(&g),
+        point[0],
+        current_bc,
+    ))
+}
+
+/// Closed-form first derivative `S'(x_i)` at every knot, from an already-solved moment
+/// vector `m` (no extra solve) -- the companion to [`compute_m`], used to build
+/// [`compute_corner_cache`]'s derivative fields.
+pub(crate) fn knot_derivatives_from_m<T: Float>(
+    x: ArrayView1<T>,
+    y: ArrayView1<T>,
+    m: ArrayView1<T>,
+) -> Vec<T> {
+    let n = x.len() - 1;
+    let two = T::one() + T::one();
+    let six = two + two + two;
+    let mut d: Vec<T> = (0..n)
+        .map(|i| {
+            let h = x[i + 1] - x[i];
+            (y[i + 1] - y[i]) / h - h * (two * m[i] + m[i + 1]) / six
+        })
+        .collect();
+    let h_last = x[n] - x[n - 1];
+    d.push((y[n] - y[n - 1]) / h_last + h_last * (m[n - 1] + two * m[n]) / six);
+    d
+}
+
+/// Splines every 1-D lane of `field` along `axis` and replaces it with its knot
+/// derivatives (via [`compute_m`] + [`knot_derivatives_from_m`]), returning a new array
+/// the same shape as `field`. Generalizes [`compute_m_inner_cache`]'s per-lane iteration
+/// (hardcoded to the last axis) to an arbitrary one, for [`compute_corner_cache`].
+fn corner_cache_axis_pass<T: Float>(
+    grid: ArrayView1<T>,
+    field: ArrayViewD<T>,
+    axis: usize,
+    bc: &CubicBoundaryConditions<T>,
+) -> ArrayD<T> {
+    let axis = Axis(axis);
+    let mut out = ArrayD::<T>::zeros(IxDyn(field.shape()));
+    for (y, mut out_lane) in field.lanes(axis).into_iter().zip(out.lanes_mut(axis)) {
+        let m = compute_m(grid, y, bc);
+        let d = knot_derivatives_from_m(grid, y, ArrayView1::from(&m));
+        out_lane.assign(&ArrayView1::from(&d));
+    }
+    out
+}
+
+/// Precomputes the full corner-derivative tensor for [`CubicC2`]'s `Strategy2D`/
+/// `Strategy3D` full-cache upgrade: for every grid point, all `2^N` partial-derivative
+/// combinations (value, first partials, and mixed partials) needed to evaluate a Hermite
+/// patch in O(1) via [`spline_eval_corner_cached`].
+///
+/// Returns an array shaped like `values`, with one extra trailing axis of length `2^N`
+/// (`N = grids.len()`). Index `k` in that axis is a bitmask over the `N` grid axes: bit
+/// `i` set means "this entry is `d/dx_i` of the value", so `k == 0` is the raw value and
+/// `k == 2^N - 1` is the full mixed partial.
+///
+/// Built by processing axes `0..N` in order: for every mask not yet including axis `i`'s
+/// bit, splines the corresponding field along axis `i` ([`corner_cache_axis_pass`]) to
+/// populate the entry with that bit added. Boundary condition per axis is
+/// [`CubicC2::bc_for_dim`], except `Clamped` falls back to `Natural`: the user's clamped
+/// value is a first derivative, not the right shape of data for splining a *derivative*
+/// field, and unlike `NotAKnot`, `Natural` has no minimum-point requirement, so it never
+/// rejects a `Clamped` axis with only 2-3 points that validated fine before this cache.
+pub(crate) fn compute_corner_cache<T: Float>(
+    grids: &[ArrayView1<T>],
+    values: ArrayViewD<T>,
+    bcs: &[CubicBoundaryConditions<T>],
+) -> ArrayD<T> {
+    let n_axes = grids.len();
+    let n_bits = 1usize << n_axes;
+    let mask_axis = Axis(n_axes);
+
+    let mut out_shape = values.shape().to_vec();
+    out_shape.push(n_bits);
+    let mut cache = ArrayD::<T>::zeros(IxDyn(&out_shape));
+    cache.index_axis_mut(mask_axis, 0).assign(&values);
+
+    for axis in 0..n_axes {
+        let bit = 1usize << axis;
+        let bc = match &bcs[if bcs.len() == 1 { 0 } else { axis }] {
+            CubicBoundaryConditions::Clamped { .. } => CubicBoundaryConditions::Natural,
+            other => other.clone(),
+        };
+        for mask in 0..bit {
+            let field = cache.index_axis(mask_axis, mask).to_owned();
+            let deriv = corner_cache_axis_pass(grids[axis], field.view(), axis, &bc);
+            cache.index_axis_mut(mask_axis, mask | bit).assign(&deriv);
+        }
+    }
+    cache
+}
+
+/// Standard cubic Hermite basis blend of endpoint values `p0`/`p1` and their derivatives
+/// `m0`/`m1` (actual derivatives, not yet scaled by the interval width `h`) at
+/// fractional position `t` in `[0, 1]` between them.
+fn hermite_eval_1d<T: Float>(p0: T, m0: T, p1: T, m1: T, h: T, t: T) -> T {
+    let two = T::one() + T::one();
+    let three = two + T::one();
+    let t2 = t * t;
+    let t3 = t2 * t;
+    let h00 = two * t3 - three * t2 + T::one();
+    let h10 = t3 - two * t2 + t;
+    let h01 = -two * t3 + three * t2;
+    let h11 = t3 - t2;
+    h00 * p0 + h10 * h * m0 + h01 * p1 + h11 * h * m1
+}
+
+/// Evaluates a Hermite patch from the full corner-derivative tensor built by
+/// [`compute_corner_cache`] in O(1) -- no solving, unlike [`spline_eval_nd_cached`]'s
+/// outer axes. Used by [`Strategy2D`]/[`Strategy3D`]'s `CubicC2::interpolate`.
+///
+/// Recurses like [`spline_eval_nd_cached`] (peels `grids[0]`, recurses on `grids[1..]`),
+/// but instead of solving a fresh 1-D spline per level, Hermite-blends pairs of cache
+/// entries. Bit `i` of the cache's trailing mask axis is assigned to `grids[i]` (see
+/// [`compute_corner_cache`]), and recursion always eliminates the lowest-numbered
+/// remaining axis first, so at every level the bit being eliminated is bit 0 of the
+/// *current* mask numbering -- exactly the even/odd split of that axis. Each level's
+/// blended output re-numbers the survivors contiguously (`mask / 2`), matching what the
+/// next level expects.
+pub(crate) fn spline_eval_corner_cached<T: Float>(
+    grids: &[ArrayView1<T>],
+    cache: ArrayViewD<T>,
+    point: &[T],
+) -> T {
+    debug_assert_eq!(grids.len(), point.len());
+    debug_assert_eq!(cache.ndim(), grids.len() + 1);
+
+    if grids.is_empty() {
+        return *cache
+            .iter()
+            .next()
+            .expect("corner cache base case has exactly one entry");
+    }
+
+    let mask_axis = Axis(cache.ndim() - 1);
+    let half = cache.len_of(mask_axis) / 2;
+
+    let lower = locate_lower_index(grids[0], &point[0]);
+    let h = grids[0][lower + 1] - grids[0][lower];
+    let t = (point[0] - grids[0][lower]) / h;
+
+    let lower_slice = cache.index_axis(Axis(0), lower);
+    let upper_slice = cache.index_axis(Axis(0), lower + 1);
+    let slice_mask_axis = Axis(lower_slice.ndim() - 1);
+
+    let mut new_shape = lower_slice.shape()[..lower_slice.ndim() - 1].to_vec();
+    new_shape.push(half);
+    let mut new_field = ArrayD::<T>::zeros(IxDyn(&new_shape));
+    let new_mask_axis = Axis(new_field.ndim() - 1);
+
+    for sub in 0..half {
+        let p0 = lower_slice.index_axis(slice_mask_axis, 2 * sub);
+        let m0 = lower_slice.index_axis(slice_mask_axis, 2 * sub + 1);
+        let p1 = upper_slice.index_axis(slice_mask_axis, 2 * sub);
+        let m1 = upper_slice.index_axis(slice_mask_axis, 2 * sub + 1);
+        let mut out_slot = new_field.index_axis_mut(new_mask_axis, sub);
+        Zip::from(&mut out_slot)
+            .and(&p0)
+            .and(&m0)
+            .and(&p1)
+            .and(&m1)
+            .for_each(|o, &p0v, &m0v, &p1v, &m1v| {
+                *o = hermite_eval_1d(p0v, m0v, p1v, m1v, h, t);
+            });
+    }
+
+    spline_eval_corner_cached(&grids[1..], new_field.view(), &point[1..])
 }

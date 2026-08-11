@@ -6,7 +6,7 @@ fn test_cubic_spline() {
     let interp = InterpND::new(
         vec![array![0., 1., 2.], array![0., 1., 2.]],
         array![[0., 1., 2.], [2., 3., 4.], [4., 5., 6.]].into_dyn(),
-        strategy::CubicSpline::natural(),
+        strategy::CubicC2::natural(),
         Extrapolate::Enable,
     )
     .unwrap();
@@ -26,7 +26,7 @@ fn test_cubic_spline_knot_exactness() {
             [9., 10., 13., 18.],
         ]
         .into_dyn(),
-        strategy::CubicSpline::natural(),
+        strategy::CubicC2::natural(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -59,11 +59,45 @@ fn test_cubic_spline_0d() {
     let interp = InterpND::new(
         vec![array![]],
         array![0.5].into_dyn(),
-        strategy::CubicSpline::natural(),
+        strategy::CubicC2::natural(),
         Extrapolate::Error,
     )
     .unwrap();
     assert_eq!(interp.interpolate(&[]).unwrap(), 0.5);
+}
+
+#[test]
+fn test_cubic_c2_periodic_outer_axis() {
+    // Regression coverage: `Periodic` on the outer axis (axis 0, re-solved on every
+    // `interpolate()` call via `spline_eval_1d`) used to run an exact `y[0] != y[n]`
+    // equality check against *derived* intermediate values from the inner-axis spline
+    // evaluation, not raw grid data -- values that can differ from their
+    // mathematically-equal counterpart by a few ULPs, causing spurious failures. That
+    // check is gone now; this just confirms Periodic on an outer axis still
+    // interpolates successfully.
+    let mut strategy = strategy::CubicC2::natural();
+    strategy.boundary_conditions = vec![
+        strategy::CubicBoundaryConditions::Periodic,
+        strategy::CubicBoundaryConditions::Natural,
+    ];
+    let interp = InterpND::new(
+        vec![array![0., 1., 2., 3.], array![0., 1., 2.]],
+        array![
+            [0., 1., 2.],
+            [1., 3., 2.],
+            [2., 1., 3.],
+            [0., 1., 2.], // matches the x=0 row, by Periodic's convention
+        ]
+        .into_dyn(),
+        strategy,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    // No exact-value oracle needed here -- this is regression coverage for the removed
+    // check, not a numerical-accuracy test.
+    for &(x, y) in &[(0.5, 0.5), (2.5, 1.5), (3.0, 1.0), (0.0, 1.0)] {
+        assert!(interp.interpolate(&[x, y]).unwrap().is_finite());
+    }
 }
 
 #[test]

@@ -7,7 +7,7 @@ fn test_cubic_spline() {
         array![0., 1., 2.],
         array![0., 1., 2.],
         array![[0., 1., 2.], [2., 3., 4.], [4., 5., 6.]],
-        strategy::CubicSpline::natural(),
+        strategy::CubicC2::natural(),
         Extrapolate::Enable,
     )
     .unwrap();
@@ -33,7 +33,7 @@ fn test_cubic_spline_knot_exactness() {
             [4., 5., 8., 13.],
             [9., 10., 13., 18.],
         ], // f(x, y) = x^2 + y
-        strategy::CubicSpline::not_a_knot(),
+        strategy::CubicC2::not_a_knot(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -47,6 +47,92 @@ fn test_cubic_spline_knot_exactness() {
             );
         }
     }
+}
+
+#[test]
+fn test_cubic_c2_interior_accuracy() {
+    // f(x, y) = x^2*y + x*y^2: quadratic in each axis (well within cubic-spline
+    // capacity), so a `NotAKnot` spline reproduces it exactly everywhere, not just at
+    // grid points -- unlike knot-exactness, this exercises the corner cache's
+    // mixed-partial term (d^2f/dxdy = 2x + 2y, non-constant) at interior points.
+    fn f(x: f64, y: f64) -> f64 {
+        x * x * y + x * y * y
+    }
+    let interp = Interp2D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        array![
+            [0., 0., 0., 0.],
+            [0., 2., 6., 12.],
+            [0., 6., 16., 30.],
+            [0., 12., 30., 54.],
+        ],
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &(x, y) in &[(0.5, 0.5), (1.5, 2.5), (2.5, 1.5), (0.25, 2.75)] {
+        assert_approx_eq!(interp.interpolate(&[x, y]).unwrap(), f(x, y));
+    }
+}
+
+#[test]
+fn test_cubic_c2_cached_vs_uncached() {
+    // `Strategy2D`'s corner-cache path (`compute_corner_cache` +
+    // `spline_eval_corner_cached`) must agree with `StrategyND`'s unchanged
+    // recursive-collapse path (`spline_eval_nd_cached`) on the same grid/values/BC.
+    let grid = array![0., 1., 2., 3.];
+    let values = array![
+        [0., 1., 4., 9.],
+        [1., 2., 5., 10.],
+        [4., 5., 8., 13.],
+        [9., 10., 13., 18.],
+    ]; // f(x, y) = x^2 + y
+    let interp2d = Interp2D::new(
+        grid.clone(),
+        grid.clone(),
+        values.clone(),
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let interp_nd = InterpND::new(
+        vec![grid.clone(), grid],
+        values.into_dyn(),
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &(x, y) in &[(0.5, 0.5), (1.5, 2.5), (2.5, 1.5), (0.25, 2.75)] {
+        assert_approx_eq!(
+            interp2d.interpolate(&[x, y]).unwrap(),
+            interp_nd.interpolate(&[x, y]).unwrap()
+        );
+    }
+}
+
+#[test]
+fn test_cubic_c2_clamped_short_axis() {
+    // A `Clamped` axis with only 2 points must still validate under the corner-cache
+    // upgrade: the second-pass BC substituted for `Clamped` (`Natural`, not `NotAKnot`)
+    // has no minimum-point requirement -- regression test for that fallback choice.
+    let mut strategy = strategy::CubicC2::natural();
+    strategy.boundary_conditions = vec![
+        strategy::CubicBoundaryConditions::Clamped {
+            left: 1.,
+            right: 1.,
+        },
+        strategy::CubicBoundaryConditions::Natural,
+    ];
+    let interp = Interp2D::new(
+        array![0., 1.], // only 2 points on the Clamped axis
+        array![0., 1., 2., 3.],
+        array![[0., 1., 2., 3.], [1., 2., 3., 4.]], // f(x, y) = x + y
+        strategy,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_approx_eq!(interp.interpolate(&[0.5, 1.5]).unwrap(), 2.0);
 }
 
 #[test]

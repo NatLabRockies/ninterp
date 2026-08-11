@@ -106,14 +106,14 @@ where
     }
 }
 
-impl<D> Strategy1D<D> for CubicSpline<D::Elem>
+impl<D> Strategy1D<D> for CubicC2<D::Elem>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
 {
     /// Checks the grid size against the configured BC's minimum point requirement (e.g.
-    /// [`CubicBC::NotAKnot`] needs at least 4) before [`Strategy1D::init`] attempts the
-    /// real computation.
+    /// [`CubicBoundaryConditions::NotAKnot`] needs at least 4) before [`Strategy1D::init`]
+    /// attempts the real computation.
     fn validate(&self, data: &InterpData1DBase<D>) -> Result<(), ValidateError> {
         validate_bc_min_points(self.bc_for_dim(0), data.grid[0].len(), 0)
     }
@@ -121,11 +121,11 @@ where
     /// Computes and caches `M[0..=n]` for the configured BC via [`compute_m_inner_cache`]
     /// (a single pencil, since 1-D data has no outer axes to vary over).
     fn init(&mut self, data: &InterpData1DBase<D>) -> Result<(), ValidateError> {
-        self.m_cache = compute_m_inner_cache(
+        self.cache = compute_m_inner_cache(
             data.grid[0].view(),
             data.values.view().into_dyn(),
             self.bc_for_dim(0),
-        )?;
+        );
         Ok(())
     }
 
@@ -137,7 +137,7 @@ where
         spline_eval_nd_cached(
             &[data.grid[0].view()],
             data.values.view().into_dyn(),
-            self.m_cache.view(),
+            self.cache.view(),
             point,
             &self.boundary_conditions,
         )

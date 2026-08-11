@@ -203,7 +203,7 @@ where
     }
 }
 
-impl<D> StrategyND<D> for CubicSpline<D::Elem>
+impl<D> StrategyND<D> for CubicC2<D::Elem>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
@@ -220,11 +220,11 @@ where
             return Ok(());
         }
         let inner_dim = data.values.ndim().saturating_sub(1);
-        self.m_cache = compute_m_inner_cache(
+        self.cache = compute_m_inner_cache(
             data.grid[inner_dim].view(),
             data.values.view(),
             self.bc_for_dim(inner_dim),
-        )?;
+        );
         Ok(())
     }
 
@@ -242,7 +242,7 @@ where
         spline_eval_nd_cached(
             &grids,
             data.values.view(),
-            self.m_cache.view(),
+            self.cache.view(),
             point,
             &self.boundary_conditions,
         )
