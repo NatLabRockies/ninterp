@@ -34,7 +34,9 @@ fn using_enum() {
     .into(); // `.into()` converts the `Interp1D` into an `InterpolatorEnum::Interp1D(...)`
     assert_eq!(interp.interpolate(&[1.75]).unwrap(), 8.);
 
-    // Change interpolator variant again, using alternate syntax
+    // Change interpolator variant again, this time constructing the
+    // `InterpolatorEnum::Interp3D(...)` variant directly instead of
+    // building an `Interp3D` and calling `.into()`
     interp = InterpolatorEnum::new_3d(
         array![0., 1.],
         array![0., 1.],
@@ -43,7 +45,7 @@ fn using_enum() {
         strategy::Nearest,
         Extrapolate::Error,
     )
-    .unwrap(); // `.into()` converts the `Interp1D` into an `InterpolatorEnum::Interp1D(...)`
+    .unwrap();
     assert_eq!(interp.interpolate(&[0.8, 0.7, 0.6]).unwrap(), 1.3);
 }
 

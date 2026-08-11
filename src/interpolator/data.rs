@@ -2,10 +2,10 @@
 
 use super::*;
 
-pub use n::{InterpDataND, InterpDataNDOwned, InterpDataNDViewed};
-pub use one::{InterpData1D, InterpData1DOwned, InterpData1DViewed};
-pub use three::{InterpData3D, InterpData3DOwned, InterpData3DViewed};
-pub use two::{InterpData2D, InterpData2DOwned, InterpData2DViewed};
+pub use n::{InterpDataND, InterpDataNDBase, InterpDataNDView};
+pub use one::{InterpData1D, InterpData1DBase, InterpData1DView};
+pub use three::{InterpData3D, InterpData3DBase, InterpData3DView};
+pub use two::{InterpData2D, InterpData2DBase, InterpData2DView};
 
 /// Interpolator data for interpolators of concrete dimensionality `const N: usize`.
 ///
@@ -29,7 +29,7 @@ pub use two::{InterpData2D, InterpData2DOwned, InterpData2DViewed};
         "
     ))
 )]
-pub struct InterpData<D, const N: usize>
+pub struct InterpDataBase<D, const N: usize>
 where
     Dim<[Ix; N]>: Dimension,
     D: Data + RawDataClone + Clone,
@@ -39,29 +39,37 @@ where
     /// - 1-D: `[x]`
     /// - 2-D: `[x, y]`
     /// - 3-D: `[x, y, z]`
-    #[cfg_attr(
-        feature = "serde",
-        serde(deserialize_with = "serde_arr_array::deserialize")
-    )]
-    #[cfg_attr(
-        feature = "serde_ndim",
-        serde(serialize_with = "serde_arr_array::serialize")
-    )]
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_grid_arr"))]
     pub grid: [ArrayBase<D, Ix1>; N],
     /// Function values at coordinates: a single `N`-dimensional [`ArrayBase`].
-    #[cfg_attr(
-        feature = "serde_ndim",
-        serde(serialize_with = "serde_ndim::serialize")
-    )]
     #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_fixed"))]
     pub values: ArrayBase<D, Dim<[Ix; N]>>,
 }
-/// [`InterpData`] that views data.
-pub type InterpDataViewed<T, const N: usize> = InterpData<ViewRepr<T>, N>;
-/// [`InterpData`] that owns data.
-pub type InterpDataOwned<T, const N: usize> = InterpData<OwnedRepr<T>, N>;
+/// Owned data variant (see [`InterpDataBase`] for the generic form).
+pub type InterpData<T, const N: usize> = InterpDataBase<OwnedRepr<T>, N>;
+/// Viewed data variant (see [`InterpDataBase`] for the generic form).
+pub type InterpDataView<T, const N: usize> = InterpDataBase<ViewRepr<T>, N>;
 
-impl<D, const N: usize> PartialEq for InterpData<D, N>
+#[cfg(feature = "serde")]
+impl<D, const N: usize> SerializeNested for InterpDataBase<D, N>
+where
+    Dim<[Ix; N]>: Dimension,
+    D: Data + RawDataClone + Clone,
+    D::Elem: PartialEq + Debug + Serialize,
+    ArrayBase<D, Dim<[Ix; N]>>: Serialize,
+{
+    fn serialize_nested<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut s = serializer.serialize_struct("InterpDataBase", 2)?;
+        s.serialize_field("grid", &GridArrWrapper(&self.grid))?;
+        s.serialize_field("values", &ArrayWrapper(&self.values))?;
+        s.end()
+    }
+}
+
+impl<D, const N: usize> PartialEq for InterpDataBase<D, N>
 where
     Dim<[Ix; N]>: Dimension,
     D: Data + RawDataClone + Clone,
@@ -73,7 +81,7 @@ where
     }
 }
 
-impl<D, const N: usize> InterpData<D, N>
+impl<D, const N: usize> InterpDataBase<D, N>
 where
     Dim<[Ix; N]>: Dimension,
     D: Data + RawDataClone + Clone,
@@ -86,13 +94,13 @@ where
     {
         for i in 0..N {
             let i_grid_len = self.grid[i].len();
-            // Check that each grid dimension has elements
-            if i_grid_len == 0 {
-                return Err(ValidateError::EmptyGrid(i));
+            // Every strategy needs at least 2 points per dimension to bracket a query point
+            if i_grid_len < 2 {
+                return Err(ValidateError::InsufficientGridPoints(i));
             }
             // Check that grid points are monotonically increasing
             if !self.grid[i].windows(2).into_iter().all(|w| w[0] <= w[1]) {
-                return Err(ValidateError::Monotonicity(i));
+                return Err(ValidateError::NonMonotonic(i));
             }
             // Check that grid and values are compatible shapes
             if i_grid_len != self.values.shape()[i] {
@@ -103,20 +111,20 @@ where
     }
 
     /// View interpolator data.
-    pub fn view(&self) -> InterpDataViewed<&D::Elem, N> {
-        InterpDataViewed {
+    pub fn view(&self) -> InterpDataView<&D::Elem, N> {
+        InterpDataView {
             grid: std::array::from_fn(|i| self.grid[i].view()),
             values: self.values.view(),
         }
     }
 
-    /// Turn the data into an [`InterpDataOwned`], cloning the array elements if necessary.
-    pub fn into_owned(self) -> InterpDataOwned<D::Elem, N>
+    /// Turn the data into an [`InterpData`], cloning the array elements if necessary.
+    pub fn into_owned(self) -> InterpData<D::Elem, N>
     where
         Dim<[Ix; N]>: Dimension,
         D::Elem: Clone,
     {
-        InterpDataOwned {
+        InterpData {
             grid: self.grid.map(|arr| arr.into_owned()),
             values: self.values.into_owned(),
         }

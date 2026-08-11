@@ -2,36 +2,42 @@
 #![warn(missing_docs)]
 
 /// The `prelude` module exposes a variety of types:
-/// - All interpolator structs:
+/// - All interpolator types:
 ///   - [`Interp0D`](`interpolator::Interp0D`)
 ///   - [`Interp1D`](`interpolator::Interp1D`)
 ///   - [`Interp2D`](`interpolator::Interp2D`)
 ///   - [`Interp3D`](`interpolator::Interp3D`)
 ///   - [`InterpND`](`interpolator::InterpND`)
 ///   - A `serde`-compatible interpolator enum [`InterpolatorEnum`](`interpolator::enums::InterpolatorEnum`)
-///   - `Owned` and `Viewed` type aliases for all of the above
-/// - Their common trait: [`Interpolator`]
+///   - `Base` (generic) and `View` (borrowed) type aliases for all of the above
+/// - Their common trait: [`Interpolator`](`interpolator::Interpolator`)
 /// - The [`strategy`] mod, containing pre-defined interpolation strategies:
 ///   - [`strategy::Linear`]
 ///   - [`strategy::LinearUniform`]
 ///   - [`strategy::Nearest`]
-///   - [`strategy::Step`] (replaces the former `LeftNearest`/`RightNearest`)
+///   - [`strategy::Step`] (per-dimension and/or runtime-selected step directions)
+///   - [`strategy::StepLower`] / [`strategy::StepUpper`]
 ///   - `serde`-compatible strategy enums: [`strategy::enums::Strategy1DEnum`]/etc.
-/// - The extrapolation setting enum: [`Extrapolate`]
+/// - The extrapolation setting enum: [`Extrapolate`](`interpolator::Extrapolate`)
+/// - With the `serde` feature: `Nested`, `serialize_nested`, and `SerializeNested`, for opting
+///   into the nested-array serialization format at a specific call site
 pub mod prelude {
     pub use crate::strategy;
 
     pub use crate::interpolator::{Extrapolate, Interpolator};
 
     pub use crate::interpolator::Interp0D;
-    pub use crate::interpolator::{Interp1D, Interp1DOwned, Interp1DViewed};
-    pub use crate::interpolator::{Interp2D, Interp2DOwned, Interp2DViewed};
-    pub use crate::interpolator::{Interp3D, Interp3DOwned, Interp3DViewed};
-    pub use crate::interpolator::{InterpND, InterpNDOwned, InterpNDViewed};
+    pub use crate::interpolator::{Interp1D, Interp1DBase, Interp1DView};
+    pub use crate::interpolator::{Interp2D, Interp2DBase, Interp2DView};
+    pub use crate::interpolator::{Interp3D, Interp3DBase, Interp3DView};
+    pub use crate::interpolator::{InterpND, InterpNDBase, InterpNDView};
 
     pub use crate::interpolator::enums::{
-        InterpolatorEnum, InterpolatorEnumOwned, InterpolatorEnumViewed,
+        InterpolatorEnum, InterpolatorEnumBase, InterpolatorEnumView,
     };
+
+    #[cfg(feature = "serde")]
+    pub use crate::serde_support::{serialize_nested, Nested, SerializeNested};
 }
 
 pub mod error;
@@ -53,15 +59,17 @@ pub(crate) use ndarray::prelude::*;
 pub(crate) use ndarray::{Data, Ix, OwnedRepr, RawDataClone, ViewRepr};
 
 pub use num_traits;
-pub(crate) use num_traits::{clamp, Euclid, Float, One, Zero};
+pub(crate) use num_traits::{clamp, Euclid, Float, Num, One, Zero};
+
+pub(crate) use core::ops::Sub;
 
 pub(crate) use dyn_clone::*;
 
 #[cfg(feature = "serde")]
-#[path = "serde.rs"]
-mod serde_mod;
+#[path = "serde/mod.rs"]
+mod serde_support;
 #[cfg(feature = "serde")]
-pub(crate) use serde_mod::*;
+pub(crate) use serde_support::*;
 
 #[cfg(test)]
 /// Alias for [`approx::assert_abs_diff_eq`] with `epsilon = 1e-6`
@@ -78,7 +86,7 @@ pub(crate) use assert_approx_eq;
 
 /// Wrap value around data bounds.
 /// Assumes `min` < `max`.
-pub(crate) fn wrap<T: Float + Euclid + Copy>(input: T, min: T, max: T) -> T {
+pub(crate) fn wrap<T: Num + Euclid + Copy>(input: T, min: T, max: T) -> T {
     min + (input - min).rem_euclid(&(max - min))
 }
 

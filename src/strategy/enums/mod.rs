@@ -1,4 +1,6 @@
 //! This module provides enums that allow mutable strategy swapping.
+//! The enum variants and `From` impls here are hand-maintained per strategy type.
+//! Adding a new strategy requires explicit wiring in each of the 1-D/2-D/3-D/N-D enum modules.
 //!
 //! This is an alternative to using a `Box<dyn Strategy1D>`/etc. with a few key differences:
 //! - Better runtime performance
@@ -10,7 +12,7 @@
 //! use ndarray::prelude::*;
 //! use ninterp::prelude::*;
 //!
-//! let mut interp: Interp1DOwned<_, strategy::enums::Strategy1DEnum> = Interp1D::new(
+//! let mut interp: Interp1D<_, strategy::enums::Strategy1DEnum> = Interp1D::new(
 //!     // x
 //!     array![0., 1., 2., 3., 4.],
 //!     // f(x)
@@ -28,26 +30,97 @@
 //! assert_eq!(interp.interpolate(&[3.25]).unwrap(), 0.8);
 //! assert_eq!(interp.interpolate(&[3.50]).unwrap(), 1.0);
 //!
-//! // Swap to LinearUniform — O(1) index lookup for this uniform grid
+//! // Swap to LinearUniform: O(1) index lookup for this uniform grid
 //! interp.set_strategy(strategy::LinearUniform).unwrap();
 //! assert_eq!(interp.interpolate(&[3.00]).unwrap(), 0.8);
 //! assert_eq!(interp.interpolate(&[3.75]).unwrap(), 0.95);
 //! assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);
 //!
-//! // Piecewise-constant: return value at nearest lower grid point
-//! interp
-//!     .set_strategy(strategy::Step::from(strategy::StepDirection::Lower))
-//!     .unwrap();
+//! // Piecewise-constant: fixed lower direction (zero-allocation marker strategy)
+//! interp.set_strategy(strategy::StepLower).unwrap();
 //! assert_eq!(interp.interpolate(&[3.75]).unwrap(), 0.8);
 //! assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);
 //! ```
-//! See also: `examples/dynamic_strategy.rs`
+//! See also: `examples/swap_strategy.rs`
 
 // NOTE: `enum_dispatch` does essentially what this module does, but with less boilerplate.
 // However, it does not currently support using a generic trait on a non-generic enum.
 // https://gitlab.com/antonok/enum_dispatch/-/issues/67
 
 use super::*;
+
+/// Generates enum + From impls + trait dispatch, shared by Strategy*DEnum types.
+/// Takes enum name, trait name, data type name, point parameter type, and the list
+/// of strategies (variant name + type pairs). This allows future customization if
+/// strategies are added/removed per dimensionality.
+macro_rules! strategy_enum_impl {
+    (
+        $EnumName:ident,
+        $TraitName:ident,
+        $DataType:ident,
+        $PointType:ty,
+        [$(($Variant:ident, $StrategyType:ty)),* $(,)?]
+    ) => {
+        /// See [enums module](super) documentation.
+        #[allow(missing_docs)]
+        #[derive(Debug, Clone, PartialEq)]
+        #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+        #[cfg_attr(feature = "serde", serde(untagged))]
+        #[non_exhaustive]
+        pub enum $EnumName {
+            $($Variant($StrategyType),)*
+        }
+
+        $(
+            impl From<$StrategyType> for $EnumName {
+                #[inline]
+                fn from(strategy: $StrategyType) -> Self {
+                    Self::$Variant(strategy)
+                }
+            }
+        )*
+
+        impl<D> $TraitName<D> for $EnumName
+        where
+            D: Data + RawDataClone + Clone,
+            D::Elem: Float + Debug,
+        {
+            #[inline]
+            fn validate(&self, data: &$DataType<D>) -> Result<(), ValidateError> {
+                match self {
+                    $(Self::$Variant(strategy) => $TraitName::<D>::validate(strategy, data),)*
+                }
+            }
+
+            #[inline]
+            fn init(&mut self, data: &$DataType<D>) -> Result<(), ValidateError> {
+                match self {
+                    $(Self::$Variant(strategy) => $TraitName::<D>::init(strategy, data),)*
+                }
+            }
+
+            #[inline]
+            fn interpolate(
+                &self,
+                data: &$DataType<D>,
+                point: $PointType,
+            ) -> Result<D::Elem, InterpolateError> {
+                match self {
+                    $(Self::$Variant(strategy) => $TraitName::<D>::interpolate(strategy, data, point),)*
+                }
+            }
+
+            #[inline]
+            fn allow_extrapolate(&self) -> bool {
+                match self {
+                    $(Self::$Variant(strategy) => $TraitName::<D>::allow_extrapolate(strategy),)*
+                }
+            }
+        }
+    };
+}
+#[allow(unused_imports)]
+pub(crate) use strategy_enum_impl;
 
 mod n;
 mod one;
@@ -85,9 +158,7 @@ mod tests {
         assert_eq!(interp.interpolate(&[3.75]).unwrap(), 1.0);
         assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);
 
-        interp
-            .set_strategy(strategy::Step::from(strategy::StepDirection::Lower))
-            .unwrap();
+        interp.set_strategy(strategy::StepLower).unwrap();
         assert_eq!(interp.interpolate(&[3.00]).unwrap(), 0.8);
         assert_eq!(interp.interpolate(&[3.75]).unwrap(), 0.8);
         assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);

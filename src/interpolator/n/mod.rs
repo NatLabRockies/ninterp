@@ -10,7 +10,8 @@ mod tests;
 
 /// Interpolator data for N-dimensional interpolators, where N can vary at runtime.
 ///
-/// See [`InterpData`] and its aliases for concrete-dimensionality interpolator data structs.
+/// See [`InterpDataBase`] and its dimension-specific aliases
+/// for concrete-dimensionality interpolator data structs.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 #[cfg_attr(
@@ -23,35 +24,41 @@ mod tests;
         "
     ))
 )]
-pub struct InterpDataND<D>
+pub struct InterpDataNDBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
 {
     /// Coordinate grid: a vector of 1-dimensional [`ArrayBase<D, Ix1>`].
-    #[cfg_attr(
-        feature = "serde",
-        serde(deserialize_with = "serde_vec_array::deserialize")
-    )]
-    #[cfg_attr(
-        feature = "serde_ndim",
-        serde(serialize_with = "serde_vec_array::serialize")
-    )]
+    #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_grid_vec"))]
     pub grid: Vec<ArrayBase<D, Ix1>>,
     /// Function values at coordinates: a single dynamic-dimensional [`ArrayBase`].
-    #[cfg_attr(
-        feature = "serde_ndim",
-        serde(serialize_with = "serde_ndim::serialize")
-    )]
     #[cfg_attr(feature = "serde", serde(deserialize_with = "deserialize_dyn"))]
     pub values: ArrayBase<D, IxDyn>,
 }
-/// [`InterpDataND`] that views data.
-pub type InterpDataNDViewed<T> = InterpDataND<ViewRepr<T>>;
-/// [`InterpDataND`] that owns data.
-pub type InterpDataNDOwned<T> = InterpDataND<OwnedRepr<T>>;
+/// Owned data variant for N-D data (see [`InterpDataNDBase`] for the generic form).
+pub type InterpDataND<T> = InterpDataNDBase<OwnedRepr<T>>;
+/// Viewed data variant for N-D data (see [`InterpDataNDBase`] for the generic form).
+pub type InterpDataNDView<T> = InterpDataNDBase<ViewRepr<T>>;
 
-impl<D> PartialEq for InterpDataND<D>
+#[cfg(feature = "serde")]
+impl<D> SerializeNested for InterpDataNDBase<D>
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: PartialEq + Debug + Serialize,
+{
+    fn serialize_nested<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut s = serializer.serialize_struct("InterpDataNDBase", 2)?;
+        s.serialize_field("grid", &GridVecWrapper(&self.grid))?;
+        s.serialize_field("values", &ArrayWrapper(&self.values))?;
+        s.end()
+    }
+}
+
+impl<D> PartialEq for InterpDataNDBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
@@ -62,7 +69,7 @@ where
     }
 }
 
-impl<D> InterpDataND<D>
+impl<D> InterpDataNDBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
@@ -88,22 +95,20 @@ where
         let n = self.ndim();
         if (self.grid.len() != n) && !(n == 0 && self.grid.iter().all(|g| g.is_empty())) {
             // Only possible for `InterpDataND`
-            return Err(ValidateError::Other(format!(
-                "grid length {} does not match dimensionality {}",
-                self.grid.len(),
-                n,
-            )));
+            return Err(ValidateError::GridAxisCount {
+                expected: n,
+                found: self.grid.len(),
+            });
         }
         for i in 0..n {
             let i_grid_len = self.grid[i].len();
-            // Check that each grid dimension has elements
-            // Indexing `grid` directly is okay because empty dimensions are caught at compilation
-            if i_grid_len == 0 {
-                return Err(ValidateError::EmptyGrid(i));
+            // Every strategy needs at least 2 points per dimension to bracket a query point
+            if i_grid_len < 2 {
+                return Err(ValidateError::InsufficientGridPoints(i));
             }
             // Check that grid points are monotonically increasing
             if !self.grid[i].windows(2).into_iter().all(|w| w[0] <= w[1]) {
-                return Err(ValidateError::Monotonicity(i));
+                return Err(ValidateError::NonMonotonic(i));
             }
             // Check that grid and values are compatible shapes
             if i_grid_len != self.values.shape()[i] {
@@ -123,19 +128,19 @@ where
     }
 
     /// View interpolator data.
-    pub fn view(&self) -> InterpDataNDViewed<&D::Elem> {
-        InterpDataNDViewed {
+    pub fn view(&self) -> InterpDataNDView<&D::Elem> {
+        InterpDataNDView {
             grid: self.grid.iter().map(|g| g.view()).collect(),
             values: self.values.view(),
         }
     }
 
-    /// Turn the data into an [`InterpDataNDOwned`], cloning the array elements if necessary.
-    pub fn into_owned(self) -> InterpDataNDOwned<D::Elem>
+    /// Turn the data into an [`InterpDataND`], cloning the array elements if necessary.
+    pub fn into_owned(self) -> InterpDataND<D::Elem>
     where
         D::Elem: Clone,
     {
-        InterpDataNDOwned {
+        InterpDataND {
             grid: self.grid.into_iter().map(|g| g.into_owned()).collect(),
             values: self.values.into_owned(),
         }
@@ -159,29 +164,58 @@ where
         "
     ))
 )]
-pub struct InterpND<D, S>
+pub struct InterpNDBase<D, S>
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: PartialEq + Debug,
+    S: Clone,
+{
+    /// Interpolator data.
+    pub data: InterpDataNDBase<D>,
+    /// Interpolation strategy.
+    pub strategy: S,
+    /// Extrapolation setting.
+    pub extrapolate: Extrapolate<D::Elem>,
+}
+/// Owned interpolator variant (see [`InterpNDBase`] for the generic form).
+pub type InterpND<T, S> = InterpNDBase<OwnedRepr<T>, S>;
+/// Viewed interpolator variant (see [`InterpNDBase`] for the generic form).
+pub type InterpNDView<T, S> = InterpNDBase<ViewRepr<T>, S>;
+
+partialeq_impl!(InterpNDBase, InterpDataNDBase, StrategyND);
+#[cfg(feature = "serde")]
+serialize_nested_impl!(InterpNDBase, InterpDataNDBase, StrategyND);
+
+impl<D, S> InterpNDBase<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
     S: StrategyND<D> + Clone,
 {
-    /// Interpolator data.
-    pub data: InterpDataND<D>,
-    /// Interpolation strategy.
-    pub strategy: S,
-    /// Extrapolation setting.
-    #[cfg_attr(feature = "serde", serde(default))]
-    pub extrapolate: Extrapolate<D::Elem>,
+    /// Re-run the strategy's [`StrategyND::validate`] against the current data.
+    ///
+    /// `new`, `set_strategy`, and [`Interpolator::validate`] already call this
+    /// internally, so this is only needed after mutating the public `data`/`strategy`
+    /// fields directly.
+    pub fn validate_strategy(&self) -> Result<(), ValidateError> {
+        self.strategy.validate(&self.data)
+    }
+
+    /// Re-run the strategy's [`StrategyND::init`] against the current data.
+    ///
+    /// `new` and `set_strategy` already call this internally, so this is only needed
+    /// after bypassing them: mutating the public `data`/`strategy` fields directly, or
+    /// deserializing an interpolator whose strategy skips its cached state from
+    /// serialization (e.g. via `#[serde(skip)]`, to avoid bloating the wire format with
+    /// a large derived array). `Deserialize` does not call `init`; if the cached state
+    /// is instead stored in ordinary serialized fields, it comes back as-is and this
+    /// isn't needed.
+    pub fn init_strategy(&mut self) -> Result<(), ValidateError> {
+        self.strategy.init(&self.data)
+    }
 }
-/// [`InterpND`] that views data.
-pub type InterpNDViewed<T, S> = InterpND<ViewRepr<T>, S>;
-/// [`InterpND`] that owns data.
-pub type InterpNDOwned<T, S> = InterpND<OwnedRepr<T>, S>;
 
-extrapolate_impl!(InterpND, StrategyND);
-partialeq_impl!(InterpND, InterpDataND, StrategyND);
-
-impl<D, S> InterpND<D, S>
+impl<D, S> InterpNDBase<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialOrd + Debug,
@@ -194,8 +228,7 @@ where
     /// use ndarray::prelude::*;
     /// use ninterp::prelude::*;
     /// // f(x, y, z) = 0.2 * x + 0.2 * y + 0.2 * z
-    /// // type annotation for clarity
-    /// let interp: InterpNDOwned<f64, _> = InterpND::new(
+    /// let interp = InterpND::new(
     ///     // grid
     ///     vec![
     ///         // x
@@ -227,7 +260,7 @@ where
     /// // out of bounds point with `Extrapolate::Error` fails
     /// assert!(matches!(
     ///     interp.interpolate(&[5.5, 5.5, 5.5]).unwrap_err(),
-    ///     ninterp::error::InterpolateError::ExtrapolateError(_)
+    ///     ninterp::error::InterpolateError::OutOfBounds(_)
     /// ));
     /// ```
     pub fn new(
@@ -237,35 +270,36 @@ where
         extrapolate: Extrapolate<D::Elem>,
     ) -> Result<Self, ValidateError> {
         let mut interpolator = Self {
-            data: InterpDataND::new(grid, values)?,
+            data: InterpDataNDBase::new(grid, values)?,
             strategy,
             extrapolate,
         };
-        interpolator.check_extrapolate(&interpolator.extrapolate)?;
-        interpolator.strategy.init(&interpolator.data)?;
+        interpolator.validate_extrapolate(&interpolator.extrapolate)?;
+        interpolator.validate_strategy()?;
+        interpolator.init_strategy()?;
         Ok(interpolator)
     }
 
     /// Return an interpolator with viewed data.
-    pub fn view(&self) -> InterpNDViewed<&D::Elem, S>
+    pub fn view(&self) -> InterpNDView<&D::Elem, S>
     where
         S: for<'a> StrategyND<ViewRepr<&'a D::Elem>>,
         D::Elem: Clone,
     {
-        InterpNDViewed {
+        InterpNDView {
             data: self.data.view(),
             strategy: self.strategy.clone(),
             extrapolate: self.extrapolate.clone(),
         }
     }
 
-    /// Turn the interpolator into an [`InterpNDOwned`], cloning the array elements if necessary.
-    pub fn into_owned(self) -> InterpNDOwned<D::Elem, S>
+    /// Turn the interpolator into an [`InterpND`], cloning the array elements if necessary.
+    pub fn into_owned(self) -> InterpND<D::Elem, S>
     where
         S: StrategyND<OwnedRepr<D::Elem>>,
         D::Elem: Clone,
     {
-        InterpNDOwned {
+        InterpND {
             data: self.data.into_owned(),
             strategy: self.strategy.clone(),
             extrapolate: self.extrapolate.clone(),
@@ -273,10 +307,10 @@ where
     }
 }
 
-impl<D, S> Interpolator<D::Elem> for InterpND<D, S>
+impl<D, S> Interpolator<D::Elem> for InterpNDBase<D, S>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: Float + Euclid + Debug,
+    D::Elem: Num + PartialOrd + Euclid + Copy + Debug,
     S: StrategyND<D> + Clone,
 {
     #[inline]
@@ -284,17 +318,23 @@ where
         self.data.ndim()
     }
 
-    fn validate(&mut self) -> Result<(), ValidateError> {
-        self.check_extrapolate(&self.extrapolate)?;
+    fn validate(&self) -> Result<(), ValidateError> {
+        self.validate_extrapolate(&self.extrapolate)?;
         self.data.validate()?;
-        self.strategy.init(&self.data)?;
+        self.validate_strategy()?;
         Ok(())
     }
 
     fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
         let n = self.ndim();
         if point.len() != n {
-            return Err(InterpolateError::PointLength(n));
+            return Err(InterpolateError::PointLength {
+                expected: n,
+                failures: vec![WrongLengthAt {
+                    index: 0,
+                    found: point.len(),
+                }],
+            });
         }
         let mut errors = Vec::new();
         for dim in 0..n {
@@ -333,50 +373,203 @@ where
                         return self.strategy.interpolate(&self.data, &wrapped_point);
                     }
                     Extrapolate::Error => {
-                        errors.push(format!(
-                            "\n    point[{dim}] = {:?} is out of bounds for grid[{dim}] = {:?}",
-                            point[dim], self.data.grid[dim],
-                        ));
+                        errors.push(OutOfBoundsAt { index: 0, dim });
                     }
                 };
             }
         }
         if !errors.is_empty() {
-            return Err(InterpolateError::ExtrapolateError(errors.join("")));
+            return Err(InterpolateError::OutOfBounds(errors));
         }
         self.strategy.interpolate(&self.data, point)
     }
 
     fn set_extrapolate(&mut self, extrapolate: Extrapolate<D::Elem>) -> Result<(), ValidateError> {
-        self.check_extrapolate(&extrapolate)?;
+        self.validate_extrapolate(&extrapolate)?;
         self.extrapolate = extrapolate;
         Ok(())
     }
-}
 
-impl<D> InterpND<D, Box<dyn StrategyND<D>>>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialEq + Debug,
-{
-    /// Update strategy dynamically.
-    pub fn set_strategy(&mut self, strategy: Box<dyn StrategyND<D>>) -> Result<(), ValidateError> {
-        self.strategy = strategy;
-        self.check_extrapolate(&self.extrapolate)
+    fn interpolate_fast(&self, point: &[D::Elem]) -> D::Elem {
+        assert_eq!(
+            point.len(),
+            self.ndim(),
+            "interpolate_fast: point length mismatch"
+        );
+        self.strategy.interpolate_fast(&self.data, point)
+    }
+
+    fn batch_interpolate_into(
+        &self,
+        points: &[&[D::Elem]],
+        out: &mut [D::Elem],
+    ) -> Result<(), InterpolateError> {
+        let n = self.ndim();
+        let failures: Vec<WrongLengthAt> = points
+            .iter()
+            .enumerate()
+            .filter(|(_, point)| point.len() != n)
+            .map(|(i, point)| WrongLengthAt {
+                index: i,
+                found: point.len(),
+            })
+            .collect();
+        if !failures.is_empty() {
+            return Err(InterpolateError::PointLength {
+                expected: n,
+                failures,
+            });
+        }
+        if out.len() != points.len() {
+            return Err(InterpolateError::OutputLength {
+                expected: points.len(),
+                found: out.len(),
+            });
+        }
+        match &self.extrapolate {
+            Extrapolate::Enable => self
+                .strategy
+                .batch_interpolate_into(&self.data, points, out),
+            Extrapolate::Clamp => {
+                // Clamping an in-bounds point is already identity, so every point
+                // can be clamped unconditionally.
+                let clamped: Vec<Vec<D::Elem>> = points
+                    .iter()
+                    .map(|&point| {
+                        point
+                            .iter()
+                            .enumerate()
+                            .map(|(dim, pt)| {
+                                *clamp(
+                                    pt,
+                                    self.data.grid[dim].first().unwrap(),
+                                    self.data.grid[dim].last().unwrap(),
+                                )
+                            })
+                            .collect()
+                    })
+                    .collect();
+                let clamped: Vec<&[D::Elem]> = clamped.iter().map(Vec::as_slice).collect();
+                self.strategy
+                    .batch_interpolate_into(&self.data, &clamped, out)
+            }
+            Extrapolate::Wrap => {
+                // Unlike `Clamp`, `wrap()` isn't identity exactly at the boundary,
+                // so only out-of-bounds points get wrapped.
+                let wrapped: Vec<Vec<D::Elem>> = points
+                    .iter()
+                    .map(|&point| {
+                        if out_of_bounds(&self.data.grid, point) {
+                            point
+                                .iter()
+                                .enumerate()
+                                .map(|(dim, pt)| {
+                                    wrap(
+                                        *pt,
+                                        *self.data.grid[dim].first().unwrap(),
+                                        *self.data.grid[dim].last().unwrap(),
+                                    )
+                                })
+                                .collect()
+                        } else {
+                            point.to_vec()
+                        }
+                    })
+                    .collect();
+                let wrapped: Vec<&[D::Elem]> = wrapped.iter().map(Vec::as_slice).collect();
+                self.strategy
+                    .batch_interpolate_into(&self.data, &wrapped, out)
+            }
+            Extrapolate::Fill(value) => {
+                // Pre-fill output with the fill value, then scatter interpolated
+                // results from in-bounds points into their corresponding indices.
+                for o in out.iter_mut() {
+                    *o = *value;
+                }
+                let mut in_bounds_indices = Vec::new();
+                let mut in_bounds_points: Vec<&[D::Elem]> = Vec::new();
+                for (i, &point) in points.iter().enumerate() {
+                    if !out_of_bounds(&self.data.grid, point) {
+                        in_bounds_indices.push(i);
+                        in_bounds_points.push(point);
+                    }
+                }
+                if !in_bounds_indices.is_empty() {
+                    let mut scratch = vec![D::Elem::zero(); in_bounds_indices.len()];
+                    self.strategy.batch_interpolate_into(
+                        &self.data,
+                        &in_bounds_points,
+                        &mut scratch,
+                    )?;
+                    for (idx, value) in in_bounds_indices.into_iter().zip(scratch) {
+                        out[idx] = value;
+                    }
+                }
+                Ok(())
+            }
+            Extrapolate::Error => {
+                let mut errors = Vec::new();
+                let mut in_bounds_points: Vec<&[D::Elem]> = Vec::new();
+                for (i, &point) in points.iter().enumerate() {
+                    let mut point_errors = Vec::new();
+                    for (dim, (axis, &coord)) in self.data.grid.iter().zip(point.iter()).enumerate()
+                    {
+                        if !(axis.first().unwrap()..=axis.last().unwrap()).contains(&&coord) {
+                            point_errors.push(OutOfBoundsAt { index: i, dim });
+                        }
+                    }
+                    if point_errors.is_empty() {
+                        in_bounds_points.push(point);
+                    } else {
+                        errors.extend(point_errors);
+                    }
+                }
+                if !errors.is_empty() {
+                    return Err(InterpolateError::OutOfBounds(errors));
+                }
+                self.strategy
+                    .batch_interpolate_into(&self.data, &in_bounds_points, out)
+            }
+        }
+    }
+
+    fn batch_interpolate_fast_into(&self, points: &[&[D::Elem]], out: &mut [D::Elem]) {
+        let n = self.ndim();
+        for point in points {
+            assert_eq!(
+                point.len(),
+                n,
+                "batch_interpolate_fast_into: point length mismatch"
+            );
+        }
+        assert_eq!(
+            out.len(),
+            points.len(),
+            "batch_interpolate_fast_into: length mismatch"
+        );
+        self.strategy
+            .batch_interpolate_fast_into(&self.data, points, out)
+    }
+
+    fn batch_interpolate_fast(&self, points: &[&[D::Elem]]) -> Vec<D::Elem>
+    where
+        D::Elem: Num + Copy,
+    {
+        let n = self.ndim();
+        for point in points {
+            assert_eq!(
+                point.len(),
+                n,
+                "batch_interpolate_fast: point length mismatch"
+            );
+        }
+        let mut out = vec![D::Elem::zero(); points.len()];
+        self.batch_interpolate_fast_into(points, &mut out);
+        out
     }
 }
 
-impl<D> InterpND<D, strategy::enums::StrategyNDEnum>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
-{
-    /// Update strategy dynamically.
-    pub fn set_strategy(
-        &mut self,
-        strategy: impl Into<strategy::enums::StrategyNDEnum>,
-    ) -> Result<(), ValidateError> {
-        self.strategy = strategy.into();
-        self.check_extrapolate(&self.extrapolate)
-    }
-}
+extrapolate_impl!(InterpNDBase, StrategyND);
+set_strategy_box_impl!(InterpNDBase, StrategyND);
+set_strategy_enum_impl!(InterpNDBase, strategy::enums::StrategyNDEnum);
+any_interpolator_impl!(InterpND, StrategyND);

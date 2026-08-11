@@ -5,7 +5,7 @@ use super::*;
 pub mod enums;
 pub(crate) mod spline;
 pub mod traits;
-pub(crate) mod utils;
+pub mod utils;
 
 /// Linear interpolation: <https://en.wikipedia.org/wiki/Linear_interpolation>
 #[derive(Debug, Clone, PartialEq)]
@@ -66,26 +66,42 @@ pub enum StepDirection {
 /// Piecewise-constant (step) interpolation.
 ///
 /// Returns the value at the nearest lower or upper grid point in each dimension.
-/// Construct from a single [`StepDirection`] to broadcast the same direction across all
-/// dimensions, or supply one direction per dimension for mixed behavior.
+///
+/// Use [`Step`] when mixed per-dimension behavior is needed, or when direction is chosen at
+/// runtime (for example from config). Use [`StepLower`] or [`StepUpper`] when a single direction
+/// is known at compile time, especially in hot loops.
+///
+/// Construct [`Step`] from a single [`StepDirection`] to broadcast the same direction across
+/// all dimensions, or supply one direction per dimension for mixed behavior.
 ///
 /// # Examples
 /// ```
 /// use ndarray::prelude::*;
 /// use ninterp::prelude::*;
 ///
-/// // Floor (previous value): returns the value at the nearest lower grid point
+/// // Returns the value at the nearest lower grid point
 /// let interp = Interp1D::new(
 ///     array![0., 1., 2., 3., 4.],
 ///     array![0.2, 0.4, 0.6, 0.8, 1.0],
-///     strategy::Step::from(strategy::StepDirection::Lower),
+///     strategy::StepLower,
 ///     Extrapolate::Error,
 /// )
 /// .unwrap();
 /// assert_eq!(interp.interpolate(&[3.75]).unwrap(), 0.8); // floor → value at 3.0
 /// assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0); // exact grid point
 ///
-/// // Ceiling (next value): returns the value at the nearest upper grid point
+/// // Returns the value at the nearest upper grid point
+/// let interp = Interp1D::new(
+///     array![0., 1., 2., 3., 4.],
+///     array![0.2, 0.4, 0.6, 0.8, 1.0],
+///     strategy::StepUpper,
+///     Extrapolate::Error,
+/// )
+/// .unwrap();
+/// assert_eq!(interp.interpolate(&[3.25]).unwrap(), 1.0); // ceil → value at 4.0
+/// assert_eq!(interp.interpolate(&[3.00]).unwrap(), 0.8); // exact grid point
+///
+/// // Behaves exactly like `StepUpper`, but allows the direction to be chosen at runtime
 /// let interp = Interp1D::new(
 ///     array![0., 1., 2., 3., 4.],
 ///     array![0.2, 0.4, 0.6, 0.8, 1.0],
@@ -121,6 +137,28 @@ impl From<StepDirection> for Step {
 }
 
 impl Step {
+    /// Checks the stored direction count against an interpolator's dimensionality: one
+    /// direction broadcasts to every dimension, otherwise there must be exactly one per
+    /// dimension. Shared by the `Strategy1D`/`2D`/`3D`/`ND` impls so all four report it
+    /// identically.
+    ///
+    /// Stays a [`ValidateError::Other`] rather than earning a variant: it describes how
+    /// this strategy was configured, not anything about the data.
+    pub(crate) fn validate_len(&self, ndim: usize) -> Result<(), ValidateError> {
+        let found = self.0.len();
+        if found == 1 || found == ndim {
+            return Ok(());
+        }
+        let expected = if ndim == 1 {
+            "1".to_string()
+        } else {
+            format!("1 or {ndim}")
+        };
+        Err(ValidateError::Other(format!(
+            "Step strategy has {found} directions but interpolator is {ndim}-D (expected {expected})"
+        )))
+    }
+
     /// Returns the direction for dimension `dim`.
     /// A single stored direction broadcasts to all dimensions.
     pub(crate) fn dir(&self, dim: usize) -> StepDirection {
@@ -131,6 +169,22 @@ impl Step {
         }
     }
 }
+
+/// Piecewise-constant interpolation that always selects the nearest **lower** grid point.
+///
+/// This is the zero-allocation, fixed-direction variant of [`Step`]. Prefer this when the
+/// direction is known at compile time.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize_unit_struct))]
+pub struct StepLower;
+
+/// Piecewise-constant interpolation that always selects the nearest **upper** grid point.
+///
+/// This is the zero-allocation, fixed-direction variant of [`Step`]. Prefer this when the
+/// direction is known at compile time.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize_unit_struct))]
+pub struct StepUpper;
 
 #[cfg(feature = "serde")]
 mod step_serde {
@@ -163,6 +217,38 @@ mod step_serde {
     }
 }
 
+#[cfg(feature = "serde")]
+mod step_marker_serde {
+    use super::*;
+    use serde::{Deserialize, Deserializer};
+
+    #[derive(Deserialize)]
+    enum StepLowerDe {
+        #[serde(alias = "LeftNearest")]
+        StepLower,
+    }
+
+    #[derive(Deserialize)]
+    enum StepUpperDe {
+        #[serde(alias = "RightNearest")]
+        StepUpper,
+    }
+
+    impl<'de> Deserialize<'de> for StepLower {
+        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            let _ = StepLowerDe::deserialize(deserializer)?;
+            Ok(StepLower)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for StepUpper {
+        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            let _ = StepUpperDe::deserialize(deserializer)?;
+            Ok(StepUpper)
+        }
+    }
+}
+
 /// Cubic spline interpolation (<https://en.wikipedia.org/wiki/Spline_interpolation>).
 ///
 /// Constructs a C² piecewise cubic polynomial through all data points.
@@ -179,7 +265,7 @@ mod step_serde {
 /// use ninterp::prelude::*;
 ///
 /// // f(x) = 2x + 1 (linear — reproduced exactly by any spline)
-/// let interp: Interp1DOwned<f64, _> = Interp1D::new(
+/// let interp: Interp1D<f64, _> = Interp1D::new(
 ///     array![0., 1., 2., 3.],
 ///     array![1., 3., 5., 7.],
 ///     strategy::CubicSpline::not_a_knot(),
@@ -290,6 +376,14 @@ mod tests {
             format!("\"{}\"", stringify!(Nearest))
         );
         assert_eq!(
+            serde_json::to_string(&StepLower).unwrap(),
+            format!("\"{}\"", stringify!(StepLower))
+        );
+        assert_eq!(
+            serde_json::to_string(&StepUpper).unwrap(),
+            format!("\"{}\"", stringify!(StepUpper))
+        );
+        assert_eq!(
             serde_json::to_string(&Step::from(StepDirection::Lower)).unwrap(),
             r#"{"Step":["Lower"]}"#
         );
@@ -301,5 +395,21 @@ mod tests {
             serde_json::to_string(&Step(vec![StepDirection::Lower, StepDirection::Upper])).unwrap(),
             r#"{"Step":["Lower","Upper"]}"#
         );
+
+        let step_lower: StepLower = serde_json::from_str("\"StepLower\"").unwrap();
+        assert_eq!(step_lower, StepLower);
+        let step_upper: StepUpper = serde_json::from_str("\"StepUpper\"").unwrap();
+        assert_eq!(step_upper, StepUpper);
+        // Backward-compatibility aliases for pre-Step serialized names.
+        assert_eq!(
+            serde_json::from_str::<StepLower>("\"LeftNearest\"").unwrap(),
+            StepLower
+        );
+        assert_eq!(
+            serde_json::from_str::<StepUpper>("\"RightNearest\"").unwrap(),
+            StepUpper
+        );
+        // Aliases are intentionally scoped to StepLower/StepUpper, not StepDirection.
+        assert!(serde_json::from_str::<Step>(r#"{"Step":["LeftNearest"]}"#).is_err());
     }
 }

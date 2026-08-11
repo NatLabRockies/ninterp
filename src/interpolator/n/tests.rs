@@ -95,6 +95,45 @@ fn test_linear() {
 }
 
 #[test]
+fn test_dyn_interpolator() {
+    let interp = InterpND::new(
+        vec![
+            array![0.05, 0.10, 0.15],
+            array![0.10, 0.20, 0.30],
+            array![0.20, 0.40, 0.60],
+        ],
+        array![
+            [[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
+            [[9., 10., 11.], [12., 13., 14.], [15., 16., 17.]],
+            [[18., 19., 20.], [21., 22., 23.], [24., 25., 26.]],
+        ]
+        .into_dyn(),
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let points: [&[f64]; 2] = [&[0.05, 0.10, 0.20], &[0.15, 0.30, 0.60]];
+
+    let boxed: Box<dyn AnyInterpolator<f64>> = Box::new(interp.clone());
+    assert_eq!(
+        boxed.interpolate(&[0.05, 0.10, 0.20]).unwrap(),
+        interp.interpolate(&[0.05, 0.10, 0.20]).unwrap(),
+    );
+    assert_eq!(
+        boxed.batch_interpolate(&points).unwrap(),
+        interp.batch_interpolate(&points).unwrap(),
+    );
+    assert!(matches!(
+        boxed.interpolate(&[]).unwrap_err(),
+        InterpolateError::PointLength { expected: 3, .. }
+    ));
+    assert_eq!(
+        boxed.as_any().downcast_ref::<InterpND<f64, _>>(),
+        Some(&interp)
+    );
+}
+
+#[test]
 fn test_linear_offset() {
     let interp = InterpND::new(
         vec![array![0., 1.], array![0., 1.], array![0., 1.]],
@@ -296,8 +335,24 @@ fn test_nearest() {
 }
 
 #[test]
+fn test_integer_nearest_with_clamp() {
+    let interp = InterpND::new(
+        vec![array![0, 10], array![0, 10]],
+        array![[0, 1], [2, 3]].into_dyn(),
+        strategy::Nearest,
+        Extrapolate::Clamp,
+    )
+    .unwrap();
+
+    // In-bounds nearest still works on integer coordinates.
+    assert_eq!(interp.interpolate(&[8, 3]).unwrap(), 2);
+    // Out-of-bounds point is clamped to [0, 10], selecting the top-left row/right column.
+    assert_eq!(interp.interpolate(&[-3, 12]).unwrap(), 1);
+}
+
+#[test]
 fn test_step() {
-    // Uniform Lower (floor) — same grid as test_nearest
+    // Uniform Lower (floor), same grid as test_nearest
     let interp = InterpND::new(
         vec![array![0., 1.], array![0., 1.], array![0., 1.]],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
@@ -323,6 +378,15 @@ fn test_step() {
     assert_eq!(interp.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 0.); // floor→[0,0,0]
     assert_eq!(interp.interpolate(&[0.9, 0.9, 0.9]).unwrap(), 0.); // floor→[0,0,0]
 
+    let interp_lower = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::StepLower,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(interp_lower.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 0.);
+
     // Uniform Upper (ceiling)
     let interp_upper = InterpND::new(
         vec![array![0., 1.], array![0., 1.], array![0., 1.]],
@@ -332,6 +396,18 @@ fn test_step() {
     )
     .unwrap();
     assert_eq!(interp_upper.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 7.); // ceil→[1,1,1]
+
+    let interp_marker_upper = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::StepUpper,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(
+        interp_marker_upper.interpolate(&[0.3, 0.7, 0.6]).unwrap(),
+        7.
+    );
 
     // Per-dimension: Lower in x, Upper in y, Lower in z
     let interp_mixed = InterpND::new(
@@ -371,7 +447,7 @@ fn test_extrapolate_inputs() {
             Extrapolate::Enable,
         )
         .unwrap_err(),
-        ValidateError::ExtrapolateSelection(_)
+        ValidateError::ExtrapolateUnsupported
     ));
     // Extrapolate::Error
     let interp = InterpND::new(
@@ -383,11 +459,11 @@ fn test_extrapolate_inputs() {
     .unwrap();
     assert!(matches!(
         interp.interpolate(&[-1., -1., -1.]).unwrap_err(),
-        InterpolateError::ExtrapolateError(_)
+        InterpolateError::OutOfBounds(_)
     ));
     assert!(matches!(
         interp.interpolate(&[2., 2., 2.]).unwrap_err(),
-        InterpolateError::ExtrapolateError(_)
+        InterpolateError::OutOfBounds(_)
     ));
 }
 
@@ -465,6 +541,138 @@ fn test_extrapolate_wrap() {
 }
 
 #[test]
+fn test_interpolate_fast() {
+    let interp = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(
+        interp.interpolate_fast(&[0.25, 0.65, 0.9]),
+        interp.interpolate(&[0.25, 0.65, 0.9]).unwrap()
+    );
+}
+
+#[test]
+#[should_panic(expected = "interpolate_fast: point length mismatch")]
+fn test_interpolate_fast_point_too_short() {
+    let interp = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    interp.interpolate_fast(&[0.5, 0.5]);
+}
+
+#[test]
+#[should_panic(expected = "interpolate_fast: point length mismatch")]
+fn test_interpolate_fast_point_too_long() {
+    let interp = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    interp.interpolate_fast(&[0.5, 0.5, 0.5, 0.5]);
+}
+
+#[test]
+fn test_batch_interpolate_matches_interpolate() {
+    let interp = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Linear,
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    let points: [&[f64]; 3] = [&[0.25, 0.65, 0.9], &[0., 0., 0.], &[2., 2., 2.]];
+    let batched = interp.batch_interpolate(&points).unwrap();
+    let looped: Vec<_> = points
+        .iter()
+        .map(|point| interp.interpolate(point).unwrap())
+        .collect();
+    assert_eq!(batched, looped);
+
+    let batched_fast = interp.batch_interpolate_fast(&points);
+    let looped_fast: Vec<_> = points
+        .iter()
+        .map(|point| interp.interpolate_fast(point))
+        .collect();
+    assert_eq!(batched_fast, looped_fast);
+}
+
+#[test]
+fn test_batch_interpolate_clamp() {
+    let interp = InterpND::new(
+        vec![array![0.1, 1.1], array![0.2, 1.2], array![0.3, 1.3]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Linear,
+        Extrapolate::Clamp,
+    )
+    .unwrap();
+    let points: [&[f64]; 2] = [&[-1., -1., -1.], &[2., 2., 2.]];
+    assert_eq!(
+        interp.batch_interpolate(&points).unwrap(),
+        vec![interp.data.values[[0, 0, 0]], interp.data.values[[1, 1, 1]]]
+    );
+}
+
+#[test]
+fn test_batch_interpolate_error_aggregates_all_points() {
+    let interp = InterpND::new(
+        vec![array![0.1, 1.1], array![0.2, 1.2], array![0.3, 1.3]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let points: [&[f64]; 3] = [&[0.4, 0.4, 0.4], &[-1., -1., -1.], &[2., 2., 2.]];
+    let err = interp.batch_interpolate(&points).unwrap_err();
+    let InterpolateError::OutOfBounds(failures) = err else {
+        panic!("expected InterpolateError::OutOfBounds");
+    };
+    let offending: Vec<usize> = failures.iter().map(|at| at.index).collect();
+    assert!(offending.contains(&1));
+    assert!(offending.contains(&2));
+    assert!(!offending.contains(&0));
+}
+
+#[test]
+fn test_batch_interpolate_point_length_mismatch() {
+    let interp = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let points: [&[f64]; 2] = [&[0.25, 0.65, 0.9], &[0.5, 0.5]];
+    assert!(matches!(
+        interp.batch_interpolate(&points).unwrap_err(),
+        InterpolateError::PointLength { expected: 3, .. }
+    ));
+}
+
+#[test]
+#[should_panic(expected = "batch_interpolate_fast: point length mismatch")]
+fn test_batch_interpolate_fast_point_length_mismatch() {
+    let interp = InterpND::new(
+        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
+        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let points: [&[f64]; 2] = [&[0.25, 0.65, 0.9], &[0.5, 0.5]];
+    interp.batch_interpolate_fast(&points);
+}
+
+#[test]
 fn test_mismatched_grid() {
     assert!(matches!(
         InterpND::new(
@@ -476,7 +684,10 @@ fn test_mismatched_grid() {
             Extrapolate::Error,
         )
         .unwrap_err(),
-        ValidateError::Other(_)
+        ValidateError::GridAxisCount {
+            expected: 2,
+            found: 3
+        }
     ));
     assert!(InterpND::new(
         vec![array![]],
@@ -495,7 +706,11 @@ fn test_mismatched_grid() {
             Extrapolate::Error,
         )
         .unwrap_err(),
-        ValidateError::Other(_)
+        // A single value reads as 0-D, so a non-empty grid has one axis too many
+        ValidateError::GridAxisCount {
+            expected: 0,
+            found: 1
+        }
     ));
 }
 
@@ -503,11 +718,11 @@ fn test_mismatched_grid() {
 fn test_partialeq() {
     #[derive(PartialEq)]
     #[allow(unused)]
-    struct MyStruct(InterpDataNDOwned<f64>);
+    struct MyStruct(InterpDataND<f64>);
 
     #[derive(PartialEq)]
     #[allow(unused)]
-    struct MyStruct2(InterpNDOwned<f64, strategy::Linear>);
+    struct MyStruct2(InterpND<f64, strategy::Linear>);
 }
 
 #[test]
@@ -522,35 +737,96 @@ fn test_serde() {
     .unwrap();
 
     let ser = serde_json::to_string(&interp).unwrap();
-    let de: InterpNDOwned<f64, strategy::Nearest> = serde_json::from_str(&ser).unwrap();
+    let de: InterpND<f64, strategy::Nearest> = serde_json::from_str(&ser).unwrap();
     assert_eq!(interp, de);
 
+    // `ndarray` format by default
     let data_ser = serde_json::to_string(&interp.data).unwrap();
-    #[cfg(feature = "serde_ndim")]
-    assert_eq!(
-        data_ser,
-        "{\"grid\":[[0.1,1.1],[0.2,1.2],[0.3,1.3]],\"values\":[[[0.0,1.0],[2.0,3.0]],[[4.0,5.0],[6.0,7.0]]]}"
-    );
-    #[cfg(not(feature = "serde_ndim"))]
     assert_eq!(
         data_ser,
         "{\"grid\":[{\"v\":1,\"dim\":[2],\"data\":[0.1,1.1]},{\"v\":1,\"dim\":[2],\"data\":[0.2,1.2]},{\"v\":1,\"dim\":[2],\"data\":[0.3,1.3]}],\"values\":{\"v\":1,\"dim\":[2,2,2],\"data\":[0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0]}}"
     );
+    // nested-array format on request
+    let data_ser_nested = serde_json::to_string(&crate::prelude::Nested(&interp.data)).unwrap();
+    assert_eq!(
+        data_ser_nested,
+        "{\"grid\":[[0.1,1.1],[0.2,1.2],[0.3,1.3]],\"values\":[[[0.0,1.0],[2.0,3.0]],[[4.0,5.0],[6.0,7.0]]]}"
+    );
+    // ...and the whole interpolator nests too
+    let interp_ser_nested = serde_json::to_string(&crate::prelude::Nested(&interp)).unwrap();
+    let de_nested: InterpND<f64, strategy::Nearest> =
+        serde_json::from_str(&interp_ser_nested).unwrap();
+    assert_eq!(interp, de_nested);
 
     // simple format (new serialization output)
     let ser0 = "{\"grid\":[[0.1,1.1],[0.2,1.2],[0.3,1.3]],\"values\":[[[0.0,1.0],[2.0,3.0]],[[4.0,5.0],[6.0,7.0]]]}";
-    let de0: InterpDataND<_> = serde_json::from_str(&ser0).unwrap();
+    let de0: InterpDataND<_> = serde_json::from_str(ser0).unwrap();
     assert_eq!(interp.data, de0);
     // mixed format (simple grid)
     let ser1 = "{\"grid\":[[0.1,1.1],[0.2,1.2],[0.3,1.3]],\"values\":{\"v\":1,\"dim\":[2,2,2],\"data\":[0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0]}}";
-    let de1: InterpDataND<_> = serde_json::from_str(&ser1).unwrap();
+    let de1: InterpDataND<_> = serde_json::from_str(ser1).unwrap();
     assert_eq!(interp.data, de1);
     // mixed format (simple values)
     let ser2 = "{\"grid\":[{\"v\":1,\"dim\":[2],\"data\":[0.1,1.1]},{\"v\":1,\"dim\":[2],\"data\":[0.2,1.2]},{\"v\":1,\"dim\":[2],\"data\":[0.3,1.3]}],\"values\":[[[0.0,1.0],[2.0,3.0]],[[4.0,5.0],[6.0,7.0]]]}";
-    let de2: InterpDataND<_> = serde_json::from_str(&ser2).unwrap();
+    let de2: InterpDataND<_> = serde_json::from_str(ser2).unwrap();
     assert_eq!(interp.data, de2);
     // complex format (legacy serialization output)
     let ser3 = "{\"grid\":[{\"v\":1,\"dim\":[2],\"data\":[0.1,1.1]},{\"v\":1,\"dim\":[2],\"data\":[0.2,1.2]},{\"v\":1,\"dim\":[2],\"data\":[0.3,1.3]}],\"values\":{\"v\":1,\"dim\":[2,2,2],\"data\":[0.0,1.0,2.0,3.0,4.0,5.0,6.0,7.0]}}";
-    let de3: InterpDataND<_> = serde_json::from_str(&ser3).unwrap();
+    let de3: InterpDataND<_> = serde_json::from_str(ser3).unwrap();
     assert_eq!(interp.data, de3);
+}
+
+#[test]
+fn test_dyn_interpolator_heterogeneous_storage() {
+    // The motivating use case for `AnyInterpolator`: interpolators of differing
+    // dimensionality and strategy, stored behind one `Vec<Box<dyn AnyInterpolator<T>>>`.
+    let interp1d: Box<dyn AnyInterpolator<f64>> = Box::new(
+        Interp1D::new(
+            array![0., 1., 2.],
+            array![0.0, 0.4, 0.8],
+            strategy::Linear,
+            Extrapolate::Error,
+        )
+        .unwrap(),
+    );
+    let interp2d: Box<dyn AnyInterpolator<f64>> = Box::new(
+        Interp2D::new(
+            array![0., 1.],
+            array![0., 1.],
+            array![[0., 1.], [2., 3.]],
+            strategy::Nearest,
+            Extrapolate::Error,
+        )
+        .unwrap(),
+    );
+    let interpnd: Box<dyn AnyInterpolator<f64>> = Box::new(
+        InterpND::new(
+            vec![array![0., 1.]],
+            array![0.0, 0.4].into_dyn(),
+            strategy::Linear,
+            Extrapolate::Error,
+        )
+        .unwrap(),
+    );
+
+    let interps: Vec<Box<dyn AnyInterpolator<f64>>> = vec![interp1d, interp2d, interpnd];
+    let points: [&[f64]; 3] = [&[1.5], &[0.6, 0.6], &[0.5]];
+    let results: Vec<f64> = interps
+        .iter()
+        .zip(&points)
+        .map(|(interp, point)| interp.interpolate(point).unwrap())
+        .collect();
+    assert_approx_eq!(results[0], 0.6);
+    assert_approx_eq!(results[1], 3.);
+    assert_approx_eq!(results[2], 0.2);
+
+    // Downcast back to the concrete type for the first entry.
+    assert!(interps[0]
+        .as_any()
+        .downcast_ref::<Interp1D<f64, strategy::Linear>>()
+        .is_some());
+    assert!(interps[0]
+        .as_any()
+        .downcast_ref::<Interp2D<f64, strategy::Nearest>>()
+        .is_none());
 }

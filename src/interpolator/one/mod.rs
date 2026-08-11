@@ -8,14 +8,14 @@ mod tests;
 
 const N: usize = 1;
 
-/// [`InterpData`] for 1-D data.
-pub type InterpData1D<D> = InterpData<D, N>;
-/// [`InterpData1D`] that views data.
-pub type InterpData1DViewed<T> = InterpData1D<ViewRepr<T>>;
-/// [`InterpData1D`] that owns data.
-pub type InterpData1DOwned<T> = InterpData1D<OwnedRepr<T>>;
+/// Generic (base) form for 1-D data; parameterized by data representation.
+pub type InterpData1DBase<D> = InterpDataBase<D, N>;
+/// Owned data variant for 1-D data (see [`InterpData1DBase`] for the generic form).
+pub type InterpData1D<T> = InterpData1DBase<OwnedRepr<T>>;
+/// Viewed data variant for 1-D data (see [`InterpData1DBase`] for the generic form).
+pub type InterpData1DView<T> = InterpData1DBase<ViewRepr<T>>;
 
-impl<D> InterpData1D<D>
+impl<D> InterpData1DBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialOrd + Debug,
@@ -48,32 +48,28 @@ where
         "
     ))
 )]
-pub struct Interp1D<D, S>
+pub struct Interp1DBase<D, S>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: PartialEq + Debug,
-    S: Strategy1D<D> + Clone,
+    S: Clone,
 {
     /// Interpolator data.
-    pub data: InterpData1D<D>,
+    pub data: InterpData1DBase<D>,
     /// Interpolation strategy.
     pub strategy: S,
     /// Extrapolation setting.
-    #[cfg_attr(feature = "serde", serde(default))]
     pub extrapolate: Extrapolate<D::Elem>,
 }
-/// [`Interp1D`] that views data.
-pub type Interp1DViewed<T, S> = Interp1D<ViewRepr<T>, S>;
-/// [`Interp1D`] that owns data.
-pub type Interp1DOwned<T, S> = Interp1D<OwnedRepr<T>, S>;
+/// Owned interpolator variant (see [`Interp1DBase`] for the generic form).
+pub type Interp1D<T, S> = Interp1DBase<OwnedRepr<T>, S>;
+/// Viewed interpolator variant (see [`Interp1DBase`] for the generic form).
+pub type Interp1DView<T, S> = Interp1DBase<ViewRepr<T>, S>;
 
-extrapolate_impl!(Interp1D, Strategy1D);
-partialeq_impl!(Interp1D, InterpData1D, Strategy1D);
-
-impl<D, S> Interp1D<D, S>
+impl<D, S> Interp1DBase<D, S>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: PartialOrd + Debug,
+    D::Elem: PartialEq + Debug,
     S: Strategy1D<D> + Clone,
 {
     /// Instantiate one-dimensional interpolator.
@@ -83,8 +79,7 @@ where
     /// use ndarray::prelude::*;
     /// use ninterp::prelude::*;
     /// // f(x) = 0.4 * x
-    /// // type annotation for clarity
-    /// let interp: Interp1DOwned<f64, _> = Interp1D::new(
+    /// let interp = Interp1D::new(
     ///     // x
     ///     array![0., 1., 2.], // x0, x1, x2
     ///     // f(x)
@@ -101,130 +96,34 @@ where
         f_x: ArrayBase<D, Ix1>,
         strategy: S,
         extrapolate: Extrapolate<D::Elem>,
-    ) -> Result<Self, ValidateError> {
+    ) -> Result<Self, ValidateError>
+    where
+        D::Elem: PartialOrd,
+    {
         let mut interpolator = Self {
-            data: InterpData1D::new(x, f_x)?,
+            data: InterpData1DBase::new(x, f_x)?,
             strategy,
             extrapolate,
         };
-        interpolator.check_extrapolate(&interpolator.extrapolate)?;
-        interpolator.strategy.init(&interpolator.data)?;
+        interpolator.validate_extrapolate(&interpolator.extrapolate)?;
+        interpolator.validate_strategy()?;
+        interpolator.init_strategy()?;
         Ok(interpolator)
     }
 
-    /// Return an interpolator with viewed data.
-    pub fn view(&self) -> Interp1DViewed<&D::Elem, S>
-    where
-        S: for<'a> Strategy1D<ViewRepr<&'a D::Elem>>,
-        D::Elem: Clone,
-    {
-        Interp1DViewed {
-            data: self.data.view(),
-            strategy: self.strategy.clone(),
-            extrapolate: self.extrapolate.clone(),
-        }
-    }
-
-    /// Turn the interpolator into an [`Interp1DOwned`], cloning the array elements if necessary.
-    pub fn into_owned(self) -> Interp1DOwned<D::Elem, S>
-    where
-        S: Strategy1D<OwnedRepr<D::Elem>>,
-        D::Elem: Clone,
-    {
-        Interp1DOwned {
-            data: self.data.into_owned(),
-            strategy: self.strategy.clone(),
-            extrapolate: self.extrapolate.clone(),
-        }
-    }
+    interp_inherent_methods!(
+        Interp1DBase,
+        Strategy1D,
+        Interp1DView<&D::Elem, S>,
+        Interp1D<D::Elem, S>
+    );
 }
 
-impl<D, S> Interpolator<D::Elem> for Interp1D<D, S>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Euclid + Debug,
-    S: Strategy1D<D> + Clone,
-{
-    /// Returns `1`.
-    #[inline]
-    fn ndim(&self) -> usize {
-        N
-    }
-
-    fn validate(&mut self) -> Result<(), ValidateError> {
-        self.check_extrapolate(&self.extrapolate)?;
-        self.data.validate()?;
-        self.strategy.init(&self.data)?;
-        Ok(())
-    }
-
-    fn interpolate(&self, point: &[D::Elem]) -> Result<D::Elem, InterpolateError> {
-        let point: &[D::Elem; N] = point
-            .try_into()
-            .map_err(|_| InterpolateError::PointLength(N))?;
-        if !(self.data.grid[0].first().unwrap()..=self.data.grid[0].last().unwrap())
-            .contains(&&point[0])
-        {
-            match &self.extrapolate {
-                Extrapolate::Enable => {}
-                Extrapolate::Fill(value) => return Ok(*value),
-                Extrapolate::Clamp => {
-                    let clamped_point = [*clamp(
-                        &point[0],
-                        self.data.grid[0].first().unwrap(),
-                        self.data.grid[0].last().unwrap(),
-                    )];
-                    return self.strategy.interpolate(&self.data, &clamped_point);
-                }
-                Extrapolate::Wrap => {
-                    let wrapped_point = [wrap(
-                        point[0],
-                        *self.data.grid[0].first().unwrap(),
-                        *self.data.grid[0].last().unwrap(),
-                    )];
-                    return self.strategy.interpolate(&self.data, &wrapped_point);
-                }
-                Extrapolate::Error => {
-                    return Err(InterpolateError::ExtrapolateError(format!(
-                        "\n    point[0] = {:?} is out of bounds for grid[0] = {:?}",
-                        point[0], self.data.grid[0]
-                    )))
-                }
-            }
-        };
-        self.strategy.interpolate(&self.data, point)
-    }
-
-    fn set_extrapolate(&mut self, extrapolate: Extrapolate<D::Elem>) -> Result<(), ValidateError> {
-        self.check_extrapolate(&extrapolate)?;
-        self.extrapolate = extrapolate;
-        Ok(())
-    }
-}
-
-impl<D> Interp1D<D, Box<dyn Strategy1D<D>>>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialEq + Debug,
-{
-    /// Update strategy dynamically.
-    pub fn set_strategy(&mut self, strategy: Box<dyn Strategy1D<D>>) -> Result<(), ValidateError> {
-        self.strategy = strategy;
-        self.check_extrapolate(&self.extrapolate)
-    }
-}
-
-impl<D> Interp1D<D, strategy::enums::Strategy1DEnum>
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
-{
-    /// Update strategy dynamically.
-    pub fn set_strategy(
-        &mut self,
-        strategy: impl Into<strategy::enums::Strategy1DEnum>,
-    ) -> Result<(), ValidateError> {
-        self.strategy = strategy.into();
-        self.check_extrapolate(&self.extrapolate)
-    }
-}
+interp_trait_impls!(
+    Interp1DBase,
+    Interp1D,
+    InterpData1DBase,
+    Strategy1D,
+    strategy::enums::Strategy1DEnum,
+    N
+);

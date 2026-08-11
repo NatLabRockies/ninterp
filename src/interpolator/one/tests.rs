@@ -64,11 +64,77 @@ fn test_invalid_args() {
         Extrapolate::Error,
     )
     .unwrap();
+    // Wrong-length points on a concretely-typed `Interp1D` are caught at compile time
+    // via the inherent `interpolate(&[D::Elem; N])`; the trait's checked path (used by
+    // generic/`dyn` callers passing a real slice) still catches it at runtime.
     assert!(matches!(
-        interp.interpolate(&[]).unwrap_err(),
-        InterpolateError::PointLength(_)
+        Interpolator::interpolate(&interp, &[]).unwrap_err(),
+        InterpolateError::PointLength { .. }
     ));
     assert_eq!(interp.interpolate(&[1.0]).unwrap(), 0.4);
+}
+
+#[test]
+fn test_invalid_args_dyn() {
+    let interp: Box<dyn Interpolator<f64>> = Box::new(
+        Interp1D::new(
+            array![0., 1., 2., 3., 4.],
+            array![0.2, 0.4, 0.6, 0.8, 1.0],
+            strategy::Linear,
+            Extrapolate::Error,
+        )
+        .unwrap(),
+    );
+    // Through `Box<dyn Interpolator<T>>`, only the trait's slice-taking method is ever
+    // reachable, so a wrong-length point still fails at runtime, not compile time.
+    assert!(matches!(
+        interp.interpolate(&[]).unwrap_err(),
+        InterpolateError::PointLength { .. }
+    ));
+    assert_eq!(interp.interpolate(&[1.0]).unwrap(), 0.4);
+}
+
+#[test]
+fn test_dyn_interpolator() {
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let points: [&[f64]; 2] = [&[1.0], &[2.5]];
+
+    let boxed: Box<dyn AnyInterpolator<f64>> = Box::new(interp.clone());
+    assert_eq!(boxed.interpolate(&[1.0]).unwrap(), 0.4);
+    assert_eq!(
+        boxed.batch_interpolate(&points).unwrap(),
+        interp.batch_interpolate(&[[1.0], [2.5]]).unwrap(),
+    );
+    assert!(matches!(
+        boxed.interpolate(&[]).unwrap_err(),
+        InterpolateError::PointLength { expected: 1, .. }
+    ));
+    assert_eq!(
+        boxed.as_any().downcast_ref::<Interp1D<f64, _>>(),
+        Some(&interp)
+    );
+}
+
+#[test]
+fn test_insufficient_grid_points() {
+    // A single grid point can't bracket anything, regardless of `Extrapolate` setting.
+    // Previously this passed construction and panicked on the first `interpolate` call.
+    assert!(matches!(
+        Interp1D::new(
+            array![5.0],
+            array![10.0],
+            strategy::Linear,
+            Extrapolate::Error
+        )
+        .unwrap_err(),
+        ValidateError::InsufficientGridPoints(0)
+    ));
 }
 
 #[test]
@@ -131,6 +197,29 @@ fn test_right_nearest() {
 }
 
 #[test]
+fn test_step_markers() {
+    let lower = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::StepLower,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(lower.interpolate(&[3.75]).unwrap(), 0.8);
+    assert_eq!(lower.interpolate(&[4.00]).unwrap(), 1.0);
+
+    let upper = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::StepUpper,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(upper.interpolate(&[3.25]).unwrap(), 1.0);
+    assert_eq!(upper.interpolate(&[3.00]).unwrap(), 0.8);
+}
+
+#[test]
 fn test_nearest() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
@@ -150,6 +239,32 @@ fn test_nearest() {
     assert_eq!(interp.interpolate(&[3.50]).unwrap(), 1.0);
     assert_eq!(interp.interpolate(&[3.75]).unwrap(), 1.0);
     assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);
+}
+
+#[test]
+fn test_integer_nearest_and_wrap_step() {
+    let nearest = Interp1D::new(
+        array![0, 10, 20],
+        array![100, 200, 300],
+        strategy::Nearest,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(nearest.interpolate(&[14]).unwrap(), 200);
+    // Midpoint ties resolve to the upper bracket in Nearest.
+    assert_eq!(nearest.interpolate(&[15]).unwrap(), 300);
+
+    let step_wrap = Interp1D::new(
+        array![0, 10, 20],
+        array![100, 200, 300],
+        strategy::Step::from(strategy::StepDirection::Lower),
+        Extrapolate::Wrap,
+    )
+    .unwrap();
+    // -1 wraps to 19 -> lower step bucket [10, 20].
+    assert_eq!(step_wrap.interpolate(&[-1]).unwrap(), 200);
+    // 21 wraps to 1 -> lower step bucket [0, 10].
+    assert_eq!(step_wrap.interpolate(&[21]).unwrap(), 100);
 }
 
 #[test]
@@ -230,7 +345,7 @@ fn test_extrapolate_inputs() {
             Extrapolate::Enable,
         )
         .unwrap_err(),
-        ValidateError::ExtrapolateSelection(_)
+        ValidateError::ExtrapolateUnsupported
     ));
 
     // Extrapolate::Error
@@ -244,12 +359,12 @@ fn test_extrapolate_inputs() {
     // Fail to extrapolate below lowest grid value
     assert!(matches!(
         interp.interpolate(&[-1.]).unwrap_err(),
-        InterpolateError::ExtrapolateError(_)
+        InterpolateError::OutOfBounds(_)
     ));
     // Fail to extrapolate above highest grid value
     assert!(matches!(
         interp.interpolate(&[5.]).unwrap_err(),
-        InterpolateError::ExtrapolateError(_)
+        InterpolateError::OutOfBounds(_)
     ));
 }
 
@@ -296,14 +411,128 @@ fn test_extrapolate() {
 }
 
 #[test]
+fn test_batch_interpolate_matches_interpolate() {
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::Linear,
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    let points = [[-1.], [0.5], [1.5], [3.75], [5.]];
+    let batched = interp.batch_interpolate(&points).unwrap();
+    let looped: Vec<_> = points
+        .iter()
+        .map(|point| interp.interpolate(point).unwrap())
+        .collect();
+    assert_eq!(batched, looped);
+
+    let batched_fast = interp.batch_interpolate_fast(&points);
+    let looped_fast: Vec<_> = points
+        .iter()
+        .map(|point| interp.interpolate_fast(point))
+        .collect();
+    assert_eq!(batched_fast, looped_fast);
+}
+
+#[test]
+fn test_batch_interpolate_clamp() {
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::Linear,
+        Extrapolate::Clamp,
+    )
+    .unwrap();
+    assert_eq!(
+        interp.batch_interpolate(&[[-1.], [2.], [5.]]).unwrap(),
+        vec![0.2, 0.6, 1.0]
+    );
+}
+
+#[test]
+fn test_batch_interpolate_fill() {
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::Linear,
+        Extrapolate::Fill(f64::NAN),
+    )
+    .unwrap();
+    let results = interp.batch_interpolate(&[[-1.], [2.], [5.]]).unwrap();
+    assert!(results[0].is_nan());
+    assert_eq!(results[1], 0.6);
+    assert!(results[2].is_nan());
+}
+
+#[test]
+fn test_batch_interpolate_wrap_boundary() {
+    // `wrap()` isn't identity exactly at the boundary (`wrap(max, min, max) == min`),
+    // so an in-bounds point sitting exactly on the upper edge must not get wrapped,
+    // while a genuinely out-of-bounds point still does.
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::Linear,
+        Extrapolate::Wrap,
+    )
+    .unwrap();
+    let results = interp.batch_interpolate(&[[4.], [5.]]).unwrap();
+    assert_eq!(results[0], interp.interpolate(&[4.]).unwrap());
+    assert_eq!(results[1], interp.interpolate(&[5.]).unwrap());
+    assert_eq!(results[0], 1.0); // untouched boundary point
+    assert_eq!(results[1], 0.4); // wrap(5, 0, 4) == 1 -> f(1) == 0.4
+}
+
+#[test]
+fn test_batch_interpolate_error_aggregates_all_points() {
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.2, 0.4, 0.6, 0.8, 1.0],
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    // Two bad points among good ones: the batch error must mention both, not just
+    // the first one it finds.
+    let err = interp
+        .batch_interpolate(&[[1.], [-1.], [2.], [5.]])
+        .unwrap_err();
+    let InterpolateError::OutOfBounds(failures) = err else {
+        panic!("expected InterpolateError::OutOfBounds");
+    };
+    let offending: Vec<usize> = failures.iter().map(|at| at.index).collect();
+    assert!(offending.contains(&1));
+    assert!(offending.contains(&3));
+    assert!(!offending.contains(&0));
+    assert!(!offending.contains(&2));
+}
+
+#[test]
+fn test_batch_interpolate_dyn() {
+    let interp: Box<dyn Interpolator<f64>> = Box::new(
+        Interp1D::new(
+            array![0., 1., 2., 3., 4.],
+            array![0.2, 0.4, 0.6, 0.8, 1.0],
+            strategy::Linear,
+            Extrapolate::Error,
+        )
+        .unwrap(),
+    );
+    let points: [&[f64]; 2] = [&[1.0], &[3.0]];
+    assert_eq!(interp.batch_interpolate(&points).unwrap(), vec![0.4, 0.8]);
+    assert_eq!(interp.batch_interpolate_fast(&points), vec![0.4, 0.8]);
+}
+
+#[test]
 fn test_partialeq() {
     #[derive(PartialEq)]
     #[allow(unused)]
-    struct MyStruct(InterpData1DOwned<f64>);
+    struct MyStruct(InterpData1D<f64>);
 
     #[derive(PartialEq)]
     #[allow(unused)]
-    struct MyStruct2(Interp1DOwned<f64, strategy::Linear>);
+    struct MyStruct2(Interp1D<f64, strategy::Linear>);
 }
 
 #[test]
@@ -318,35 +547,41 @@ fn test_serde() {
     .unwrap();
 
     let ser = serde_json::to_string(&interp).unwrap();
-    let de: Interp1DOwned<f64, strategy::Step> = serde_json::from_str(&ser).unwrap();
+    let de: Interp1D<f64, strategy::Step> = serde_json::from_str(&ser).unwrap();
     assert_eq!(interp, de);
 
+    // `ndarray` format by default
     let data_ser = serde_json::to_string(&interp.data).unwrap();
-    #[cfg(feature = "serde_ndim")]
-    assert_eq!(
-        data_ser,
-        "{\"grid\":[[0.0,1.0,2.0,3.0,4.0]],\"values\":[0.2,0.4,0.6,0.8,1.0]}"
-    );
-    #[cfg(not(feature = "serde_ndim"))]
     assert_eq!(
         data_ser,
         "{\"grid\":[{\"v\":1,\"dim\":[5],\"data\":[0.0,1.0,2.0,3.0,4.0]}],\"values\":{\"v\":1,\"dim\":[5],\"data\":[0.2,0.4,0.6,0.8,1.0]}}"
     );
+    // nested-array format on request
+    let data_ser_nested = serde_json::to_string(&crate::prelude::Nested(&interp.data)).unwrap();
+    assert_eq!(
+        data_ser_nested,
+        "{\"grid\":[[0.0,1.0,2.0,3.0,4.0]],\"values\":[0.2,0.4,0.6,0.8,1.0]}"
+    );
+    // ...and the whole interpolator nests too
+    let interp_ser_nested = serde_json::to_string(&crate::prelude::Nested(&interp)).unwrap();
+    let de_nested: Interp1D<f64, strategy::Step> =
+        serde_json::from_str(&interp_ser_nested).unwrap();
+    assert_eq!(interp, de_nested);
 
     // simple format (new serialization output)
     let ser0 = "{\"grid\":[[0.0,1.0,2.0,3.0,4.0]],\"values\":[0.2,0.4,0.6,0.8,1.0]}";
-    let de0: InterpData1D<_> = serde_json::from_str(&ser0).unwrap();
+    let de0: InterpData1D<_> = serde_json::from_str(ser0).unwrap();
     assert_eq!(interp.data, de0);
     // mixed format (simple grid)
     let ser1 = "{\"grid\":[[0.0,1.0,2.0,3.0,4.0]],\"values\":{\"v\":1,\"dim\":[5],\"data\":[0.2,0.4,0.6,0.8,1.0]}}";
-    let de1: InterpData1D<_> = serde_json::from_str(&ser1).unwrap();
+    let de1: InterpData1D<_> = serde_json::from_str(ser1).unwrap();
     assert_eq!(interp.data, de1);
     // mixed format (simple values)
     let ser2 = "{\"grid\":[{\"v\":1,\"dim\":[5],\"data\":[0.0,1.0,2.0,3.0,4.0]}],\"values\":[0.2,0.4,0.6,0.8,1.0]}";
-    let de2: InterpData1D<_> = serde_json::from_str(&ser2).unwrap();
+    let de2: InterpData1D<_> = serde_json::from_str(ser2).unwrap();
     assert_eq!(interp.data, de2);
     // complex format (legacy serialization output)
     let ser3 = "{\"grid\":[{\"v\":1,\"dim\":[5],\"data\":[0.0,1.0,2.0,3.0,4.0]}],\"values\":{\"v\":1,\"dim\":[5],\"data\":[0.2,0.4,0.6,0.8,1.0]}}";
-    let de3: InterpData1D<_> = serde_json::from_str(&ser3).unwrap();
+    let de3: InterpData1D<_> = serde_json::from_str(ser3).unwrap();
     assert_eq!(interp.data, de3);
 }

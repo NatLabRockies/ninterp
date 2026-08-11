@@ -23,6 +23,14 @@ jobs:
       - name: check formatting
         run: cargo fmt --check
 
+      - name: clippy
+        run: cargo clippy --all-features --all-targets -- -D warnings
+
+      - name: doc
+        run: cargo doc --all-features --no-deps
+        env:
+          RUSTDOCFLAGS: -D warnings
+
       - name: test
         # Note: this will be unwieldy if there are many features, but for now it is fine.
         run: cargo hack test --feature-powerset --verbose

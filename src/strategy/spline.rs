@@ -162,16 +162,9 @@ pub(crate) fn eval_spline_from_m<T: Float>(
     m: &[T],
     point: T,
 ) -> T {
-    let n = x.len() - 1;
     let two = T::one() + T::one();
     let six = two + two + two;
-    let i = if point < *x.first().unwrap() {
-        0
-    } else if point > *x.last().unwrap() {
-        n - 1
-    } else {
-        find_nearest_index(x, &point)
-    };
+    let i = locate_lower_index(x, &point);
     let h = x[i + 1] - x[i];
     let dx = point - x[i];
     let dx_r = h - dx;

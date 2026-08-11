@@ -9,6 +9,21 @@ const N: usize = 0;
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct Interp0D<T>(pub T);
+
+#[cfg(feature = "serde")]
+impl<T> SerializeNested for Interp0D<T>
+where
+    T: Serialize,
+{
+    /// 0-D interpolators hold no arrays, so there is nothing to nest.
+    fn serialize_nested<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.serialize(serializer)
+    }
+}
+
 impl<T> Interp0D<T>
 where
     T: PartialEq + Debug,
@@ -41,7 +56,7 @@ where
 
     /// Returns `Ok(())`.
     #[inline]
-    fn validate(&mut self) -> Result<(), ValidateError> {
+    fn validate(&self) -> Result<(), ValidateError> {
         Ok(())
     }
 
@@ -50,7 +65,13 @@ where
     /// Errors if `!point.is_empty()`.
     fn interpolate(&self, point: &[T]) -> Result<T, InterpolateError> {
         if !point.is_empty() {
-            return Err(InterpolateError::PointLength(N));
+            return Err(InterpolateError::PointLength {
+                expected: N,
+                failures: vec![WrongLengthAt {
+                    index: 0,
+                    found: point.len(),
+                }],
+            });
         }
         Ok(self.0.clone())
     }
@@ -59,6 +80,12 @@ where
     #[inline]
     fn set_extrapolate(&mut self, _extrapolate: Extrapolate<T>) -> Result<(), ValidateError> {
         Ok(())
+    }
+
+    /// Returns the contained value [`Interp0D::0`].
+    #[inline]
+    fn interpolate_fast(&self, _point: &[T]) -> T {
+        self.0.clone()
     }
 }
 #[cfg(test)]
