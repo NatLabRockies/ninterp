@@ -28,37 +28,40 @@ Bring common API types into scope:
 use ninterp::prelude::*;
 ```
 
-Minimal end-to-end interpolation example:
+Minimal end-to-end interpolation example, using the hard-coded 2-D interpolator:
 
 ```rust
 use ndarray::prelude::*;
 use ninterp::prelude::*;
 
-let interp = Interp1D::new(
-    array![0.0, 1.0, 2.0, 3.0], // x
-    array![0.0, 1.0, 4.0, 9.0], // f(x)
+let interp = Interp2D::new(
+    array![0.0, 1.0], // x
+    array![0.0, 1.0], // y
+    array![
+        [0.0, 1.0], // f(x0, y0), f(x0, y1)
+        [1.0, 2.0], // f(x1, y0), f(x1, y1)
+    ],
     strategy::Linear,
     Extrapolate::Error,
 )
 .unwrap();
 
-let y = interp.interpolate(&[1.5]).unwrap();
-assert_eq!(y, 2.5);
+let z = interp.interpolate(&[0.25, 0.75]).unwrap();
+assert_eq!(z, 1.0);
 ```
 
-Minimal N-D interpolation example:
+The same example, generalized to `InterpND` (grid axes become a `Vec`, values become
+dynamically-dimensioned via `.into_dyn()`):
 
 ```rust
 use ndarray::prelude::*;
 use ninterp::prelude::*;
 
 let interp_nd = InterpND::new(
-    // grid
     vec![
-        array![0.0, 1.0], // x0, x1
-        array![0.0, 1.0], // y0, y1
+        array![0.0, 1.0], // x
+        array![0.0, 1.0], // y
     ],
-    // values
     array![
         [0.0, 1.0], // f(x0, y0), f(x0, y1)
         [1.0, 2.0], // f(x1, y0), f(x1, y1)
@@ -74,50 +77,6 @@ assert_eq!(z, 1.0);
 
 Instantiation is done by calling an interpolator's `new` method.
 For dimensionalities N >= 1, this executes a validation step that prevents runtime panics.
-
-## Cargo Features
-- `serde`: support for [`serde`](https://crates.io/crates/serde) 1.x
-  ```text
-  cargo add ninterp --features serde
-  ```
-
-  By default, arrays are written in `ndarray`'s built-in format, which is performant to parse and works with every serialization format (text and binary):
-  ```json
-  {"grid":[{"v":1,"dim":[2],"data":[0.0,1.0]},{"v":1,"dim":[3],"data":[0.0,1.0,2.0]}],"values":{"v":1,"dim":[2,3],"data":[0.0,1.0,2.0,3.0,4.0,5.0]}}
-  ```
-
-  You can also serialize interpolators using the nested-array format from
-  [`serde-ndim`](https://crates.io/crates/serde-ndim), which is far easier to read and hand-edit. This works for any `is_human_readable` serde format (serializing to binary formats necessarily uses the standard `ndarray` style).
-
-  - On fields, using the `serialize_nested` helper function from [`ninterp::prelude`](https://docs.rs/ninterp/latest/ninterp/prelude/index.html):
-
-    ```rust,ignore
-    use ninterp::prelude::*;
-
-    #[derive(serde::Serialize)]
-    struct MyConfig {
-        #[serde(serialize_with = "serialize_nested")]
-        surface: Interp2D<f64, strategy::Linear>,
-    }
-    ```
-
-  - Directly, using the `Nested` wrapper:
-
-    ```rust,ignore
-    use ninterp::prelude::*;
-
-    let json = serde_json::to_string(&Nested(&interp.data)).unwrap();
-    // {"grid":[[0.0,1.0],[0.0,1.0,2.0]],"values":[[0.0,1.0,2.0],[3.0,4.0,5.0]]}
-    ```
-
-  Deserialization accepts **either** format, so this is purely a choice about what you write:
-
-  - Prefer the default when deserialization is on a hot path: nested arrays cost roughly 20% more to read,
-    since `ndarray`'s format carries the shape up front and can allocate exactly once,
-    while `serde-ndim` must parse the shape from the nested array every read.
-
-  - Prefer `Nested` / `serialize_with = "serialize_nested"` for config files and anything a human will look at,
-    so long as the array read cost is worth it.
 
 ## Choosing an Interpolator
 The [`prelude`](https://docs.rs/ninterp/latest/ninterp/prelude/index.html) exposes these interpolators:
@@ -144,6 +103,12 @@ Each approach has trade-offs:
 | `InterpolatorEnum` | Low | Interpolator + strategy | No | Yes |
 | `Interp*<_, Box<dyn Strategy*>>` | Medium | Strategy only | Yes | No |
 | `Box<dyn Interpolator<_>>` | Highest | Interpolator + strategy | Yes | No |
+
+For heterogeneous storage that also needs to recover the concrete interpolator type later
+(e.g. `downcast_ref`-style access), [`AnyInterpolator`](https://docs.rs/ninterp/latest/ninterp/interpolator/trait.AnyInterpolator.html)
+(`ninterp::interpolator::AnyInterpolator`, not in the `prelude`) adds `Send + Sync` and an
+`as_any` downcast on top of `Interpolator<T>`. It's implemented for owned
+`Interp1D`/`2D`/`3D`/`ND` only, since downcasting requires `Self: 'static`.
 
 ## Core Concepts
 ### Data Shape Contract
@@ -205,6 +170,37 @@ skips the bounds check and extrapolation handling that `interpolate` does, retur
 `D::Elem` directly instead of a `Result` (panicking, instead of erroring, on an invalid
 point). It takes the same point argument as `interpolate` above.
 
+### Batch Interpolation
+To interpolate several points against one interpolator,
+[`batch_interpolate`](https://docs.rs/ninterp/latest/ninterp/interpolator/trait.Interpolator.html#method.batch_interpolate)
+(and its `interpolate_fast`-style counterpart `batch_interpolate_fast`) resolve
+`self.extrapolate` once for the whole batch and funnel every point into at most one call
+to the strategy, instead of calling `interpolate` per point. For a `Box<dyn
+Interpolator<T>>` or `Box<dyn Strategy*D>`, this also collapses `m` virtual dispatches
+into one:
+
+```rust
+use ndarray::prelude::*;
+use ninterp::prelude::*;
+
+let interp = Interp1D::new(
+    array![0.0, 1.0, 2.0, 3.0],
+    array![0.0, 1.0, 4.0, 9.0],
+    strategy::Linear,
+    Extrapolate::Error,
+)
+.unwrap();
+
+let ys = interp.batch_interpolate(&[[0.5], [1.5], [2.5]]).unwrap();
+assert_eq!(ys, vec![0.5, 2.5, 6.5]);
+```
+
+`batch_interpolate_into`/`batch_interpolate_fast_into` write into a caller-supplied output
+slice instead of allocating a `Vec`. `batch_interpolate_into` returns
+`InterpolateError::OutputLength` if the slice length doesn't match the point count;
+`batch_interpolate_fast_into` instead panics on that mismatch, matching `interpolate_fast`'s
+panic-instead-of-`Result` convention.
+
 ### Validation Lifecycle
 After editing interpolator data, call
 [`Interpolator::validate`](https://docs.rs/ninterp/latest/ninterp/interpolator/trait.Interpolator.html#tymethod.validate)
@@ -248,6 +244,7 @@ Interpolation-time (`interpolate`):
 | --- | --- |
 | `InterpolateError::PointLength` | Query point has wrong dimensionality; carries a `WrongLengthAt` per offending point |
 | `InterpolateError::OutOfBounds` | Query point is out of bounds while using `Extrapolate::Error`; carries an `OutOfBoundsAt` per offending coordinate |
+| `InterpolateError::OutputLength` | `batch_interpolate_into` output slice length doesn't match the point count |
 
 ## Using Owned and Borrowed (Viewed) Data
 All interpolators support both owned and borrowed data via the generic `D` bound on
@@ -300,6 +297,50 @@ For example, in 1-D:
   ```
 
 The same pattern applies to 2-D, 3-D, and N-D interpolators (`Interp2D`/`Interp2DView`, etc.).
+
+## Cargo Features
+- `serde`: support for [`serde`](https://crates.io/crates/serde) 1.x
+  ```text
+  cargo add ninterp --features serde
+  ```
+
+  By default, arrays are written in `ndarray`'s built-in format, which is performant to parse and works with every serialization format (text and binary):
+  ```json
+  {"grid":[{"v":1,"dim":[2],"data":[0.0,1.0]},{"v":1,"dim":[3],"data":[0.0,1.0,2.0]}],"values":{"v":1,"dim":[2,3],"data":[0.0,1.0,2.0,3.0,4.0,5.0]}}
+  ```
+
+  You can also serialize interpolators using the nested-array format from
+  [`serde-ndim`](https://crates.io/crates/serde-ndim), which is far easier to read and hand-edit. This works for any `is_human_readable` serde format (serializing to binary formats necessarily uses the standard `ndarray` style).
+
+  - On fields, using the `serialize_nested` helper function from [`ninterp::prelude`](https://docs.rs/ninterp/latest/ninterp/prelude/index.html):
+
+    ```rust,ignore
+    use ninterp::prelude::*;
+
+    #[derive(serde::Serialize)]
+    struct MyConfig {
+        #[serde(serialize_with = "serialize_nested")]
+        surface: Interp2D<f64, strategy::Linear>,
+    }
+    ```
+
+  - Directly, using the `Nested` wrapper:
+
+    ```rust,ignore
+    use ninterp::prelude::*;
+
+    let json = serde_json::to_string(&Nested(&interp.data)).unwrap();
+    // {"grid":[[0.0,1.0],[0.0,1.0,2.0]],"values":[[0.0,1.0,2.0],[3.0,4.0,5.0]]}
+    ```
+
+  Deserialization accepts **either** format, so this is purely a choice about what you write:
+
+  - Prefer the default when deserialization is on a hot path: nested arrays cost roughly 20% more to read,
+    since `ndarray`'s format carries the shape up front and can allocate exactly once,
+    while `serde-ndim` must parse the shape from the nested array every read.
+
+  - Prefer `Nested` / `serialize_with = "serialize_nested"` for config files and anything a human will look at,
+    so long as the array read cost is worth it.
 
 ## Examples
 See examples in `new` method documentation:

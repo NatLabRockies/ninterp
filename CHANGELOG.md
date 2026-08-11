@@ -12,270 +12,157 @@ Everything below is merged to `main` but not yet tagged/released.
 
 ### Added
 - `strategy::LinearUniform`: an O(1)-index alternative to `Linear` for uniformly-spaced
-  grids (1D/2D/3D/ND). Validates grid uniformity at construction/`init` time (1024 * ε
-  relative tolerance) instead of silently falling back to a search.
-- `strategy::Step`: a parameterized step (piecewise-constant) strategy, replacing
-  `LeftNearest`/`RightNearest` with a single strategy that works across all
-  dimensionalities. A single `StepDirection` broadcasts to every axis, or a `Vec` gives
-  per-axis control.
-- `strategy::StepLower` / `strategy::StepUpper`: zero-sized marker strategies for the
-  common fixed-direction case, avoiding `Step`'s direction-vector allocation and
-  per-call direction matching. `Step` remains the choice for mixed per-dimension or
-  runtime-selected direction.
-- `strategy::LinearUniform`, `Step`, `StepLower`, and `StepUpper` are all available for
-  every dimensionality and included in the corresponding `Strategy*Enum` types.
-- `Nested` wrapper / `serialize_nested` helper / `SerializeNested` trait (`prelude`, behind
-  the `serde` feature): opt into the nested-array format at a specific serialization call
+  grids (1D/2D/3D/ND), validated at construction/`init` time.
+- `strategy::Step`: a parameterized step (piecewise-constant) strategy across all
+  dimensionalities, replacing `LeftNearest`/`RightNearest`. A single `StepDirection`
+  broadcasts to every axis, or a `Vec` gives per-axis control.
+- `strategy::StepLower` / `strategy::StepUpper`: zero-sized, allocation-free markers for
+  the fixed-direction case; `Step` remains the choice for mixed or runtime-selected
+  direction.
+- `LinearUniform`, `Step`, `StepLower`, and `StepUpper` are available for every
+  dimensionality and included in the `Strategy*Enum` types.
+- `Nested` wrapper / `serialize_nested` helper / `SerializeNested` trait (`prelude`,
+  `serde` feature): opt into the nested-array serialization format at a specific call
   site, e.g. `serde_json::to_string(&Nested(&interp))` or
   `#[serde(serialize_with = "serialize_nested")]` on a field. Falls back to the `ndarray`
-  format on non-`is_human_readable` (binary) serializers, since there's nothing to nest
-  there and those formats can't read it back anyway.
-- `strategy::utils::exact_index`, `locate_step_index`, `locate_lower_index_uniform`,
-  `validate_uniform_grid`, and `AxisLocation`/`locate_axis` are now `pub` (previously
-  `pub(crate)`). They're the same per-axis primitives `Linear`/`LinearUniform`/`Step`/
-  `StepLower`/`StepUpper` are built from, now reusable from custom strategies instead of
-  needing to be reimplemented. `validate_uniform_grid` (named for consistency with the
-  rest of the crate's `validate_*` invariant checks) takes a `tolerance: Option<T>`:
-  `None` keeps the existing default of 1024 × ε scaled by the grid's own step size,
-  `Some(t)` overrides it for a strategy whose precision needs differ. On failure it
-  raises the dedicated `ValidateError::NonUniform { dim, index }` rather than a
-  formatted string, so every strategy that calls it, not just `LinearUniform`, reports
-  a non-uniform grid identically and a caller can match on it instead of parsing text.
-- `interpolate_fast` on `Strategy1D`/`2D`/`3D`/`ND` and `Interpolator<T>` (both
-  default-provided, non-breaking): a `Result`-free interpolation path for hot loops
-  where the caller has already checked the point is in-bounds and knows extrapolation
-  isn't needed. `Interp0D`/`1D`/`2D`/`3D`/`ND`, `InterpolatorEnum`, and
-  `Box<dyn Interpolator<T>>` all override it with the real skip-checks path;
-  `Interp1D`/`2D`/`3D` additionally get an inherent `interpolate_fast(&self, &[D::Elem; N])`
-  taking the point as a fixed-size array, so the point length is guaranteed by the type
-  system instead of checked at runtime.
-- `InterpolatorEnum` gains `validate_extrapolate`/`validate_strategy`/`init_strategy`
-  forwarding to the current variant, matching what `Interp1D`/`2D`/`3D`/`ND` already
-  expose as public inherent methods.
-- `batch_interpolate`/`batch_interpolate_fast` on `Interpolator<T>` and
-  `Strategy1D`/`2D`/`3D`/`ND` (both default-provided, non-breaking, mirroring
-  `interpolate_fast`'s own default): interpolate at several points in one call. A
-  big motivator is `Box<dyn Interpolator<T>>`/`Box<dyn Strategy1D/2D/3D/ND<D>>`:
-  interpolating `m` points against a type-erased interpolator previously cost `m`
-  virtual dispatches, one per `.interpolate()` call; `batch_interpolate` collapses
-  that to a single dispatch that reaches the concrete type once, which then loops
-  internally via ordinary static calls: this holds independently at both erasure
-  points, a boxed interpolator reaches its concrete type in one hop, and (for an
-  interpolator holding a boxed strategy, e.g. `Interp2DBase<D, Box<dyn Strategy2D<D>>>`)
-  the strategy call inside it reaches its own concrete type in a separate one hop.
-  `Box<dyn Interpolator<T>>` and `Box<dyn Strategy1D/2D/3D/ND<D>>` forward both
-  methods to the wrapped concrete type (the same way `interpolate_fast` already is)
-  specifically so this collapse actually happens: without the forward, the boxed
-  type would inherit the trait's own default loop operating on the box itself, one
-  dispatch per point again. No
-  strategy overrides the default per-point loop yet either, so the same seam is
-  also ready for a future strategy that amortizes its own locate step across a
-  batch (sorting points once, SIMD-packing the blend step, etc.), independent of
-  the dispatch-collapsing benefit above. `Interp1D`/`2D`/`3D` gain inherent
-  versions taking `&[[D::Elem; N]]`, the same fixed-size-array split as
-  `interpolate`/`interpolate_fast`. `InterpND` and `InterpolatorEnum` implement
-  both directly in their `Interpolator` impls instead (no separate inherent
-  versions): `InterpND` has no fixed `N` to give an inherent version a distinct,
-  more specific signature, matching how its own `interpolate`/`interpolate_fast`
-  already work; `InterpolatorEnum`'s `interpolate_fast` override is simplified the
-  same way in this release, since its inherent signature was never more specific
-  than the trait's either. The checked `batch_interpolate` resolves
-  `self.extrapolate` once for the whole batch and funnels every point into at most
-  one call to the strategy; under `Extrapolate::Error`, it now reports every
-  out-of-range point in one `InterpolateError::OutOfBounds`, not just the first one
-  found.
-- `batch_interpolate_into`/`batch_interpolate_fast_into` on `Interpolator<T>`,
-  `Strategy1D`/`2D`/`3D`/`ND`, `Interp1D`/`2D`/`3D`/`InterpND`, and `InterpolatorEnum`:
-  allocation-free batched interpolation that writes results into a caller-supplied output
-  slice. `batch_interpolate` and `batch_interpolate_fast` now defer to their `_into`
-  counterparts internally, so a strategy author who overrides `batch_interpolate_into`
-  for real batch amortization automatically gets that optimization in both paths (no
-  drift risk). New `InterpolateError::OutputLength` variant for length mismatches.
+  format for non-human-readable (binary) serializers.
+- `strategy::utils` per-axis primitives (`exact_index`, `locate_step_index`,
+  `locate_lower_index_uniform`, `validate_uniform_grid`, `AxisLocation`/`locate_axis`)
+  are now `pub`, for reuse by custom strategies. `validate_uniform_grid` takes a
+  `tolerance: Option<T>` (`None` keeps the default of 1024 × ε) and raises the dedicated
+  `ValidateError::NonUniform { dim, index }` on failure.
+- `interpolate_fast` on `Strategy1D`/`2D`/`3D`/`ND` and `Interpolator<T>`: a `Result`-free
+  interpolation path (panics instead of erroring) for hot loops where the point is
+  already known to be in-bounds. `Interp1D`/`2D`/`3D` also get an inherent
+  `interpolate_fast(&self, &[D::Elem; N])` taking the point as a fixed-size array.
+- `InterpolatorEnum` gains `validate_extrapolate`/`validate_strategy`/`init_strategy`,
+  matching what `Interp1D`/`2D`/`3D`/`ND` already expose.
+- `batch_interpolate`/`batch_interpolate_fast` on `Interpolator<T>`,
+  `Strategy1D`/`2D`/`3D`/`ND`, and the concrete interpolator types: interpolate several
+  points in one call, resolving `self.extrapolate` once and funneling every point into
+  at most one strategy call instead of one `interpolate` call per point. For a
+  `Box<dyn Interpolator<T>>`/`Box<dyn Strategy*D>`, this also collapses what would be one
+  virtual dispatch per point into a single dispatch. Under `Extrapolate::Error`, every
+  out-of-range point is reported in one `InterpolateError::OutOfBounds`, not just the
+  first.
+- `batch_interpolate_into`/`batch_interpolate_fast_into`: allocation-free counterparts
+  that write into a caller-supplied output slice instead of returning a `Vec`.
+  `batch_interpolate`/`batch_interpolate_fast` now defer to these internally. New
+  `InterpolateError::OutputLength` variant for a slice/point-count length mismatch.
 - `interpolator::AnyInterpolator<T>: Interpolator<T> + Send + Sync` (not in the
-  `prelude`): a downcastable counterpart to `Interpolator<T>`, for storing
-  heterogeneous interpolators behind `Box<dyn AnyInterpolator<T>>` and recovering the
-  concrete type via `as_any`. Implemented for owned `Interp1D`/`2D`/`3D`/`ND` only,
-  since `as_any` requires `Self: 'static` and the borrowed `Interp*View` types can't
-  satisfy that; a viewed interpolator can still be used through `Interpolator<T>`.
-  `interpolate`/`batch_interpolate` are inherited from the `Interpolator<T>`
-  supertrait rather than duplicated under `AnyInterpolator`-specific names: called
-  through `Box<dyn AnyInterpolator<T>>` (or generically), nothing shadows them the way
-  `Interp1D`/`2D`/`3D`'s own inherent, array-typed `interpolate`/`batch_interpolate`
-  do on the concrete, unboxed type.
+  `prelude`): a downcastable counterpart to `Interpolator<T>` for storing heterogeneous
+  interpolators behind `Box<dyn AnyInterpolator<T>>` and recovering the concrete type via
+  `as_any`. Implemented for owned `Interp1D`/`2D`/`3D`/`ND` only, since `as_any` requires
+  `Self: 'static`; viewed interpolators can still be used through `Interpolator<T>`.
 
 ### Changed
 - **Breaking:** owned data is now the default in type names, following Rust idioms
-  (`String` vs `&str`, `Vec<T>` vs `&[T]`). Every form that is generic over the `ndarray`
-  data representation gains a `Base` suffix, the unsuffixed name becomes the owned alias,
-  and `Viewed` becomes `View`:
-  - Structs: `Interp{1D,2D,3D,ND}<D, S>` -> `Interp{1D,2D,3D,ND}Base<D, S>`,
-    `InterpData<D, const N: usize>` -> `InterpDataBase<D, N>`,
-    `InterpDataND<D>` -> `InterpDataNDBase<D>`,
-    `InterpolatorEnum<D>` -> `InterpolatorEnumBase<D>`. `Interp0D<T>` is unaffected;
-    it was never generic over the representation.
-  - Generic aliases: `InterpData{1D,2D,3D}<D>` -> `InterpData{1D,2D,3D}Base<D>`.
-  - Owned aliases drop their suffix: `Interp{1D,2D,3D,ND}Owned<T, S>` ->
-    `Interp{1D,2D,3D,ND}<T, S>`, `InterpData{1D,2D,3D,ND}Owned<T>` ->
-    `InterpData{1D,2D,3D,ND}<T>`, `InterpDataOwned<T, N>` -> `InterpData<T, N>`,
-    `InterpolatorEnumOwned<T>` -> `InterpolatorEnum<T>`.
-  - Viewed aliases swap suffix: `Interp{1D,2D,3D,ND}Viewed<T, S>` ->
-    `Interp{1D,2D,3D,ND}View<T, S>`, `InterpData{1D,2D,3D,ND}Viewed<T>` ->
-    `InterpData{1D,2D,3D,ND}View<T>`, `InterpDataViewed<T, N>` -> `InterpDataView<T, N>`,
-    `InterpolatorEnumViewed<T>` -> `InterpolatorEnumView<T>`.
-  - `InterpDataBase` is now re-exported from `ninterp::interpolator` as well as
-    `ninterp::data`.
+  (`String` vs `&str`, `Vec<T>` vs `&[T]`). Every form generic over the `ndarray` data
+  representation gains a `Base` suffix, the unsuffixed name becomes the owned alias, and
+  `Viewed` becomes `View`:
+  - `Interp{1D,2D,3D,ND}` -> `Interp{1D,2D,3D,ND}Base`, `InterpData` -> `InterpDataBase`,
+    `InterpDataND` -> `InterpDataNDBase`, `InterpolatorEnum` -> `InterpolatorEnumBase`
+    (generic forms). `Interp0D<T>` is unaffected; it was never generic over the
+    representation.
+  - `Interp{1D,2D,3D,ND}Owned`/`InterpData{1D,2D,3D,ND}Owned`/`InterpolatorEnumOwned` drop
+    the `Owned` suffix entirely (they're now the plain, unsuffixed names).
+  - `Interp{1D,2D,3D,ND}Viewed`/`InterpData{1D,2D,3D,ND}Viewed`/`InterpolatorEnumViewed`
+    become `...View`.
+  - `InterpDataBase` is now also re-exported from `ninterp::interpolator` (previously
+    only `ninterp::data`).
   - **Migrating generic-over-`D` code:** custom strategy impls and anything else written
-    against the representation parameter must move to the `Base` names
-    (`InterpData{1D,2D,3D,ND}Base<D>`, `Interp{1D,2D,3D,ND}Base<D, S>`). Keeping the old
+    against the representation parameter must move to the `Base` names. Keeping the old
     unsuffixed name is a compile error, though an indirect one: `InterpData1D<D>` now
-    means `InterpDataBase<OwnedRepr<D>, 1>`, so `D` lands in `Elem` position and the
-    failure surfaces as an unsatisfied `D::Elem: PartialEq + Debug` bound, or as a
-    signature mismatch against `&InterpData1DBase<D>` on a trait impl.
-- **Breaking:** `Interp1D`/`2D`/`3D`/`ND`'s inherent `check_extrapolate` is renamed to
-  `validate_extrapolate`, matching the `validate`/`validate_strategy` naming every other
-  invariant check in the crate already uses.
-- **Breaking:** `InterpolateError`, `ValidateError`, and `Extrapolate<T>` are now
-  `#[non_exhaustive]`, allowing new variants to be added without breaking downstream
-  exhaustive matches. Any existing exhaustive `match` over one without a `_` arm now
-  needs one. Constructing existing variants is unaffected, so
-  `Extrapolate::Enable`/`Fill(x)`/etc. still work as before.
-- **Breaking:** `Strategy1DEnum`/`Strategy2DEnum`/`Strategy3DEnum`/`StrategyNDEnum` are
-  now `#[non_exhaustive]`, since every new built-in strategy adds a variant. Any
-  existing exhaustive `match` over one without a `_` arm now needs one; construction
-  (`strategy::Linear.into()`, `set_strategy(...)`, etc.) is unaffected.
-- **Breaking:** `Strategy1D`/`Strategy2D`/`Strategy3D`/`StrategyND::init` is split into
-  a pure `validate(&self, data)` and a mutating `init(&mut self, data)`, both
-  default-no-op (non-breaking for existing custom strategy implementations, which keep
-  compiling unchanged). `validate` is for invariant checks that don't need precomputed
-  state (`LinearUniform`'s grid-uniformity check and `Step`'s direction-count check
-  both moved from `init` to `validate`); `init` stays reserved for real precomputation.
-  `new` and `set_strategy` call both; `Interpolator::validate` now also calls
-  `validate_strategy` (see below), so invariant violations like a non-uniform
-  `LinearUniform` grid are caught there too, not just via `init_strategy`.
-- **Breaking:** `find_nearest_index` is renamed to `locate_lower_index` and, along with
-  the other grid/index search helpers (`step_index` -> `locate_step_index`,
-  `uniform_lower_index` -> `locate_lower_index_uniform`, `exact_index`,
-  `validate_uniform_grid`), moves from `strategy::traits` to a new `strategy::utils`
-  module; `traits` now holds only the `Strategy1D`/`2D`/`3D`/`ND` trait definitions.
-  No deprecation shim, matching the other breaking renames in this release.
-  `locate_lower_index` also now clamps out-of-range points to `[0, len - 2]` itself,
-  rather than relying on each `Linear` call site to inline the same clamp before
-  calling it.
-- **Breaking:** `LeftNearest` and `RightNearest` are removed. Migrate to
-  `Step::from(StepDirection::Lower)` / `Step::from(StepDirection::Upper)`, or the
-  leaner `StepLower` / `StepUpper` markers.
-- **Breaking:** `Linear` and `LinearUniform` now require `D::Elem: Float` (previously
-  `Num + PartialOrd`). Other strategies (`Nearest`, `Step`, etc.) keep looser numeric
-  bounds after an initial, overly broad `Float` restriction across the whole strategy
-  surface was narrowed back down to just the two strategies that actually need it.
-- **Breaking:** both interpolation-time failures now carry structured positions instead
-  of prose, and both aggregate across a batch rather than one aggregating and the other
-  stopping at the first failure:
+    means `InterpDataBase<OwnedRepr<D>, 1>`, so the failure surfaces as an unsatisfied
+    `D::Elem: PartialEq + Debug` bound rather than a clean "not found".
+- **Breaking:** `check_extrapolate` renamed to `validate_extrapolate`, matching the
+  `validate`/`validate_strategy` naming used elsewhere.
+- **Breaking:** `InterpolateError`, `ValidateError`, `Extrapolate<T>`, and
+  `Strategy1DEnum`/`2DEnum`/`3DEnum`/`NDEnum` are now `#[non_exhaustive]`. An existing
+  exhaustive downstream `match` over any of these needs a `_` arm; construction is
+  unaffected.
+- **Breaking:** `Strategy1D`/`2D`/`3D`/`ND::init` is split into a pure
+  `validate(&self, data)` and a mutating `init(&mut self, data)`, both default no-op
+  (existing custom strategies keep compiling unchanged). `LinearUniform`'s uniform-grid
+  check and `Step`'s direction-count check moved from `init` to `validate`. `new` and
+  `set_strategy` call both; `Interpolator::validate` now also calls `validate_strategy`.
+- **Breaking:** `find_nearest_index` renamed to `locate_lower_index` (now also clamps
+  out-of-range points to `[0, len - 2]` itself); it and the other index-search helpers
+  (`step_index` -> `locate_step_index`, `uniform_lower_index` ->
+  `locate_lower_index_uniform`, `exact_index`, `validate_uniform_grid`) move from
+  `strategy::traits` to a new `strategy::utils` module.
+- **Breaking:** `LeftNearest`/`RightNearest` removed. Migrate to
+  `Step::from(StepDirection::Lower)`/`Step::from(StepDirection::Upper)`, or the leaner
+  `StepLower`/`StepUpper`.
+- **Breaking:** `Linear`/`LinearUniform` now require `D::Elem: Float` (previously
+  `Num + PartialOrd`); other strategies keep looser numeric bounds.
+- **Breaking:** interpolation-time failures carry structured positions instead of prose,
+  and aggregate across a batch instead of stopping at the first failure:
   - `InterpolateError::PointLength(usize)` ->
-    `PointLength { expected: usize, failures: Vec<WrongLengthAt> }`, where each entry
-    carries `index` and `found`. The actual length was available at every construction
-    site and thrown away.
-  - `InterpolateError::OutOfBounds(String)` -> `OutOfBounds(Vec<OutOfBoundsAt>)`, where
-    each entry carries `index` and `dim`. A point out of bounds in two dimensions
-    yields two entries. The offending coordinate and grid bounds are no longer echoed
-    into the message: they are `D::Elem`, which the error is not generic over, and the
-    caller can index the `points` and `grid` it already owns. This also drops one
-    `String` allocation per offending coordinate from the batch error path.
-  - Both entry types are `#[non_exhaustive]` structs rather than tuples, so per-failure
-    context can be added later without a breaking change. Read them by field
-    (`at.index`, `at.dim`, `at.found`) and match with `..`.
-
-  Both variants render a lone failure as a sentence and several as an indented list, and
-  omit point indices entirely when every failure is at index 0, which is every
-  single-point call: `point has length 2, expected 3 for 3-D interpolation`.
+    `PointLength { expected: usize, failures: Vec<WrongLengthAt> }`.
+  - `InterpolateError::OutOfBounds(String)` -> `OutOfBounds(Vec<OutOfBoundsAt>)`; the
+    offending coordinate/bounds are no longer echoed into the message (they're
+    `D::Elem`, which the error isn't generic over); index the `points`/`grid` you
+    already have instead.
+  - Both entry types are `#[non_exhaustive]` structs rather than tuples; read by field
+    (`at.index`, `at.dim`, `at.found`).
+  - Both variants render a lone failure as a sentence and several as an indented list,
+    omitting point indices for single-point calls.
 - **Breaking:** `ValidateError::ExtrapolateSelection` becomes the payload-free
-  `ExtrapolateUnsupported`. Only `Extrapolate::Enable` can ever be rejected, and only by
-  a strategy whose `allow_extrapolate` returns `false`, so the stringified setting the
-  variant used to carry said nothing the variant name doesn't.
-- New `ValidateError::GridLength { expected: usize, found: usize }`, for an `InterpDataND`
-  whose grid axis count doesn't match its values' dimensionality. Previously fell through
-  to `ValidateError::Other(String)`; `Other` remains for conditions the crate doesn't
-  model, e.g. a custom strategy validating its own configuration (`Step`'s
-  direction-count check stays `Other` for exactly this reason: it describes the
-  strategy's own arguments, not the data).
-- **Breaking:** error variants renamed for consistency, and no longer read as
-  full sentences: `ValidateError::Monotonicity` -> `NonMonotonic`, and
-  `InterpolateError::ExtrapolateError` -> `InterpolateError::OutOfBounds`, which drops
-  the stuttering `Error` suffix no sibling variant carried and names the condition
-  (a query point outside the grid) rather than the setting that turns it into an
-  error. Its message is rewritten to match, from "attempted to interpolate at point(s)
-  beyond grid data" to ``point out of bounds with `Extrapolate::Error` set``, so the
-  variant states the condition and the message states which setting to change.
-  `ValidateError::EmptyGrid` is removed outright; a grid dimension
-  with 0 or 1 points is now rejected by the same `InsufficientGridPoints`, since a
-  single point can't bracket a query either.
+  `ExtrapolateUnsupported`.
+- New `ValidateError::GridLength { expected: usize, found: usize }`, for an
+  `InterpDataND` whose grid axis count doesn't match its values' dimensionality
+  (previously fell through to `ValidateError::Other(String)`).
+- **Breaking:** `ValidateError::Monotonicity` -> `NonMonotonic`;
+  `InterpolateError::ExtrapolateError` -> `OutOfBounds` (message rewritten to
+  ``point out of bounds with `Extrapolate::Error` set``). `ValidateError::EmptyGrid` is
+  removed; a grid dimension with 0 or 1 points is now `InsufficientGridPoints`.
 - **Breaking:** the `serde_ndim` Cargo feature is removed. It switched the nested-array
   write format on for every array field crate-wide, and because Cargo features are
-  additive and unify across the dependency graph, enabling it anywhere in a binary
-  silently flipped the wire format for every other `ninterp` consumer in that binary too.
-  Migrate to wrapping values in `Nested` (or `serialize_with = "serialize_nested"` on a
-  field) at the specific call site that wants it. Reading already accepted either format
-  and continues to, so data written by prior versions still loads fine.
+  additive, enabling it anywhere in a binary silently flipped the wire format for every
+  other `ninterp` consumer in that binary too. Migrate to wrapping values in `Nested` (or
+  `serialize_with = "serialize_nested"`) at the specific call site that wants it. Reading
+  still accepts either format.
 - **Breaking:** `extrapolate` is now a required field on deserialize instead of silently
-  defaulting to `Extrapolate::Error` when omitted. `data` and `strategy` were already
-  required; this was the only field with that leniency, and nothing pinned the behavior
-  down, so a missing field now fails loudly (`missing field "extrapolate"`) instead of
-  risking a silently different interpolator than intended.
-- **Breaking:** `Interp1D`/`Interp2D`/`Interp3D` gain an inherent
-  `interpolate(&self, point: &[D::Elem; N])`, taking the point as a fixed-size array so a
-  wrong-length point is a compile error instead of a runtime `InterpolateError::PointLength`.
-  `Interpolator::interpolate(&self, point: &[T])` remains available (now a thin
-  length-checking wrapper around the inherent method) for `InterpND`, `InterpolatorEnum`,
-  `Box<dyn Interpolator<T>>`, and other generic/trait-object callers, all unaffected.
-  Because Rust inherent methods unconditionally shadow trait methods of the same name,
-  any call site holding a genuine runtime-length slice for a concretely-typed
-  `Interp1D`/`2D`/`3D` (e.g. from a `Vec<f64>`, not an array literal) stops compiling;
-  migrate with `let point: &[D::Elem; N] = slice.try_into()?;` at the call site.
-  `InterpND` is unaffected (no fixed `N`).
-- Each `Interp1D`/`Interp2D`/`Interp3D`/`InterpND` gains a public `validate_strategy()`,
-  mirroring the existing `init_strategy()`: re-runs the strategy's `validate` against
-  the current data, for use after mutating the public `data`/`strategy` fields
-  directly.
+  defaulting to `Extrapolate::Error` when omitted, matching `data`/`strategy`.
+- **Breaking:** `Interp1D`/`2D`/`3D` gain an inherent
+  `interpolate(&self, point: &[D::Elem; N])`, so a wrong-length point is a compile error
+  instead of a runtime `InterpolateError::PointLength`. Because inherent methods shadow
+  trait methods, a call site holding a genuine runtime-length slice (not an array
+  literal) for a concretely-typed `Interp1D`/`2D`/`3D` stops compiling; migrate with
+  `let point: &[D::Elem; N] = slice.try_into()?;`. `Interpolator::interpolate(&self,
+  point: &[T])` (used by `InterpND`, `InterpolatorEnum`, `Box<dyn Interpolator<T>>`) is
+  unaffected.
+- `Interp1D`/`2D`/`3D`/`InterpND` gain a public `validate_strategy()`, mirroring
+  `init_strategy()`, for use after mutating the public `data`/`strategy` fields directly.
 - Significant ND performance work: `Linear`/`Nearest` no longer build coordinate
-  permutation tables via `itertools::multi_cartesian_product` (removing the `itertools`
-  dependency); corner values are now gathered into a flat buffer and reduced with an
-  in-place bitmask/butterfly pass, cutting allocations from O(N * 2^N) to O(1)-O(N).
-  1D strategies no longer open with an O(M) linear scan for exact grid-point matches.
-  2D/3D `Linear` now short-circuits per-dimension when a query point lands exactly on a
-  grid coordinate. See PR #13 for benchmark numbers (roughly 50-65% faster on 1D/2D
-  hardcoded and multilinear paths).
-- Serde: `StepLower`/`StepUpper` accept the legacy `"LeftNearest"`/`"RightNearest"`
-  names on deserialization for backward compatibility; `Step`'s own wire format
+  permutation tables via `itertools::multi_cartesian_product` (dropping the `itertools`
+  dependency); corner values are gathered into a flat buffer and reduced via a
+  bitmask/butterfly pass, cutting allocations from O(N·2^N) to O(1)-O(N). 1D strategies
+  no longer linear-scan for exact grid-point matches; 2D/3D `Linear` short-circuits
+  per-dimension on an exact match. Roughly 50-65% faster on 1D/2D hardcoded and
+  multilinear paths (see PR #13).
+- Serde: `StepLower`/`StepUpper` accept the legacy `"LeftNearest"`/`"RightNearest"` names
+  on deserialization for backward compatibility; `Step`'s own wire format
   (`{"Step": [...]}`) is unchanged and does not accept those aliases.
-- Loosened `Step`/`Nearest` strategy trait bounds back down after the `LinearUniform`
-  work had temporarily tightened them further than necessary.
-- Loosened `InterpolatorEnum`'s `PartialEq`/`SerializeNested` impls off `D::Elem: Float`
-  down to `PartialEq + Debug` (`+ Serialize`), matching what those impls actually need:
-  they only compare/serialize fields and never touch the strategy trait. Construction and
-  interpolation still require `Float`, unchanged.
 - Various documentation and README improvements; CI workflow polish.
 
 ### Fixed
 - `InterpND` panicked on `n == 0` (the 0-D-via-`InterpND` case, e.g. after
-  dimensionality reduction collapses every axis). The ND `Linear` strategy's exact-match
-  scan was rewritten from `iter().position()` (which returned `None` on an empty grid
-  dimension without touching it) to `find_nearest_index`, whose binary search calls
-  `.first().unwrap()` and panics on an empty dimension. Fixed by skipping empty grid
-  dimensions in that loop.
+  dimensionality reduction collapses every axis): the ND `Linear` strategy's exact-match
+  scan now skips empty grid dimensions instead of calling into a binary search that
+  panics on one.
 - A grid dimension with exactly 1 point passed construction and then panicked on the
-  first `interpolate` call (integer underflow in the lower-bracket search, or an
-  out-of-bounds index right after it), for every strategy except when
-  `Extrapolate::Enable` was selected, since the "at least 2 points" check only ran for
-  that one setting. It's now checked unconditionally at construction, so this is a
-  `ValidateError::InsufficientGridPoints` instead of a panic.
+  first `interpolate` call, for every strategy except `Extrapolate::Enable` (the only
+  setting that ran the "at least 2 points" check). Now checked unconditionally at
+  construction, raising `ValidateError::InsufficientGridPoints` instead.
 - Serde: non-self-describing formats (bincode, postcard, ...) could never actually read
-  back an interpolator they had just written, in either feature configuration.
-  `deserialize_any` was called unconditionally, which those formats don't support at all
-  (`Bincode does not support the serde::Deserializer::deserialize_any method`); separately,
-  a fixed-size grid (`[ArrayBase<D, Ix1>; N]`) serializes as a tuple, which those formats
-  encode without a length prefix, so reading it back as a seq desynchronized the byte
-  stream (`unknown array version: 0`). Both are now gated on `is_human_readable()`, falling
-  back to `ndarray`'s own (de)serialization for non-human-readable formats.
+  back an interpolator they had just written: `deserialize_any` was called
+  unconditionally, which those formats don't support at all, and a fixed-size grid
+  serializes as a tuple, which those formats encode without a length prefix, so reading
+  it back as a seq desynchronized the byte stream. Both paths are now gated on
+  `is_human_readable()`, falling back to `ndarray`'s own (de)serialization for
+  non-human-readable formats.
 
 ## [0.9.1] - 2026-08-03
 
