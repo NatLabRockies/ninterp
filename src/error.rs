@@ -27,7 +27,7 @@ pub enum ValidateError {
     /// for `InterpDataND`, whose axis count isn't fixed by the type. Distinct from
     /// [`ValidateError::IncompatibleShapes`], which compares extents within one axis.
     #[error("grid has {found} axes, expected {expected} to match the values")]
-    GridLength { expected: usize, found: usize },
+    GridAxisCount { expected: usize, found: usize },
     /// Escape hatch for conditions this crate doesn't model, chiefly custom strategies
     /// validating their own configuration.
     #[error("{0}")]

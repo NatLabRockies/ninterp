@@ -110,7 +110,7 @@ Everything below is merged to `main` but not yet tagged/released.
     omitting point indices for single-point calls.
 - **Breaking:** `ValidateError::ExtrapolateSelection` becomes the payload-free
   `ExtrapolateUnsupported`.
-- New `ValidateError::GridLength { expected: usize, found: usize }`, for an
+- New `ValidateError::GridAxisCount { expected: usize, found: usize }`, for an
   `InterpDataND` whose grid axis count doesn't match its values' dimensionality
   (previously fell through to `ValidateError::Other(String)`).
 - **Breaking:** `ValidateError::Monotonicity` -> `NonMonotonic`;

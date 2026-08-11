@@ -95,7 +95,7 @@ where
         let n = self.ndim();
         if (self.grid.len() != n) && !(n == 0 && self.grid.iter().all(|g| g.is_empty())) {
             // Only possible for `InterpDataND`
-            return Err(ValidateError::GridLength {
+            return Err(ValidateError::GridAxisCount {
                 expected: n,
                 found: self.grid.len(),
             });

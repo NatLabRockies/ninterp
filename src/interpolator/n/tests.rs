@@ -642,7 +642,7 @@ fn test_mismatched_grid() {
             Extrapolate::Error,
         )
         .unwrap_err(),
-        ValidateError::GridLength {
+        ValidateError::GridAxisCount {
             expected: 2,
             found: 3
         }
@@ -665,7 +665,7 @@ fn test_mismatched_grid() {
         )
         .unwrap_err(),
         // A single value reads as 0-D, so a non-empty grid has one axis too many
-        ValidateError::GridLength {
+        ValidateError::GridAxisCount {
             expected: 0,
             found: 1
         }
