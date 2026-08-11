@@ -58,7 +58,8 @@ pub(crate) fn cyclic_thomas<T: Float>(
 
 /// Computes the second-derivative vector `M[0..=n]` for the given cubic spline BC.
 ///
-/// Used by [`Strategy1D::init`] (stores in `self.m`) and [`spline_eval_1d`] (on the fly).
+/// Used by [`Strategy1D::init`] (stored in `CubicSpline::m_cache`) and
+/// [`spline_eval_1d`] (on the fly).
 pub(crate) fn compute_m<T: Float>(
     x: ArrayView1<T>,
     y: ArrayView1<T>,
@@ -159,7 +160,7 @@ pub(crate) fn compute_m<T: Float>(
 pub(crate) fn eval_spline_from_m<T: Float>(
     x: ArrayView1<T>,
     y: ArrayView1<T>,
-    m: &[T],
+    m: ArrayView1<T>,
     point: T,
 ) -> T {
     let two = T::one() + T::one();
@@ -178,7 +179,8 @@ pub(crate) fn eval_spline_from_m<T: Float>(
 
 /// Computes and evaluates a 1-D cubic spline at `point` in one pass, respecting `bc`.
 ///
-/// Used by the sequential N-D path in [`spline_eval_nd_recursive`].
+/// Used for the outer (query-dependent) axes in [`spline_eval_nd_cached`], which cannot
+/// be precomputed since their inputs change with the query point.
 pub(crate) fn spline_eval_1d<T: Float>(
     x: ArrayView1<T>,
     y: ArrayView1<T>,
@@ -186,15 +188,64 @@ pub(crate) fn spline_eval_1d<T: Float>(
     bc: &CubicBC<T>,
 ) -> Result<T, InterpolateError> {
     let m = compute_m(x, y, bc).map_err(|e| InterpolateError::Other(e.to_string()))?;
-    Ok(eval_spline_from_m(x, y, &m, point))
+    Ok(eval_spline_from_m(x, y, ArrayView1::from(&m), point))
+}
+
+/// Checks `grid_len` against boundary condition `bc`'s minimum point requirement (e.g.
+/// [`CubicBC::NotAKnot`] needs at least 4), ahead of the real work in [`compute_m`].
+///
+/// Pure, no mutation; used by each dimensionality's `Strategy*D::validate`.
+pub(crate) fn validate_bc_min_points<T>(
+    bc: &CubicBC<T>,
+    grid_len: usize,
+    dim: usize,
+) -> Result<(), ValidateError> {
+    if matches!(bc, CubicBC::NotAKnot) && grid_len < 4 {
+        return Err(ValidateError::Other(format!(
+            "CubicSpline: dim {dim} has {grid_len} grid points; NotAKnot requires at least 4"
+        )));
+    }
+    Ok(())
+}
+
+/// Precomputes second-derivative coefficients for every 1-D pencil along the innermost
+/// (last) axis of `values`, for [`spline_eval_nd_cached`] to look up in O(1) instead of
+/// re-solving on every `interpolate` call. Only the innermost axis's system is
+/// query-independent; outer axes still solve fresh via [`spline_eval_1d`] since their
+/// inputs (the collapsed values from inner axes) depend on the query point.
+///
+/// Returns an array shaped like `values`, except the last axis is `inner_grid.len()`
+/// long (matching [`compute_m`]'s output length). For 1-D `values` (no outer axes) this
+/// degenerates to a single pencil, i.e. one [`compute_m`] call.
+pub(crate) fn compute_m_inner_cache<T: Float>(
+    inner_grid: ArrayView1<T>,
+    values: ArrayViewD<T>,
+    bc: &CubicBC<T>,
+) -> Result<ArrayD<T>, ValidateError> {
+    let last_axis = Axis(values.ndim() - 1);
+    let mut out_shape = values.shape().to_vec();
+    out_shape[values.ndim() - 1] = inner_grid.len();
+    let mut cache = ArrayD::<T>::zeros(IxDyn(&out_shape));
+    for (y, mut out_lane) in values
+        .lanes(last_axis)
+        .into_iter()
+        .zip(cache.lanes_mut(last_axis))
+    {
+        let m = compute_m(inner_grid, y, bc)?;
+        out_lane.assign(&ArrayView1::from(&m));
+    }
+    Ok(cache)
 }
 
 /// Recursively evaluates an N-D cubic spline via sequential 1-D slicing, respecting `bcs`.
+/// Looks up `m_cache` (from [`compute_m_inner_cache`]) at the innermost axis instead of
+/// re-solving it; outer axes still solve fresh via [`spline_eval_1d`].
 ///
 /// `bcs` length 1 broadcasts to all dimensions; length N applies per-dimension.
-pub(crate) fn spline_eval_nd_recursive<T: Float>(
+pub(crate) fn spline_eval_nd_cached<T: Float>(
     grids: &[ArrayView1<T>],
     values: ArrayViewD<T>,
+    m_cache: ArrayViewD<T>,
     point: &[T],
     bcs: &[CubicBC<T>],
 ) -> Result<T, InterpolateError> {
@@ -205,20 +256,26 @@ pub(crate) fn spline_eval_nd_recursive<T: Float>(
     let next_bcs = if bcs.len() > 1 { &bcs[1..] } else { bcs };
 
     if grids.len() == 1 {
-        let y = values
-            .into_dimensionality::<Ix1>()
-            .map_err(|_| InterpolateError::Other(
-                "internal: non-1-D values at 1-D base case, grids.len() == values.ndim() invariant broken".into()
-            ))?;
-        return spline_eval_1d(grids[0], y, point[0], current_bc);
+        let y = values.into_dimensionality::<Ix1>().map_err(|_| {
+            InterpolateError::Other(
+                "internal: non-1-D values at 1-D base case, grids.len() == values.ndim() invariant broken".into(),
+            )
+        })?;
+        let m = m_cache.into_dimensionality::<Ix1>().map_err(|_| {
+            InterpolateError::Other(
+                "internal: non-1-D m_cache at 1-D base case, grids.len() == m_cache.ndim() invariant broken".into(),
+            )
+        })?;
+        return Ok(eval_spline_from_m(grids[0], y, m, point[0]));
     }
 
     let n = grids[0].len();
     let g: Vec<T> = (0..n)
         .map(|i| {
-            spline_eval_nd_recursive(
+            spline_eval_nd_cached(
                 &grids[1..],
                 values.index_axis(Axis(0), i),
+                m_cache.index_axis(Axis(0), i),
                 &point[1..],
                 next_bcs,
             )

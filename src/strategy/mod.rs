@@ -264,7 +264,7 @@ mod step_marker_serde {
 /// use ndarray::prelude::*;
 /// use ninterp::prelude::*;
 ///
-/// // f(x) = 2x + 1 (linear — reproduced exactly by any spline)
+/// // f(x) = 2x + 1 (linear: reproduced exactly by any spline)
 /// let interp: Interp1D<f64, _> = Interp1D::new(
 ///     array![0., 1., 2., 3.],
 ///     array![1., 3., 5., 7.],
@@ -280,14 +280,20 @@ mod step_marker_serde {
 pub struct CubicSpline<T> {
     /// Boundary conditions, one per dimension or a single entry broadcast to all.
     pub boundary_conditions: Vec<CubicBC<T>>,
-    /// Second derivatives `M[i] = S''(x_i)` at each grid point, length `n + 1`
-    /// for `n` intervals. Populated by [`Strategy1D::init`]; boundary values
-    /// are determined by [`boundary_conditions`](CubicBC).
+    /// Cached second derivatives (`M[i] = S''(x_i)`) for every 1-D pencil along the
+    /// innermost (last) grid axis, one [`compute_m`](crate::strategy::spline::compute_m)
+    /// result per combination of the other axes' indices. Same shape as the value grid,
+    /// with the same last-axis length as the innermost grid; for 1-D data (no outer axes)
+    /// this degenerates to a single pencil, i.e. shape `[n + 1]` for `n` intervals.
+    ///
+    /// Populated by `Strategy1D`/`2D`/`3D`/`ND::init`. Only the innermost axis's
+    /// coefficients are query-independent, so this is as far as caching goes; outer axes
+    /// still solve fresh per call.
     ///
     /// Not included in the serialized form. Call [`Interpolator::validate`] after
-    /// deserializing a 1-D interpolator to recompute these coefficients before use.
+    /// deserializing to recompute these coefficients before use.
     #[cfg_attr(feature = "serde", serde(skip))]
-    pub(crate) m: Vec<T>,
+    pub(crate) m_cache: ArrayD<T>,
 }
 
 /// Boundary conditions for [`CubicSpline`].
@@ -312,6 +318,13 @@ pub enum CubicBC<T> {
     Periodic,
 }
 
+/// Placeholder for [`CubicSpline::m_cache`] before [`Strategy1D::init`]/`2D`/`3D`/`ND`
+/// populates it. No `T: Clone + Zero` bound needed (unlike `ArrayD::zeros`), so the
+/// constructors below stay unconstrained.
+fn empty_m_cache<T>() -> ArrayD<T> {
+    ArrayD::from_shape_vec(IxDyn(&[0]), Vec::new()).expect("empty shape matches empty vec")
+}
+
 impl<T> CubicSpline<T> {
     /// Returns the boundary condition for the given dimension.
     /// A single-entry vec is broadcast to all dimensions.
@@ -325,7 +338,7 @@ impl<T> CubicSpline<T> {
     pub fn not_a_knot() -> Self {
         Self {
             boundary_conditions: vec![CubicBC::NotAKnot],
-            m: Vec::new(),
+            m_cache: empty_m_cache(),
         }
     }
 
@@ -333,7 +346,7 @@ impl<T> CubicSpline<T> {
     pub fn natural() -> Self {
         Self {
             boundary_conditions: vec![CubicBC::Natural],
-            m: Vec::new(),
+            m_cache: empty_m_cache(),
         }
     }
 
@@ -341,7 +354,7 @@ impl<T> CubicSpline<T> {
     pub fn clamped(left: T, right: T) -> Self {
         Self {
             boundary_conditions: vec![CubicBC::Clamped { left, right }],
-            m: Vec::new(),
+            m_cache: empty_m_cache(),
         }
     }
 
@@ -350,7 +363,7 @@ impl<T> CubicSpline<T> {
     pub fn periodic() -> Self {
         Self {
             boundary_conditions: vec![CubicBC::Periodic],
-            m: Vec::new(),
+            m_cache: empty_m_cache(),
         }
     }
 }

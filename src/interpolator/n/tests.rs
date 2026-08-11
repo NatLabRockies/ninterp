@@ -55,6 +55,18 @@ fn test_linear_0d() {
 }
 
 #[test]
+fn test_cubic_spline_0d() {
+    let interp = InterpND::new(
+        vec![array![]],
+        array![0.5].into_dyn(),
+        strategy::CubicSpline::natural(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(interp.interpolate(&[]).unwrap(), 0.5);
+}
+
+#[test]
 fn test_linear() {
     let interp = InterpND::new(
         vec![

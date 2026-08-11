@@ -176,15 +176,32 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
 {
+    fn validate(&self, data: &InterpData2DBase<D>) -> Result<(), ValidateError> {
+        for (dim, grid) in data.grid.iter().enumerate() {
+            validate_bc_min_points(self.bc_for_dim(dim), grid.len(), dim)?;
+        }
+        Ok(())
+    }
+
+    fn init(&mut self, data: &InterpData2DBase<D>) -> Result<(), ValidateError> {
+        self.m_cache = compute_m_inner_cache(
+            data.grid[1].view(),
+            data.values.view().into_dyn(),
+            self.bc_for_dim(1),
+        )?;
+        Ok(())
+    }
+
     fn interpolate(
         &self,
         data: &InterpData2DBase<D>,
         point: &[D::Elem; 2],
     ) -> Result<D::Elem, InterpolateError> {
         let grids: Vec<ArrayView1<D::Elem>> = data.grid.iter().map(|g| g.view()).collect();
-        spline_eval_nd_recursive(
+        spline_eval_nd_cached(
             &grids,
             data.values.view().into_dyn(),
+            self.m_cache.view(),
             point,
             &self.boundary_conditions,
         )

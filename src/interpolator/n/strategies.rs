@@ -208,13 +208,44 @@ where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
 {
+    fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
+        for dim in 0..data.ndim() {
+            validate_bc_min_points(self.bc_for_dim(dim), data.grid[dim].len(), dim)?;
+        }
+        Ok(())
+    }
+
+    fn init(&mut self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
+        if data.ndim() == 0 {
+            return Ok(());
+        }
+        let inner_dim = data.values.ndim().saturating_sub(1);
+        self.m_cache = compute_m_inner_cache(
+            data.grid[inner_dim].view(),
+            data.values.view(),
+            self.bc_for_dim(inner_dim),
+        )?;
+        Ok(())
+    }
+
     fn interpolate(
         &self,
         data: &InterpDataNDBase<D>,
         point: &[D::Elem],
     ) -> Result<D::Elem, InterpolateError> {
+        if data.ndim() == 0 {
+            return data.values.first().copied().ok_or_else(|| {
+                InterpolateError::Other("internal: 0-D interpolation data has no value".into())
+            });
+        }
         let grids: Vec<ArrayView1<D::Elem>> = data.grid.iter().map(|g| g.view()).collect();
-        spline_eval_nd_recursive(&grids, data.values.view(), point, &self.boundary_conditions)
+        spline_eval_nd_cached(
+            &grids,
+            data.values.view(),
+            self.m_cache.view(),
+            point,
+            &self.boundary_conditions,
+        )
     }
 
     /// Returns `true`: the boundary cubic polynomials extend naturally.
