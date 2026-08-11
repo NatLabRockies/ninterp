@@ -75,11 +75,6 @@ fn test_cubic_c2_periodic_outer_axis() {
     // mathematically-equal counterpart by a few ULPs, causing spurious failures. That
     // check is gone now; this just confirms Periodic on an outer axis still
     // interpolates successfully.
-    let mut strategy = strategy::CubicC2::natural();
-    strategy.boundary_conditions = vec![
-        strategy::CubicBoundaryConditions::Periodic,
-        strategy::CubicBoundaryConditions::Natural,
-    ];
     let interp = InterpND::new(
         vec![array![0., 1., 2., 3.], array![0., 1., 2.]],
         array![
@@ -89,7 +84,13 @@ fn test_cubic_c2_periodic_outer_axis() {
             [0., 1., 2.], // matches the x=0 row, by Periodic's convention
         ]
         .into_dyn(),
-        strategy,
+        strategy::CubicC2 {
+            boundary_conditions: vec![
+                strategy::CubicBoundaryConditions::Periodic,
+                strategy::CubicBoundaryConditions::Natural,
+            ],
+            ..strategy::CubicC2::natural()
+        },
         Extrapolate::Error,
     )
     .unwrap();

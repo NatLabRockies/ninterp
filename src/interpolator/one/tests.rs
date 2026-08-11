@@ -98,6 +98,30 @@ fn test_cubic_c2_clamped_cubic_exact() {
 }
 
 #[test]
+fn test_cubic_c2_clamped_uses_given_derivative() {
+    // Differential check for the previous test: `clamped_cubic_exact` alone can't tell
+    // "Clamped correctly used the supplied derivative" apart from "Clamped silently
+    // behaved like NotAKnot" -- for a genuine cubic like f(x) = x^3, NotAKnot *also*
+    // reproduces it exactly with no derivative info at all, so a bug that dropped
+    // `left`/`right` entirely would still pass that test. Supplying deliberately wrong
+    // derivatives here and confirming the result moves far from the true value proves
+    // they're actually being read.
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 8., 27.], // f(x) = x^3; true derivatives are 0 and 27
+        strategy::CubicC2::clamped(999., 999.),
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    let wrong = interp.interpolate(&[0.5]).unwrap();
+    assert!(
+        (wrong - 0.125_f64).abs() > 1.0,
+        "Clamped(999, 999) gave {wrong}, suspiciously close to the true f(0.5) = 0.125 \
+         as if the supplied derivatives were ignored"
+    );
+}
+
+#[test]
 fn test_invalid_args() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],

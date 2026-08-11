@@ -116,19 +116,20 @@ fn test_cubic_c2_clamped_short_axis() {
     // A `Clamped` axis with only 2 points must still validate under the corner-cache
     // upgrade: the second-pass BC substituted for `Clamped` (`Natural`, not `NotAKnot`)
     // has no minimum-point requirement -- regression test for that fallback choice.
-    let mut strategy = strategy::CubicC2::natural();
-    strategy.boundary_conditions = vec![
-        strategy::CubicBoundaryConditions::Clamped {
-            left: 1.,
-            right: 1.,
-        },
-        strategy::CubicBoundaryConditions::Natural,
-    ];
     let interp = Interp2D::new(
         array![0., 1.], // only 2 points on the Clamped axis
         array![0., 1., 2., 3.],
         array![[0., 1., 2., 3.], [1., 2., 3., 4.]], // f(x, y) = x + y
-        strategy,
+        strategy::CubicC2 {
+            boundary_conditions: vec![
+                strategy::CubicBoundaryConditions::Clamped {
+                    left: 1.,
+                    right: 1.,
+                },
+                strategy::CubicBoundaryConditions::Natural,
+            ],
+            ..strategy::CubicC2::natural()
+        },
         Extrapolate::Error,
     )
     .unwrap();
@@ -175,25 +176,64 @@ fn test_cubic_c2_clamped_cubic_exact() {
     }
     let grid = [0., 1., 2., 3.];
     let values = Array2::from_shape_fn((4, 4), |(i, j)| f(grid[i], grid[j]));
-    let mut strategy = strategy::CubicC2::natural();
-    strategy.boundary_conditions = vec![
-        strategy::CubicBoundaryConditions::Clamped {
-            left: 0.,
-            right: 27.,
-        }; // f'(0) = 0, f'(3) = 27 on both axes
-        2
-    ];
     let interp = Interp2D::new(
         array![0., 1., 2., 3.],
         array![0., 1., 2., 3.],
         values,
-        strategy,
+        strategy::CubicC2 {
+            boundary_conditions: vec![
+                strategy::CubicBoundaryConditions::Clamped {
+                    left: 0.,
+                    right: 27.,
+                }; // f'(0) = 0, f'(3) = 27 on both axes
+                2
+            ],
+            ..strategy::CubicC2::natural()
+        },
         Extrapolate::Error,
     )
     .unwrap();
     for &(x, y) in &[(0.5, 0.5), (1.5, 2.5), (2.5, 1.5), (0.25, 2.75)] {
         assert_approx_eq!(interp.interpolate(&[x, y]).unwrap(), f(x, y));
     }
+}
+
+#[test]
+fn test_cubic_c2_clamped_uses_given_derivative() {
+    // Differential check for the previous test -- see the 1D version of this test for
+    // the full reasoning: exact reproduction alone can't tell "Clamped used the
+    // supplied derivative" apart from "Clamped silently behaved like NotAKnot", since
+    // NotAKnot reproduces this same separable-cubic data exactly with no derivative
+    // info at all.
+    fn f(x: f64, y: f64) -> f64 {
+        x.powi(3) + y.powi(3)
+    }
+    let grid = [0., 1., 2., 3.];
+    let values = Array2::from_shape_fn((4, 4), |(i, j)| f(grid[i], grid[j]));
+    let interp = Interp2D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        values,
+        strategy::CubicC2 {
+            boundary_conditions: vec![
+                strategy::CubicBoundaryConditions::Clamped {
+                    left: 999.,
+                    right: 999.,
+                }; // true derivatives are 0 and 27
+                2
+            ],
+            ..strategy::CubicC2::natural()
+        },
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let wrong = interp.interpolate(&[0.5, 0.5]).unwrap();
+    assert!(
+        (wrong - f(0.5, 0.5)).abs() > 1.0,
+        "Clamped(999, 999) gave {wrong}, suspiciously close to the true f(0.5, 0.5) = {} \
+         as if the supplied derivatives were ignored",
+        f(0.5, 0.5)
+    );
 }
 
 #[test]
