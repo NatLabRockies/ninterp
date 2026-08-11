@@ -106,11 +106,13 @@ Each approach has trade-offs:
 | `Interp*<_, Box<dyn Strategy*>>` | Medium | Strategy only | Yes | No |
 | `Box<dyn Interpolator<_>>` | Highest | Interpolator + strategy | Yes | No |
 
-For heterogeneous storage that also needs to recover the concrete interpolator type later
-(e.g. `downcast_ref`-style access), [`AnyInterpolator`](https://docs.rs/ninterp/latest/ninterp/interpolator/trait.AnyInterpolator.html)
+For heterogeneous storage that also needs to recover the concrete interpolator type later,
+[`AnyInterpolator`](https://docs.rs/ninterp/latest/ninterp/interpolator/trait.AnyInterpolator.html)
 (`ninterp::interpolator::AnyInterpolator`, not in the `prelude`) adds `Send + Sync` and an
-`as_any` downcast on top of `Interpolator<T>`. It's implemented for owned
-`Interp1D`/`2D`/`3D`/`ND` only, since downcasting requires `Self: 'static`.
+`as_any(&self) -> &dyn Any` method on top of `Interpolator<T>`, so
+`boxed.as_any().downcast_ref::<Interp2D<f64, MyStrategy>>()` recovers the concrete type.
+It's implemented for owned `Interp1D`/`2D`/`3D`/`ND` only, since downcasting requires
+`Self: 'static`.
 
 ## Core Concepts
 ### Data Shape Contract
@@ -178,8 +180,8 @@ To interpolate several points against one interpolator,
 (and its `interpolate_fast`-style counterpart `batch_interpolate_fast`) resolve
 `self.extrapolate` once for the whole batch and funnel every point into at most one call
 to the strategy, instead of calling `interpolate` per point. For a `Box<dyn
-Interpolator<T>>` or `Box<dyn Strategy*D>`, this also collapses `m` virtual dispatches
-into one:
+Interpolator<T>>` or `Box<dyn Strategy*D>`, this also collapses one virtual dispatch
+per point into a single dispatch for the whole batch:
 
 ```rust
 use ndarray::prelude::*;
@@ -240,7 +242,7 @@ Validation-time (`new` / `validate`):
 | `ValidateError::GridLength` | `InterpDataND` grid axis count doesn't match the dimensionality of `values` |
 | `ValidateError::ExtrapolateUnsupported` | `Extrapolate::Enable` on a strategy that can't extrapolate |
 
-Interpolation-time (`interpolate`):
+Interpolation-time (`interpolate` / batch interpolation):
 
 | Error | Meaning |
 | --- | --- |
