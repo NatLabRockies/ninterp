@@ -289,7 +289,7 @@ where
         Ok(())
     }
 
-    /// Precomputes the full corner-derivative tensor via [`compute_corner_cache`], so
+    /// Precomputes the full corner-derivative tensor via `compute_corner_cache`, so
     /// [`interpolate`](Self::interpolate) is an O(1) Hermite-patch lookup instead of
     /// re-solving the outer axes on every call.
     fn init(&mut self, data: &InterpData3DBase<D>) -> Result<(), ValidateError> {

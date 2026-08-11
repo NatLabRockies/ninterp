@@ -118,7 +118,7 @@ where
         validate_bc_min_points(self.bc_for_dim(0), data.grid[0].len(), 0)
     }
 
-    /// Computes and caches `M[0..=n]` for the configured BC via [`compute_m_inner_cache`]
+    /// Computes and caches `M[0..=n]` for the configured BC via `compute_m_inner_cache`
     /// (a single pencil, since 1-D data has no outer axes to vary over).
     fn init(&mut self, data: &InterpData1DBase<D>) -> Result<(), ValidateError> {
         self.cache = compute_m_inner_cache(

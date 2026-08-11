@@ -254,10 +254,11 @@ mod step_marker_serde {
 /// Constructs a C² piecewise cubic polynomial through all data points.
 /// The boundary condition is set by [`boundary_conditions`](CubicC2::boundary_conditions).
 /// Coefficients are precomputed in [`Strategy1D::init`], called automatically
-/// by [`Interp1D::new`] and [`Interp1D::set_strategy`].
+/// by [`Interp1D::new`](crate::interpolator::Interp1D::new) and
+/// [`Interp1D::set_strategy`](crate::interpolator::Interp1D::set_strategy).
 ///
-/// Supports [`Extrapolate::Enable`]: evaluation beyond the grid extends the
-/// boundary cubic polynomials.
+/// Supports [`Extrapolate::Enable`](crate::interpolator::Extrapolate::Enable):
+/// evaluation beyond the grid extends the boundary cubic polynomials.
 ///
 /// # Example
 /// ```
@@ -341,8 +342,8 @@ impl<T> CubicC2<T> {
     }
 
     /// Create a cubic spline with a distinct boundary condition per grid dimension.
-    /// A single-entry vec is broadcast to all dimensions instead, matching
-    /// [`bc_for_dim`](Self::bc_for_dim).
+    /// A single-entry vec is broadcast to all dimensions instead (same rule
+    /// `interpolate` uses internally to pick each axis's condition).
     ///
     /// Use [`not_a_knot`](Self::not_a_knot), [`natural`](Self::natural),
     /// [`clamped`](Self::clamped), or [`periodic`](Self::periodic) instead when every
