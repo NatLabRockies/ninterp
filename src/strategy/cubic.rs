@@ -89,9 +89,7 @@ pub(crate) fn compute_m<T: Float>(
             }
             diag.push((h[n - 2] + h[n - 1]) * (two * h[n - 2] + h[n - 1]));
             let mut rhs = vec![h[1] * u[0]];
-            for k in 1..n - 2 {
-                rhs.push(u[k]);
-            }
+            rhs.extend_from_slice(&u[1..n - 2]);
             rhs.push(h[n - 2] * u[n - 2]);
             let inner = thomas(&sub, &diag, &sup, &rhs);
             let m0 = ((h[0] + h[1]) * inner[0] - h[0] * inner[1]) / h[1];

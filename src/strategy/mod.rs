@@ -340,6 +340,20 @@ impl<T> CubicC2<T> {
         &bcs[if bcs.len() == 1 { 0 } else { dim }]
     }
 
+    /// Create a cubic spline with a distinct boundary condition per grid dimension.
+    /// A single-entry vec is broadcast to all dimensions instead, matching
+    /// [`bc_for_dim`](Self::bc_for_dim).
+    ///
+    /// Use [`not_a_knot`](Self::not_a_knot), [`natural`](Self::natural),
+    /// [`clamped`](Self::clamped), or [`periodic`](Self::periodic) instead when every
+    /// dimension shares the same condition.
+    pub fn new(boundary_conditions: Vec<CubicBoundaryConditions<T>>) -> Self {
+        Self {
+            boundary_conditions,
+            cache: empty_cache(),
+        }
+    }
+
     /// Create a cubic spline with not-a-knot boundary conditions.
     /// Requires at least 4 data points per dimension.
     pub fn not_a_knot() -> Self {

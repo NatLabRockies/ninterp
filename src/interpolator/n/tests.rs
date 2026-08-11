@@ -84,13 +84,10 @@ fn test_cubic_c2_periodic_outer_axis() {
             [0., 1., 2.], // matches the x=0 row, by Periodic's convention
         ]
         .into_dyn(),
-        strategy::CubicC2 {
-            boundary_conditions: vec![
-                strategy::CubicBoundaryConditions::Periodic,
-                strategy::CubicBoundaryConditions::Natural,
-            ],
-            ..strategy::CubicC2::natural()
-        },
+        strategy::CubicC2::new(vec![
+            strategy::CubicBoundaryConditions::Periodic,
+            strategy::CubicBoundaryConditions::Natural,
+        ]),
         Extrapolate::Error,
     )
     .unwrap();

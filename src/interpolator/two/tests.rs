@@ -120,16 +120,13 @@ fn test_cubic_c2_clamped_short_axis() {
         array![0., 1.], // only 2 points on the Clamped axis
         array![0., 1., 2., 3.],
         array![[0., 1., 2., 3.], [1., 2., 3., 4.]], // f(x, y) = x + y
-        strategy::CubicC2 {
-            boundary_conditions: vec![
-                strategy::CubicBoundaryConditions::Clamped {
-                    left: 1.,
-                    right: 1.,
-                },
-                strategy::CubicBoundaryConditions::Natural,
-            ],
-            ..strategy::CubicC2::natural()
-        },
+        strategy::CubicC2::new(vec![
+            strategy::CubicBoundaryConditions::Clamped {
+                left: 1.,
+                right: 1.,
+            },
+            strategy::CubicBoundaryConditions::Natural,
+        ]),
         Extrapolate::Error,
     )
     .unwrap();
@@ -180,16 +177,7 @@ fn test_cubic_c2_clamped_cubic_exact() {
         array![0., 1., 2., 3.],
         array![0., 1., 2., 3.],
         values,
-        strategy::CubicC2 {
-            boundary_conditions: vec![
-                strategy::CubicBoundaryConditions::Clamped {
-                    left: 0.,
-                    right: 27.,
-                }; // f'(0) = 0, f'(3) = 27 on both axes
-                2
-            ],
-            ..strategy::CubicC2::natural()
-        },
+        strategy::CubicC2::clamped(0., 27.), // f'(0) = 0, f'(3) = 27, broadcast to both axes
         Extrapolate::Error,
     )
     .unwrap();
@@ -214,16 +202,7 @@ fn test_cubic_c2_clamped_uses_given_derivative() {
         array![0., 1., 2., 3.],
         array![0., 1., 2., 3.],
         values,
-        strategy::CubicC2 {
-            boundary_conditions: vec![
-                strategy::CubicBoundaryConditions::Clamped {
-                    left: 999.,
-                    right: 999.,
-                }; // true derivatives are 0 and 27
-                2
-            ],
-            ..strategy::CubicC2::natural()
-        },
+        strategy::CubicC2::clamped(999., 999.), // true derivatives are 0 and 27
         Extrapolate::Error,
     )
     .unwrap();
