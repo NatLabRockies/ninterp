@@ -145,6 +145,67 @@ fn test_cubic_c2_clamped_short_axis() {
 }
 
 #[test]
+fn test_cubic_c2_not_a_knot_cubic_exact() {
+    // f(x, y, z) = x^3+y^3+z^3 + x^2*y+y^2*z+z^2*x: every axis slice is a genuine
+    // cubic (unlike `interior_accuracy`'s quadratic data above), and every one of the
+    // 8 corner-derivative slots (value, 3 first partials, 3 mixed second partials, the
+    // triple mixed partial) is exercised with a non-constant value except the triple
+    // mixed partial itself (which really is 0 for this f, since no term has xyz jointly).
+    fn f(x: f64, y: f64, z: f64) -> f64 {
+        x.powi(3) + y.powi(3) + z.powi(3) + x.powi(2) * y + y.powi(2) * z + z.powi(2) * x
+    }
+    let grid = [0., 1., 2., 3.];
+    let values = Array3::from_shape_fn((4, 4, 4), |(i, j, k)| f(grid[i], grid[j], grid[k]));
+    let interp = Interp3D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        values,
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &(x, y, z) in &[(0.5, 0.5, 0.5), (1.5, 2.5, 0.25), (2.25, 0.75, 1.5)] {
+        assert_approx_eq!(interp.interpolate(&[x, y, z]).unwrap(), f(x, y, z));
+    }
+}
+
+#[test]
+fn test_cubic_c2_clamped_cubic_exact() {
+    // f(x, y, z) = x^3 + y^3 + z^3 (separable, no cross terms) -- `Clamped`'s endpoint
+    // derivative is one scalar per axis shared by every pencil along it, so it's only
+    // exact when the true boundary partial doesn't vary with the other axes; a
+    // cross-term function can't satisfy that in general (see the 2D version of this
+    // test for the full reasoning). Cross-term correctness is already covered by
+    // `not_a_knot_cubic_exact` above.
+    fn f(x: f64, y: f64, z: f64) -> f64 {
+        x.powi(3) + y.powi(3) + z.powi(3)
+    }
+    let grid = [0., 1., 2., 3.];
+    let values = Array3::from_shape_fn((4, 4, 4), |(i, j, k)| f(grid[i], grid[j], grid[k]));
+    let mut strategy = strategy::CubicC2::natural();
+    strategy.boundary_conditions = vec![
+        strategy::CubicBoundaryConditions::Clamped {
+            left: 0.,
+            right: 27.,
+        }; // f'(0) = 0, f'(3) = 27 on every axis
+        3
+    ];
+    let interp = Interp3D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        values,
+        strategy,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &(x, y, z) in &[(0.5, 0.5, 0.5), (1.5, 2.5, 0.25), (2.25, 0.75, 1.5)] {
+        assert_approx_eq!(interp.interpolate(&[x, y, z]).unwrap(), f(x, y, z));
+    }
+}
+
+#[test]
 fn test_invalid_args() {
     let interp = Interp3D::new(
         array![0.05, 0.10, 0.15],

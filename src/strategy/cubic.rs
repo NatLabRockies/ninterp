@@ -342,10 +342,13 @@ fn corner_cache_axis_pass<T: Float>(
 /// Built by processing axes `0..N` in order: for every mask not yet including axis `i`'s
 /// bit, splines the corresponding field along axis `i` ([`corner_cache_axis_pass`]) to
 /// populate the entry with that bit added. Boundary condition per axis is
-/// [`CubicC2::bc_for_dim`], except `Clamped` falls back to `Natural`: the user's clamped
-/// value is a first derivative, not the right shape of data for splining a *derivative*
-/// field, and unlike `NotAKnot`, `Natural` has no minimum-point requirement, so it never
-/// rejects a `Clamped` axis with only 2-3 points that validated fine before this cache.
+/// [`CubicC2::bc_for_dim`] when splining the raw values (`mask == 0`, this axis's own
+/// first-derivative pass) -- but for every other `mask` (a cross-derivative pass over an
+/// already-differentiated field, not the original data), `Clamped` falls back to
+/// `Natural`: the user's clamped value is a first derivative *of the original function*,
+/// not the right shape of data for splining a field that's already a derivative. Unlike
+/// `NotAKnot`, `Natural` has no minimum-point requirement, so it never rejects a
+/// `Clamped` axis with only 2-3 points that validated fine before this cache.
 pub(crate) fn compute_corner_cache<T: Float>(
     grids: &[ArrayView1<T>],
     values: ArrayViewD<T>,
@@ -362,13 +365,15 @@ pub(crate) fn compute_corner_cache<T: Float>(
 
     for axis in 0..n_axes {
         let bit = 1usize << axis;
-        let bc = match &bcs[if bcs.len() == 1 { 0 } else { axis }] {
+        let bc_axis = &bcs[if bcs.len() == 1 { 0 } else { axis }];
+        let cross_bc = match bc_axis {
             CubicBoundaryConditions::Clamped { .. } => CubicBoundaryConditions::Natural,
             other => other.clone(),
         };
         for mask in 0..bit {
+            let bc = if mask == 0 { bc_axis } else { &cross_bc };
             let field = cache.index_axis(mask_axis, mask).to_owned();
-            let deriv = corner_cache_axis_pass(grids[axis], field.view(), axis, &bc);
+            let deriv = corner_cache_axis_pass(grids[axis], field.view(), axis, bc);
             cache.index_axis_mut(mask_axis, mask | bit).assign(&deriv);
         }
     }

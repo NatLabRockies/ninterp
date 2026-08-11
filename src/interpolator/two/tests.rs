@@ -136,6 +136,67 @@ fn test_cubic_c2_clamped_short_axis() {
 }
 
 #[test]
+fn test_cubic_c2_not_a_knot_cubic_exact() {
+    // f(x, y) = x^3 + x^2*y + x*y^2 + y^3: a genuine cubic in both axes (every term has
+    // total degree 3), unlike `interior_accuracy`'s quadratic data above. `NotAKnot`
+    // reproduces any degree-<=3 polynomial exactly, so this is a stronger test of the
+    // corner cache's mixed-partial term (d^2f/dxdy = 2x + 2y, non-constant) than a
+    // quadratic can be, since a quadratic's third derivative is already zero everywhere.
+    fn f(x: f64, y: f64) -> f64 {
+        x.powi(3) + x.powi(2) * y + x * y.powi(2) + y.powi(3)
+    }
+    let grid = [0., 1., 2., 3.];
+    let values = Array2::from_shape_fn((4, 4), |(i, j)| f(grid[i], grid[j]));
+    let interp = Interp2D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        values,
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &(x, y) in &[(0.5, 0.5), (1.5, 2.5), (2.5, 1.5), (0.25, 2.75)] {
+        assert_approx_eq!(interp.interpolate(&[x, y]).unwrap(), f(x, y));
+    }
+}
+
+#[test]
+fn test_cubic_c2_clamped_cubic_exact() {
+    // f(x, y) = x^3 + y^3 (separable, no cross term). `Clamped`'s endpoint derivative is
+    // a single scalar per axis, applied to every pencil along it regardless of the other
+    // axis's position -- so it can only be exact if the true partial derivative at each
+    // boundary doesn't vary with the other axis. A cross-term function (like the
+    // `NotAKnot` test above) can't satisfy that in general; this separable one
+    // (fx = 3x^2, fy = 3y^2, each independent of the other axis) can. Cross-term
+    // correctness is already covered by `not_a_knot_cubic_exact`; this test is about
+    // `Clamped` correctly using its supplied derivatives, not re-proving that.
+    fn f(x: f64, y: f64) -> f64 {
+        x.powi(3) + y.powi(3)
+    }
+    let grid = [0., 1., 2., 3.];
+    let values = Array2::from_shape_fn((4, 4), |(i, j)| f(grid[i], grid[j]));
+    let mut strategy = strategy::CubicC2::natural();
+    strategy.boundary_conditions = vec![
+        strategy::CubicBoundaryConditions::Clamped {
+            left: 0.,
+            right: 27.,
+        }; // f'(0) = 0, f'(3) = 27 on both axes
+        2
+    ];
+    let interp = Interp2D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        values,
+        strategy,
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &(x, y) in &[(0.5, 0.5), (1.5, 2.5), (2.5, 1.5), (0.25, 2.75)] {
+        assert_approx_eq!(interp.interpolate(&[x, y]).unwrap(), f(x, y));
+    }
+}
+
+#[test]
 fn test_invalid_args() {
     let interp = Interp2D::new(
         array![0.05, 0.10, 0.15],

@@ -56,6 +56,48 @@ fn test_cubic_spline_two_points() {
 }
 
 #[test]
+fn test_cubic_c2_not_a_knot_cubic_exact() {
+    // f(x) = x^3: a genuine cubic (nonzero third derivative), unlike the quadratic data
+    // in `knot_exactness` above. `NotAKnot`'s defining property is exact reproduction of
+    // any degree-<=3 polynomial, at interior points and via boundary extrapolation, not
+    // just at grid points -- quadratics satisfy that trivially since their third
+    // derivative is already zero everywhere, so this is a stronger test.
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 8., 27.], // f(x) = x^3
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    assert_approx_eq!(interp.interpolate(&[0.5]).unwrap(), 0.125);
+    assert_approx_eq!(interp.interpolate(&[1.5]).unwrap(), 3.375);
+    assert_approx_eq!(interp.interpolate(&[2.5]).unwrap(), 15.625);
+    // Extrapolation via the boundary cubic polynomial is exact too, since the "boundary
+    // polynomial" already equals the true global cubic everywhere.
+    assert_approx_eq!(interp.interpolate(&[-1.0]).unwrap(), -1.0);
+    assert_approx_eq!(interp.interpolate(&[4.0]).unwrap(), 64.0);
+}
+
+#[test]
+fn test_cubic_c2_clamped_cubic_exact() {
+    // Same f(x) = x^3, but with `Clamped` given the true endpoint derivatives
+    // (f'(x) = 3x^2, so f'(0) = 0, f'(3) = 27). Exact reproduction here confirms
+    // `Clamped` correctly uses the supplied derivative, not just that the solve runs.
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 8., 27.],
+        strategy::CubicC2::clamped(0., 27.),
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    assert_approx_eq!(interp.interpolate(&[0.5]).unwrap(), 0.125);
+    assert_approx_eq!(interp.interpolate(&[1.5]).unwrap(), 3.375);
+    assert_approx_eq!(interp.interpolate(&[2.5]).unwrap(), 15.625);
+    assert_approx_eq!(interp.interpolate(&[-1.0]).unwrap(), -1.0);
+    assert_approx_eq!(interp.interpolate(&[4.0]).unwrap(), 64.0);
+}
+
+#[test]
 fn test_invalid_args() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
