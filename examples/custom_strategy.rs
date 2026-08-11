@@ -70,6 +70,33 @@ where
         Ok(point.iter().fold(1., |acc, x| acc * x))
     }
 
+    // We can also override the batched entry point instead of relying on the default,
+    // which just loops `interpolate` once per point. A real strategy might use this to
+    // amortize per-call setup across the batch (e.g. sorting points once for a single
+    // locate sweep instead of one binary search per point); `CustomStrategy` has nothing
+    // to amortize, so this override just demonstrates the shape.
+    //
+    // There is a default implementation that loops `interpolate`, so leave this out if
+    // there's nothing to amortize.
+    fn batch_interpolate_into(
+        &self,
+        _data: &InterpData2DBase<D>,
+        points: &[[f32; 2]],
+        out: &mut [f32],
+    ) -> Result<(), ninterp::error::InterpolateError> {
+        if out.len() != points.len() {
+            return Err(ninterp::error::InterpolateError::OutputLength {
+                expected: points.len(),
+                found: out.len(),
+            });
+        }
+        println!("batch interpolating {} points!", points.len());
+        for (o, point) in out.iter_mut().zip(points) {
+            *o = point.iter().fold(1., |acc, x| acc * x);
+        }
+        Ok(())
+    }
+
     // Disallow extrapolation.
     //
     // Returning `false` will mean a combination of
@@ -98,4 +125,9 @@ fn main() {
     .unwrap();
     // 2 * 3 == 6
     assert_eq!(interp.interpolate(&[2., 3.]).unwrap(), 6.);
+
+    // `batch_interpolate` funnels every point into the `batch_interpolate_into` override
+    // above, instead of calling `interpolate` once per point.
+    let ys = interp.batch_interpolate(&[[2., 3.], [1., 4.]]).unwrap();
+    assert_eq!(ys, vec![6., 4.]);
 }
