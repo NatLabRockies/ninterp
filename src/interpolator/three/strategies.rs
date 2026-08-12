@@ -283,6 +283,7 @@ where
     D::Elem: Float + Debug,
 {
     fn validate(&self, data: &InterpData3DBase<D>) -> Result<(), ValidateError> {
+        validate_bc_count(&self.boundary_conditions, data.grid.len())?;
         for (dim, grid) in data.grid.iter().enumerate() {
             validate_bc_min_points(self.bc_for_dim(dim), grid.len(), dim)?;
         }

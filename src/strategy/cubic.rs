@@ -203,6 +203,30 @@ pub(crate) fn validate_bc_min_points<T>(
     Ok(())
 }
 
+/// Checks `boundary_conditions.len()` against `ndim`: must be either 1 (broadcast to
+/// every axis, [`CubicC2::bc_for_dim`]'s other case) or exactly `ndim` (one per axis).
+/// `bc_for_dim` indexes unchecked assuming this already holds, so every
+/// `Strategy1D`/`2D`/`3D`/`ND::validate` must call this before any `bc_for_dim` call --
+/// mirrors [`Step::validate_len`](crate::strategy::Step::validate_len)'s check for the
+/// same kind of per-dimension config vec.
+pub(crate) fn validate_bc_count<T>(
+    bcs: &[CubicBoundaryConditions<T>],
+    ndim: usize,
+) -> Result<(), ValidateError> {
+    let found = bcs.len();
+    if found == 1 || found == ndim {
+        return Ok(());
+    }
+    let expected = if ndim == 1 {
+        "1".to_string()
+    } else {
+        format!("1 or {ndim}")
+    };
+    Err(ValidateError::Other(format!(
+        "CubicC2 has {found} boundary conditions but interpolator is {ndim}-D (expected {expected})"
+    )))
+}
+
 /// Precomputes second-derivative coefficients for every 1-D pencil along the innermost
 /// (last) axis of `values`, for [`spline_eval_nd_cached`] to look up in O(1) instead of
 /// re-solving on every `interpolate` call. Only the innermost axis's system is

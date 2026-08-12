@@ -169,6 +169,83 @@ fn test_cubic_c2_not_a_knot_cubic_exact() {
 }
 
 #[test]
+fn test_cubic_c2_notaknot_enough_points() {
+    // NotAKnot requires >= 4 points per axis; axes 0 and 1 have enough on their own, so
+    // this pins down that `validate` checks every axis, not just the first it sees.
+    let result = Interp3D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        array![0., 1., 2.],
+        Array3::from_shape_fn((4, 4, 3), |(i, j, k)| (i + j + k) as f64),
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    );
+    assert!(
+        result.is_err(),
+        "NotAKnot with a 3-point axis should fail validation, got Ok"
+    );
+    let result = Interp3D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        Array3::from_shape_fn((4, 4, 4), |(i, j, k)| (i + j + k) as f64),
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    );
+    assert!(
+        result.is_ok(),
+        "NotAKnot with all axes >= 4 points should succeed, got Err: {:?}",
+        result.unwrap_err()
+    );
+}
+
+#[test]
+fn test_cubic_c2_3d_periodic() {
+    // Ground truth: a *triple product* of three independent periodic 1D cubic
+    // splines, S_A(x) * S_B(y) * S_C(z). As with the 2D case, cubic spline
+    // construction is a linear operator on its data values, so within any
+    // single grid cell the product is exactly a tricubic polynomial -- exactly
+    // reproduced by the Hermite patch given exact corner derivatives (product
+    // rule for all combinations):
+    //   value = S_A*S_B*S_C
+    //   dx = S_A'*S_B*S_C,      dy = S_A*S_B'*S_C,      dz = S_A*S_B*S_C'
+    //   dxy = S_A'*S_B'*S_C,    dyz = S_A*S_B'*S_C',    dxz = S_A'*S_B*S_C'
+    //   dxyz = S_A'*S_B'*S_C'
+    // All four query points below have a genuinely nonzero triple product
+    // S_A'*S_B'*S_C' (verified numerically against scipy), so every case
+    // exercises the full corner-derivative cache -- including dxyz, the
+    // hardest cross term to get subtly wrong -- rather than trivially
+    // validating against zero regardless of correctness.
+    let interp = Interp3D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0., 1., 2.],
+        array![0., 1., 2., 3.],
+        array![
+            [[2., 6., 2., 2.], [1., 3., 1., 1.], [2., 6., 2., 2.]],
+            [[4., 12., 4., 4.], [2., 6., 2., 2.], [4., 12., 4., 4.]],
+            [[2., 6., 2., 2.], [1., 3., 1., 1.], [2., 6., 2., 2.]],
+            [[6., 18., 6., 6.], [3., 9., 3., 3.], [6., 18., 6., 6.]],
+            [[2., 6., 2., 2.], [1., 3., 1., 1.], [2., 6., 2., 2.]],
+        ],
+        strategy::CubicC2::periodic(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+
+    // (query x, query y, query z, scipy-derived S_A(x) * S_B(y) * S_C(z))
+    let cases = [
+        (0.5, 0.5, 0.5, 4.74609375),
+        (2.5, 1.5, 1.5, 7.06640625),
+        (3.5, 0.5, 1.5, 7.06640625),
+        (0.25, 1.75, 0.75, 5.388332366943359),
+    ];
+
+    for (x, y, z, expected) in cases {
+        assert_approx_eq!(interp.interpolate(&[x, y, z]).unwrap(), expected);
+    }
+}
+
+#[test]
 fn test_cubic_c2_clamped_cubic_exact() {
     // f(x, y, z) = x^3 + y^3 + z^3 (separable, no cross terms) -- `Clamped`'s endpoint
     // derivative is one scalar per axis shared by every pencil along it, so it's only
@@ -694,4 +771,26 @@ fn test_serde() {
     let ser3 = "{\"grid\":[{\"v\":1,\"dim\":[2],\"data\":[0.0,1.0]},{\"v\":1,\"dim\":[3],\"data\":[0.0,1.0,2.0]},{\"v\":1,\"dim\":[4],\"data\":[0.0,1.0,2.0,3.0]}],\"values\":{\"v\":1,\"dim\":[2,3,4],\"data\":[0.6,0.8,1.0,1.2,0.8,1.0,1.2,1.4,1.0,1.2,1.4,1.6,0.8,1.0,1.2,1.4,1.0,1.2,1.4,1.6,1.2,1.4,1.6,1.8]}}";
     let de3: InterpData3D<_> = serde_json::from_str(ser3).unwrap();
     assert_eq!(interp.data, de3);
+}
+
+#[test]
+fn test_cubic_c2_bc_count_mismatch() {
+    // `CubicC2::bc_for_dim` indexes `boundary_conditions` unchecked, assuming its length
+    // is 1 (broadcast) or exactly `ndim`. Before `validate_bc_count`, a mismatched length
+    // (here 2 entries for a 3-D grid) reached that indexing via the per-dim
+    // `validate_bc_min_points` loop and panicked instead of returning a `ValidateError`,
+    // even though `Interpolator::new` is documented as a fallible `Result`-returning
+    // constructor. Regression test for that panic.
+    let result = Interp3D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        Array3::from_shape_fn((4, 4, 4), |(i, j, k)| (i + j + k) as f64),
+        strategy::CubicC2::new(vec![
+            strategy::CubicBoundaryConditions::Natural,
+            strategy::CubicBoundaryConditions::Natural,
+        ]),
+        Extrapolate::Error,
+    );
+    assert!(matches!(result.unwrap_err(), ValidateError::Other(_)));
 }

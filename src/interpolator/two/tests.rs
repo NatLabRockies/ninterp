@@ -159,6 +159,40 @@ fn test_cubic_c2_not_a_knot_cubic_exact() {
 }
 
 #[test]
+fn test_cubic_c2_notaknot_enough_points() {
+    // NotAKnot requires >= 4 points per axis; axis 0 has enough on its own, so this
+    // pins down that `validate` actually checks axis 1 too, not just the first one.
+    let result = Interp2D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2.],
+        array![[0., 1., 2.], [1., 2., 3.], [2., 3., 4.], [3., 4., 5.]],
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    );
+    assert!(
+        result.is_err(),
+        "NotAKnot with a 3-point axis should fail validation, got Ok"
+    );
+    let result = Interp2D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        array![
+            [0., 1., 2., 3.],
+            [1., 2., 3., 4.],
+            [2., 3., 4., 5.],
+            [3., 4., 5., 6.],
+        ],
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    );
+    assert!(
+        result.is_ok(),
+        "NotAKnot with all axes >= 4 points should succeed, got Err: {:?}",
+        result.unwrap_err()
+    );
+}
+
+#[test]
 fn test_cubic_c2_clamped_cubic_exact() {
     // f(x, y) = x^3 + y^3 (separable, no cross term). `Clamped`'s endpoint derivative is
     // a single scalar per axis, applied to every pencil along it regardless of the other
@@ -213,6 +247,47 @@ fn test_cubic_c2_clamped_uses_given_derivative() {
          as if the supplied derivatives were ignored",
         f(0.5, 0.5)
     );
+}
+
+#[test]
+fn test_cubic_c2_2d_periodic() {
+    // Ground truth: a *product* of two independent periodic 1D cubic splines,
+    // S_A(x) * S_B(y), rather than a sum. Cubic spline construction is a linear
+    // operator on its data values, so within any single grid cell S_A(x)*S_B(y)
+    // is exactly a bicubic polynomial in that cell -- reproduced exactly by the
+    // Hermite patch given exact corner derivatives (product rule):
+    //   value = S_A(x)*S_B(y),  dx = S_A'(x)*S_B(y),
+    //   dy = S_A(x)*S_B'(y),    dxy = S_A'(x)*S_B'(y)
+    // Unlike an additive S_A(x)+S_B(y) oracle, the mixed partial dxy here is
+    // genuinely nonzero, so this actually exercises the corner-derivative
+    // cache's cross-derivative computation rather than trivially validating
+    // against zero regardless of whether that code is correct.
+    let interp = Interp2D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0., 1., 2.],
+        array![
+            [2., 1., 2.],
+            [4., 2., 4.],
+            [2., 1., 2.],
+            [6., 3., 6.],
+            [2., 1., 2.],
+        ],
+        strategy::CubicC2::periodic(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+
+    // (query x, query y, scipy-derived S_A(x) * S_B(y))
+    let cases = [
+        (0.5, 0.5, 2.109375),
+        (2.5, 1.5, 3.140625),
+        (3.5, 0.5, 3.140625),
+        (0.25, 1.75, 1.9373779296875),
+    ];
+
+    for (x, y, expected) in cases {
+        assert_approx_eq!(interp.interpolate(&[x, y]).unwrap(), expected);
+    }
 }
 
 #[test]

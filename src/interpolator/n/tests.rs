@@ -99,6 +99,126 @@ fn test_cubic_c2_periodic_outer_axis() {
 }
 
 #[test]
+fn test_cubic_c2_not_a_knot_cubic_exact() {
+    // f(x, y) = x^3 + x^2*y + x*y^2 + y^3: same genuine-cubic cross-term function as the
+    // `Interp2D` version. `test_cubic_c2_cached_vs_uncached` (in two/tests.rs) only
+    // proves `InterpND` agrees with `Interp2D` on a zero-mixed-partial function
+    // (f(x,y)=x^2+y); it doesn't independently confirm `InterpND`'s own outer-axis
+    // recursive-collapse path (`spline_eval_1d`, not `Interp2D`'s corner-derivative
+    // cache) reproduces a genuine bicubic -- one with a nonzero, non-constant mixed
+    // partial d^2f/dxdy = 2x + 2y -- exactly rather than approximately.
+    fn f(x: f64, y: f64) -> f64 {
+        x.powi(3) + x.powi(2) * y + x * y.powi(2) + y.powi(3)
+    }
+    let grid = [0., 1., 2., 3.];
+    let interp = InterpND::new(
+        vec![array![0., 1., 2., 3.], array![0., 1., 2., 3.]],
+        Array2::from_shape_fn((4, 4), |(i, j)| f(grid[i], grid[j])).into_dyn(),
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &(x, y) in &[(0.5, 0.5), (1.5, 2.5), (2.5, 1.5), (0.25, 2.75)] {
+        assert_approx_eq!(interp.interpolate(&[x, y]).unwrap(), f(x, y));
+    }
+}
+
+#[test]
+fn test_cubic_c2_clamped_uses_given_derivative() {
+    // Differential check, same reasoning as the 1D/2D versions: exact reproduction alone
+    // can't tell "Clamped used the supplied derivative" apart from "Clamped silently
+    // behaved like NotAKnot", since NotAKnot reproduces this same separable-cubic data
+    // exactly with no derivative info at all. Unlike the 1D/2D versions, this exercises
+    // `InterpND`'s own `Clamped` handling on an outer axis (plain `compute_m` via
+    // `spline_eval_1d`, not the 2D/3D corner cache's Clamped-to-Natural substitution for
+    // the mixed-partial second pass) -- a code path `Clamped` had never been run through
+    // at all before this test, let alone verified to actually use its supplied value.
+    fn f(x: f64, y: f64) -> f64 {
+        x.powi(3) + y.powi(3)
+    }
+    let grid = [0., 1., 2., 3.];
+    let interp = InterpND::new(
+        vec![array![0., 1., 2., 3.], array![0., 1., 2., 3.]],
+        Array2::from_shape_fn((4, 4), |(i, j)| f(grid[i], grid[j])).into_dyn(),
+        strategy::CubicC2::clamped(999., 999.), // true derivatives are 0 and 27
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let wrong = interp.interpolate(&[0.5, 0.5]).unwrap();
+    assert!(
+        (wrong - f(0.5, 0.5)).abs() > 1.0,
+        "Clamped(999, 999) gave {wrong}, suspiciously close to the true f(0.5, 0.5) = {} \
+         as if the supplied derivatives were ignored",
+        f(0.5, 0.5)
+    );
+}
+
+#[test]
+fn test_cubic_c2_periodic_scipy_oracle() {
+    // Same additive-corner-derivative reasoning and ground truth as
+    // `Interp2D::test_cubic_c2_2d_periodic` (product of two independent periodic 1D
+    // splines, scipy `CubicSpline(bc_type='periodic')`), but built via `InterpND`
+    // directly with the 5-point axis first (outer, re-solved per query via
+    // `spline_eval_1d`) and the 3-point axis second (inner, cached at construction) --
+    // the same axis roles `test_cubic_c2_periodic_outer_axis` above uses, but with a
+    // real numerical oracle instead of just an is-finite check. This is `InterpND`'s
+    // own periodic outer-axis solve, independent of `Interp2D`'s corner-cache path.
+    let interp = InterpND::new(
+        vec![array![0., 1., 2., 3., 4.], array![0., 1., 2.]],
+        array![
+            [2., 1., 2.],
+            [4., 2., 4.],
+            [2., 1., 2.],
+            [6., 3., 6.],
+            [2., 1., 2.],
+        ]
+        .into_dyn(),
+        strategy::CubicC2::periodic(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+
+    // (query x, query y, scipy-derived S_A(x) * S_B(y))
+    let cases = [
+        (0.5, 0.5, 2.109375),
+        (2.5, 1.5, 3.140625),
+        (3.5, 0.5, 3.140625),
+        (0.25, 1.75, 1.9373779296875),
+    ];
+
+    for (x, y, expected) in cases {
+        assert_approx_eq!(interp.interpolate(&[x, y]).unwrap(), expected);
+    }
+}
+
+#[test]
+fn test_cubic_c2_notaknot_enough_points() {
+    // NotAKnot requires >= 4 points per axis; axis 0 has enough on its own, so this
+    // pins down that `StrategyND::validate` checks every axis, not just the first.
+    let result = InterpND::new(
+        vec![array![0., 1., 2., 3.], array![0., 1., 2.]],
+        Array2::from_shape_fn((4, 3), |(i, j)| (i + j) as f64).into_dyn(),
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    );
+    assert!(
+        result.is_err(),
+        "NotAKnot with a 3-point axis should fail validation, got Ok"
+    );
+    let result = InterpND::new(
+        vec![array![0., 1., 2., 3.], array![0., 1., 2., 3.]],
+        Array2::from_shape_fn((4, 4), |(i, j)| (i + j) as f64).into_dyn(),
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    );
+    assert!(
+        result.is_ok(),
+        "NotAKnot with all axes >= 4 points should succeed, got Err: {:?}",
+        result.unwrap_err()
+    );
+}
+
+#[test]
 fn test_linear() {
     let interp = InterpND::new(
         vec![

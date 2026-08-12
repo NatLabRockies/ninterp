@@ -154,6 +154,34 @@ fn test_cubic_c2_not_a_knot_cubic_exact() {
 }
 
 #[test]
+fn test_cubic_c2_notaknot_enough_points() {
+    // NotAKnot requires ≥ 4 points to define a cubic spline
+    // not enough points
+    let result = Interp1D::new(
+        array![0., 1., 2.],
+        array![0., 1., 4.],
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    );
+    assert!(
+        result.is_err(),
+        "NotAKnot on a 3-point axis should fail validation, got Ok"
+    );
+    // enough points
+    let result = Interp1D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 4., 9.],
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    );
+    assert!(
+        result.is_ok(),
+        "NotAKnot on a 4-point axis should succeed, got Err: {:?}",
+        result.unwrap_err()
+    );
+}
+
+#[test]
 fn test_cubic_c2_clamped_cubic_exact() {
     // Same f(x) = x^3, but with `Clamped` given the true endpoint derivatives
     // (f'(x) = 3x^2, so f'(0) = 0, f'(3) = 27). Exact reproduction here confirms

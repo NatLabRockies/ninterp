@@ -209,6 +209,7 @@ where
     D::Elem: Float + Debug,
 {
     fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
+        validate_bc_count(&self.boundary_conditions, data.ndim())?;
         for dim in 0..data.ndim() {
             validate_bc_min_points(self.bc_for_dim(dim), data.grid[dim].len(), dim)?;
         }
