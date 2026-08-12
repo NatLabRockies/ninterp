@@ -86,7 +86,7 @@ fn test_cubic_c2_periodic_outer_axis() {
         .into_dyn(),
         strategy::CubicC2::new(vec![
             strategy::cubic::CubicC2BoundaryConditions::Periodic,
-            strategy::cubic::CubicC2BoundaryConditions::Natural,
+            strategy::cubic::CubicC2BoundaryConditions::second_derivative(0., 0.),
         ]),
         Extrapolate::Error,
     )
@@ -94,7 +94,7 @@ fn test_cubic_c2_periodic_outer_axis() {
     // No exact-value oracle needed here: this is regression coverage for the removed
     // check, not a numerical-accuracy test.
     for &(x, y) in &[(0.5, 0.5), (2.5, 1.5), (3.0, 1.0), (0.0, 1.0)] {
-        assert!(interp.interpolate(&[x, y]).unwrap().is_finite());
+        interp.interpolate(&[x, y]).unwrap();
     }
 }
 

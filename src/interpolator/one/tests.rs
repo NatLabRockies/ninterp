@@ -182,6 +182,28 @@ fn test_cubic_c2_notaknot_enough_points() {
 }
 
 #[test]
+fn test_cubic_c2_one_sided_not_a_knot_needs_only_3_points() {
+    // A single `NotAKnot` endpoint, paired with a non-eliminating endpoint on the other
+    // side, only needs 3 points; the symmetric case above needs 4.
+    let result = Interp1D::new(
+        array![0., 1., 2.],
+        array![0., 1., 4.],
+        strategy::CubicC2::new(vec![
+            strategy::cubic::CubicC2BoundaryConditions::Endpoints {
+                lower: strategy::cubic::CubicC2Endpoint::NotAKnot,
+                upper: strategy::cubic::CubicC2Endpoint::SecondDerivative(0.0),
+            },
+        ]),
+        Extrapolate::Error,
+    );
+    assert!(
+        result.is_ok(),
+        "one-sided NotAKnot on a 3-point axis should succeed, got Err: {:?}",
+        result.unwrap_err()
+    );
+}
+
+#[test]
 fn test_cubic_c2_clamped_cubic_exact() {
     // Same f(x) = x^3, but with `Clamped` given the true endpoint derivatives
     // (f'(x) = 3x^2, so f'(0) = 0, f'(3) = 27). Exact reproduction here confirms

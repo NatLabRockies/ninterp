@@ -165,12 +165,9 @@ fn test_cubic_c2_clamped_short_axis() {
             [[1., 2., 3.], [2., 3., 4.], [3., 4., 5.]],
         ], // f(x, y, z) = x + y + z
         strategy::CubicC2::new(vec![
-            strategy::cubic::CubicC2BoundaryConditions::Clamped {
-                left: 1.,
-                right: 1.,
-            },
-            strategy::cubic::CubicC2BoundaryConditions::Natural,
-            strategy::cubic::CubicC2BoundaryConditions::Natural,
+            strategy::cubic::CubicC2BoundaryConditions::first_derivative(1., 1.),
+            strategy::cubic::CubicC2BoundaryConditions::second_derivative(0., 0.),
+            strategy::cubic::CubicC2BoundaryConditions::second_derivative(0., 0.),
         ]),
         Extrapolate::Error,
     )
@@ -798,8 +795,8 @@ fn test_cubic_c2_bc_count_mismatch() {
         array![0., 1., 2., 3.],
         Array3::from_shape_fn((4, 4, 4), |(i, j, k)| (i + j + k) as f64),
         strategy::CubicC2::new(vec![
-            strategy::cubic::CubicC2BoundaryConditions::Natural,
-            strategy::cubic::CubicC2BoundaryConditions::Natural,
+            strategy::cubic::CubicC2BoundaryConditions::second_derivative(0., 0.),
+            strategy::cubic::CubicC2BoundaryConditions::second_derivative(0., 0.),
         ]),
         Extrapolate::Error,
     );

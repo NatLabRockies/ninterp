@@ -113,8 +113,9 @@ where
 {
     /// Checks the boundary-condition count (must be 1) and the grid size against the
     /// configured BC's minimum point requirement (e.g.
-    /// [`CubicC2BoundaryConditions::NotAKnot`] needs at least 4) before [`Strategy1D::init`]
-    /// attempts the real computation.
+    /// [`CubicC2Endpoint::NotAKnot`](crate::strategy::cubic::CubicC2Endpoint::NotAKnot)
+    /// needs at least 3 or 4, depending on whether one or both endpoints use it) before
+    /// [`Strategy1D::init`] attempts the real computation.
     fn validate(&self, data: &InterpData1DBase<D>) -> Result<(), ValidateError> {
         self.boundary_conditions
             .validate_len(1, "CubicC2", "boundary conditions")?;

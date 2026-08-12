@@ -155,11 +155,8 @@ fn test_cubic_c2_clamped_short_axis() {
         array![0., 1., 2., 3.],
         array![[0., 1., 2., 3.], [1., 2., 3., 4.]], // f(x, y) = x + y
         strategy::CubicC2::new(vec![
-            strategy::cubic::CubicC2BoundaryConditions::Clamped {
-                left: 1.,
-                right: 1.,
-            },
-            strategy::cubic::CubicC2BoundaryConditions::Natural,
+            strategy::cubic::CubicC2BoundaryConditions::first_derivative(1., 1.),
+            strategy::cubic::CubicC2BoundaryConditions::second_derivative(0., 0.),
         ]),
         Extrapolate::Error,
     )

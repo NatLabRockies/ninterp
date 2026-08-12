@@ -59,21 +59,22 @@ pub struct CubicC2<T> {
 }
 
 /// Boundary conditions for [`CubicC2`].
+///
+/// [`Endpoints::lower`](CubicC2BoundaryConditions::Endpoints)/`upper` are independent, so
+/// mixing types (e.g. [`NotAKnot`](CubicC2Endpoint::NotAKnot) on one side,
+/// [`FirstDerivative`](CubicC2Endpoint::FirstDerivative) on the other) is allowed. The
+/// common symmetric cases have shorthand constructors: [`not_a_knot`](Self::not_a_knot),
+/// [`first_derivative`](Self::first_derivative), [`second_derivative`](Self::second_derivative);
+/// [`CubicC2::natural`] additionally shorthands `second_derivative(0, 0)`.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub enum CubicC2BoundaryConditions<T> {
-    /// C³ continuity at the second and penultimate knots; no extra input required.
-    /// Generally gives better accuracy than
-    /// [`Natural`](CubicC2BoundaryConditions::Natural) for smooth functions.
-    NotAKnot,
-    /// Zero second derivative at both endpoints.
-    Natural,
-    /// Specified first derivative at both endpoints.
-    Clamped {
-        /// First derivative at the left (lower) endpoint.
-        left: T,
-        /// First derivative at the right (upper) endpoint.
-        right: T,
+    /// Condition applied independently at each end of the axis.
+    Endpoints {
+        /// Condition at the lower endpoint.
+        lower: CubicC2Endpoint<T>,
+        /// Condition at the upper endpoint.
+        upper: CubicC2Endpoint<T>,
     },
     /// First and second derivatives match at both endpoints. By convention
     /// `values[n]` (the last point along this axis) should equal `values[0]`, since
@@ -81,6 +82,48 @@ pub enum CubicC2BoundaryConditions<T> {
     /// used like any other data point (both to build the periodic system and to
     /// evaluate the last interval), just never compared against `values[0]`.
     Periodic,
+}
+
+/// A single endpoint's condition, for [`CubicC2BoundaryConditions::Endpoints`].
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+pub enum CubicC2Endpoint<T> {
+    /// C³ continuity at the second (from this end) knot; no extra input required.
+    /// Generally gives better accuracy than natural (a zero
+    /// [`SecondDerivative`](Self::SecondDerivative)) for smooth functions. Requires at
+    /// least 3 grid points along this axis (4 if both endpoints are `NotAKnot`).
+    NotAKnot,
+    /// Specified first derivative at this endpoint ("clamped").
+    FirstDerivative(T),
+    /// Specified second derivative at this endpoint. Zero, the classic "natural"
+    /// condition, has a shorthand: [`CubicC2::natural`].
+    SecondDerivative(T),
+}
+
+impl<T> CubicC2BoundaryConditions<T> {
+    /// Not-a-knot at both ends. Requires at least 4 data points per dimension.
+    pub fn not_a_knot() -> Self {
+        Self::Endpoints {
+            lower: CubicC2Endpoint::NotAKnot,
+            upper: CubicC2Endpoint::NotAKnot,
+        }
+    }
+
+    /// Specified first derivative at both endpoints.
+    pub fn first_derivative(lower: T, upper: T) -> Self {
+        Self::Endpoints {
+            lower: CubicC2Endpoint::FirstDerivative(lower),
+            upper: CubicC2Endpoint::FirstDerivative(upper),
+        }
+    }
+
+    /// Specified second derivative at both endpoints.
+    pub fn second_derivative(lower: T, upper: T) -> Self {
+        Self::Endpoints {
+            lower: CubicC2Endpoint::SecondDerivative(lower),
+            upper: CubicC2Endpoint::SecondDerivative(upper),
+        }
+    }
 }
 
 /// Placeholder for [`CubicC2::cache`] before [`Strategy1D::init`]/`2D`/`3D`/`ND`
@@ -122,26 +165,31 @@ impl<T> CubicC2<T> {
     /// Requires at least 4 data points per dimension.
     pub fn not_a_knot() -> Self {
         Self {
-            boundary_conditions: PerAxis::Broadcast(CubicC2BoundaryConditions::NotAKnot),
+            boundary_conditions: PerAxis::Broadcast(CubicC2BoundaryConditions::not_a_knot()),
             cache: empty_cache(),
         }
     }
 
     /// Create a cubic spline with natural (zero second derivative at endpoints) BCs.
-    pub fn natural() -> Self {
+    pub fn natural() -> Self
+    where
+        T: Zero,
+    {
         Self {
-            boundary_conditions: PerAxis::Broadcast(CubicC2BoundaryConditions::Natural),
+            boundary_conditions: PerAxis::Broadcast(CubicC2BoundaryConditions::second_derivative(
+                T::zero(),
+                T::zero(),
+            )),
             cache: empty_cache(),
         }
     }
 
     /// Create a cubic spline with specified first derivatives at both endpoints.
-    pub fn clamped(left: T, right: T) -> Self {
+    pub fn clamped(lower: T, upper: T) -> Self {
         Self {
-            boundary_conditions: PerAxis::Broadcast(CubicC2BoundaryConditions::Clamped {
-                left,
-                right,
-            }),
+            boundary_conditions: PerAxis::Broadcast(CubicC2BoundaryConditions::first_derivative(
+                lower, upper,
+            )),
             cache: empty_cache(),
         }
     }
@@ -230,55 +278,84 @@ pub(crate) fn compute_m<T: Float>(
         .collect();
 
     match bc {
-        CubicC2BoundaryConditions::NotAKnot => {
-            // n >= 3 (grid_len >= 4) is validated by `validate_bc_min_points` before
-            // this is ever reached through the normal `validate()` -> `init()` path.
-            let mut sub: Vec<T> = h[1..n - 2].to_vec();
-            sub.push(h[n - 2] * h[n - 2] - h[n - 1] * h[n - 1]);
-            let mut sup = vec![h[1] * h[1] - h[0] * h[0]];
-            sup.extend_from_slice(&h[2..n - 1]);
-            let mut diag = vec![(h[0] + h[1]) * (h[0] + two * h[1])];
-            for k in 1..n - 2 {
-                diag.push(two * (h[k] + h[k + 1]));
+        CubicC2BoundaryConditions::Endpoints { lower, upper } => {
+            // Each endpoint contributes either a direct boundary row (`Some`, referencing
+            // only its own knot and its immediate interior neighbor) or, for `NotAKnot`,
+            // `None`: that side's M is eliminated via the third-derivative-continuity
+            // relation at knot 1 (or n-1), folded into the interior equation there instead
+            // of appearing as its own unknown. `lower_row`/`upper_row` give
+            // `(diag, off_diagonal, rhs)` for the direct case.
+            let lower_row = match lower {
+                CubicC2Endpoint::NotAKnot => None,
+                CubicC2Endpoint::SecondDerivative(v) => Some((T::one(), T::zero(), *v)),
+                CubicC2Endpoint::FirstDerivative(v) => {
+                    Some((two * h[0], h[0], six * (slopes[0] - *v)))
+                }
+            };
+            let upper_row = match upper {
+                CubicC2Endpoint::NotAKnot => None,
+                CubicC2Endpoint::SecondDerivative(v) => Some((T::one(), T::zero(), *v)),
+                CubicC2Endpoint::FirstDerivative(v) => {
+                    Some((two * h[n - 1], h[n - 1], six * (*v - slopes[n - 1])))
+                }
+            };
+
+            // `validate_bc_min_points` guarantees `count >= 2` (grid_len >= 3 with one
+            // `NotAKnot` side, >= 4 with both), so the `j == 0` and `j == count - 1`
+            // branches below are always distinct rows.
+            let start = if lower_row.is_some() { 0 } else { 1 };
+            let end = if upper_row.is_some() { n } else { n - 1 };
+            let count = end - start + 1;
+
+            let mut sub = Vec::with_capacity(count - 1);
+            let mut diag = Vec::with_capacity(count);
+            let mut sup = Vec::with_capacity(count - 1);
+            let mut rhs = Vec::with_capacity(count);
+            for j in 0..count {
+                let i = start + j;
+                if j == 0 {
+                    if let Some((diag_v, sup_v, rhs_v)) = lower_row {
+                        diag.push(diag_v);
+                        sup.push(sup_v);
+                        rhs.push(rhs_v);
+                    } else {
+                        // Folds the eliminated M[0] into knot 1's interior equation.
+                        diag.push((h[0] + h[1]) * (h[0] + two * h[1]));
+                        sup.push(h[1] * h[1] - h[0] * h[0]);
+                        rhs.push(h[1] * u[0]);
+                    }
+                } else if j == count - 1 {
+                    if let Some((diag_v, sub_v, rhs_v)) = upper_row {
+                        sub.push(sub_v);
+                        diag.push(diag_v);
+                        rhs.push(rhs_v);
+                    } else {
+                        // Mirrors the lower fold, at knot n-1 eliminating M[n].
+                        sub.push(h[n - 2] * h[n - 2] - h[n - 1] * h[n - 1]);
+                        diag.push((h[n - 2] + h[n - 1]) * (two * h[n - 2] + h[n - 1]));
+                        rhs.push(h[n - 2] * u[n - 2]);
+                    }
+                } else {
+                    sub.push(h[i - 1]);
+                    diag.push(two * (h[i - 1] + h[i]));
+                    sup.push(h[i]);
+                    rhs.push(u[i - 1]);
+                }
             }
-            diag.push((h[n - 2] + h[n - 1]) * (two * h[n - 2] + h[n - 1]));
-            let mut rhs = vec![h[1] * u[0]];
-            rhs.extend_from_slice(&u[1..n - 2]);
-            rhs.push(h[n - 2] * u[n - 2]);
             let inner = thomas(&sub, &diag, &sup, &rhs);
-            let m0 = ((h[0] + h[1]) * inner[0] - h[0] * inner[1]) / h[1];
-            let mn = ((h[n - 2] + h[n - 1]) * inner[n - 2] - h[n - 1] * inner[n - 3]) / h[n - 2];
-            let mut m = vec![m0];
-            m.extend(inner);
-            m.push(mn);
+
+            let mut m = Vec::with_capacity(n + 1);
+            if lower_row.is_none() {
+                m.push(((h[0] + h[1]) * inner[0] - h[0] * inner[1]) / h[1]);
+            }
+            m.extend_from_slice(&inner);
+            if upper_row.is_none() {
+                let last = inner.len() - 1;
+                m.push(
+                    ((h[n - 2] + h[n - 1]) * inner[last] - h[n - 1] * inner[last - 1]) / h[n - 2],
+                );
+            }
             m
-        }
-        CubicC2BoundaryConditions::Natural => {
-            let mut sub = h[..n.saturating_sub(1)].to_vec();
-            sub.push(T::zero());
-            let mut diag = vec![T::one()];
-            for k in 0..n.saturating_sub(1) {
-                diag.push(two * (h[k] + h[k + 1]));
-            }
-            diag.push(T::one());
-            let mut sup = vec![T::zero()];
-            sup.extend_from_slice(&h[1..n]);
-            let mut rhs = vec![T::zero()];
-            rhs.extend_from_slice(&u);
-            rhs.push(T::zero());
-            thomas(&sub, &diag, &sup, &rhs)
-        }
-        CubicC2BoundaryConditions::Clamped { left, right } => {
-            let (l, r) = (*left, *right);
-            let mut diag = vec![two * h[0]];
-            for k in 0..n.saturating_sub(1) {
-                diag.push(two * (h[k] + h[k + 1]));
-            }
-            diag.push(two * h[n - 1]);
-            let mut rhs = vec![six * (slopes[0] - l)];
-            rhs.extend_from_slice(&u);
-            rhs.push(six * (r - slopes[n - 1]));
-            thomas(&h, &diag, &h, &rhs)
         }
         CubicC2BoundaryConditions::Periodic => {
             // `y[n]` is read below, via `slopes[n - 1]` in the `rhs[0]` line, and
@@ -341,8 +418,8 @@ pub(crate) fn spline_eval_1d<T: Float>(
 }
 
 /// Checks `grid_len` against boundary condition `bc`'s minimum point requirement (e.g.
-/// [`CubicC2BoundaryConditions::NotAKnot`] needs at least 4), ahead of the real work in
-/// [`compute_m`].
+/// [`CubicC2Endpoint::NotAKnot`] needs at least 3 grid points on its own side, 4 if both
+/// endpoints are `NotAKnot`), ahead of the real work in [`compute_m`].
 ///
 /// Pure, no mutation; used by each dimensionality's `Strategy*D::validate`.
 pub(crate) fn validate_bc_min_points<T>(
@@ -350,9 +427,20 @@ pub(crate) fn validate_bc_min_points<T>(
     grid_len: usize,
     dim: usize,
 ) -> Result<(), ValidateError> {
-    if matches!(bc, CubicC2BoundaryConditions::NotAKnot) && grid_len < 4 {
+    let CubicC2BoundaryConditions::Endpoints { lower, upper } = bc else {
+        return Ok(());
+    };
+    let min = match (
+        matches!(lower, CubicC2Endpoint::NotAKnot),
+        matches!(upper, CubicC2Endpoint::NotAKnot),
+    ) {
+        (true, true) => 4,
+        (true, false) | (false, true) => 3,
+        (false, false) => return Ok(()),
+    };
+    if grid_len < min {
         return Err(ValidateError::Other(format!(
-            "CubicC2: dim {dim} has {grid_len} grid points; NotAKnot requires at least 4"
+            "CubicC2: dim {dim} has {grid_len} grid points; NotAKnot requires at least {min}"
         )));
     }
     Ok(())
@@ -497,14 +585,16 @@ fn corner_cache_axis_pass<T: Float>(
 /// populate the entry with that bit added. Boundary condition per axis is
 /// `bcs[axis]` when splining the raw values (`mask == 0`, this axis's own
 /// first-derivative pass). For every other `mask` (a cross-derivative pass over an
-/// already-differentiated field, not the original data), `Clamped` falls back to
-/// `Clamped { left: 0, right: 0 }`: a clamped axis fixes the same scalar derivative at
-/// every point along that boundary, so differentiating that (constant-along-the-boundary)
-/// field with respect to any other axis must itself be zero at that axis's own endpoints.
-/// That's a zero-*first*-derivative condition on the field being splined, not `Natural`'s
-/// zero-*second*-derivative one. Verified empirically: with non-separable data, only the
-/// homogeneous-`Clamped` fallback makes this cached path agree (to float precision) with
-/// `StrategyND`'s independent recursive solve; `Natural` does not.
+/// already-differentiated field, not the original data), each endpoint's
+/// [`FirstDerivative`](CubicC2Endpoint::FirstDerivative) falls back to
+/// `FirstDerivative(0)`: a clamped endpoint fixes the same scalar derivative at every
+/// point along that boundary, so differentiating that (constant-along-the-boundary) field
+/// with respect to any other axis must itself be zero at that endpoint. That's a
+/// zero-*first*-derivative condition on the field being splined, not a zero-*second*-
+/// derivative one, so `NotAKnot`/`SecondDerivative` endpoints pass through unchanged.
+/// Verified empirically: with non-separable data, only the homogeneous-`FirstDerivative`
+/// fallback makes this cached path agree (to float precision) with `StrategyND`'s
+/// independent recursive solve; a `SecondDerivative`-based fallback does not.
 pub(crate) fn compute_corner_cache<T: Float>(
     grids: &[ArrayView1<T>],
     values: ArrayViewD<T>,
@@ -522,12 +612,18 @@ pub(crate) fn compute_corner_cache<T: Float>(
     for (axis, grid) in grids.iter().enumerate() {
         let bit = 1usize << axis;
         let bc_axis = &bcs[axis];
-        let cross_bc = match bc_axis {
-            CubicC2BoundaryConditions::Clamped { .. } => CubicC2BoundaryConditions::Clamped {
-                left: T::zero(),
-                right: T::zero(),
-            },
+        let cross_endpoint = |e: &CubicC2Endpoint<T>| match e {
+            CubicC2Endpoint::FirstDerivative(_) => CubicC2Endpoint::FirstDerivative(T::zero()),
             other => other.clone(),
+        };
+        let cross_bc = match bc_axis {
+            CubicC2BoundaryConditions::Endpoints { lower, upper } => {
+                CubicC2BoundaryConditions::Endpoints {
+                    lower: cross_endpoint(lower),
+                    upper: cross_endpoint(upper),
+                }
+            }
+            CubicC2BoundaryConditions::Periodic => CubicC2BoundaryConditions::Periodic,
         };
         for mask in 0..bit {
             let bc = if mask == 0 { bc_axis } else { &cross_bc };
@@ -657,23 +753,141 @@ mod tests {
     #[test]
     fn from_bc_matches_named_constructors() {
         assert_eq!(
-            CubicC2::from(CubicC2BoundaryConditions::<f64>::NotAKnot),
+            CubicC2::from(CubicC2BoundaryConditions::<f64>::not_a_knot()),
             CubicC2::not_a_knot()
         );
         assert_eq!(
-            CubicC2::from(CubicC2BoundaryConditions::<f64>::Natural),
+            CubicC2::from(CubicC2BoundaryConditions::<f64>::second_derivative(
+                0.0, 0.0
+            )),
             CubicC2::natural()
         );
         assert_eq!(
-            CubicC2::from(CubicC2BoundaryConditions::Clamped {
-                left: 1.0,
-                right: 2.0
-            }),
+            CubicC2::from(CubicC2BoundaryConditions::first_derivative(1.0, 2.0)),
             CubicC2::clamped(1.0, 2.0)
         );
         assert_eq!(
             CubicC2::from(CubicC2BoundaryConditions::<f64>::Periodic),
             CubicC2::periodic()
         );
+    }
+
+    /// Builds the `(n+1) x (n+1)` moment system directly from `bc`'s mathematical
+    /// definition, independent of `compute_m`'s reduced/eliminated form, to cross-check
+    /// it on asymmetric endpoint combinations that this crate's other tests (all
+    /// symmetric until now) wouldn't have caught a mismatched row for.
+    fn dense_m_system(
+        x: &[f64],
+        y: &[f64],
+        bc: &CubicC2BoundaryConditions<f64>,
+    ) -> (Vec<Vec<f64>>, Vec<f64>) {
+        let n = x.len() - 1;
+        let h: Vec<f64> = (0..n).map(|i| x[i + 1] - x[i]).collect();
+        let slopes: Vec<f64> = (0..n).map(|i| (y[i + 1] - y[i]) / h[i]).collect();
+        let mut a = vec![vec![0.0; n + 1]; n + 1];
+        let mut b = vec![0.0; n + 1];
+
+        for i in 1..n {
+            a[i][i - 1] = h[i - 1];
+            a[i][i] = 2.0 * (h[i - 1] + h[i]);
+            a[i][i + 1] = h[i];
+            b[i] = 6.0 * (slopes[i] - slopes[i - 1]);
+        }
+
+        let CubicC2BoundaryConditions::Endpoints { lower, upper } = bc else {
+            panic!("dense_m_system only supports Endpoints for this test");
+        };
+        match lower {
+            CubicC2Endpoint::NotAKnot => {
+                a[0][0] = h[1];
+                a[0][1] = -(h[0] + h[1]);
+                a[0][2] = h[0];
+            }
+            CubicC2Endpoint::SecondDerivative(v) => {
+                a[0][0] = 1.0;
+                b[0] = *v;
+            }
+            CubicC2Endpoint::FirstDerivative(v) => {
+                a[0][0] = 2.0 * h[0];
+                a[0][1] = h[0];
+                b[0] = 6.0 * (slopes[0] - v);
+            }
+        }
+        match upper {
+            CubicC2Endpoint::NotAKnot => {
+                a[n][n] = h[n - 2];
+                a[n][n - 1] = -(h[n - 2] + h[n - 1]);
+                a[n][n - 2] = h[n - 1];
+            }
+            CubicC2Endpoint::SecondDerivative(v) => {
+                a[n][n] = 1.0;
+                b[n] = *v;
+            }
+            CubicC2Endpoint::FirstDerivative(v) => {
+                a[n][n] = 2.0 * h[n - 1];
+                a[n][n - 1] = h[n - 1];
+                b[n] = 6.0 * (v - slopes[n - 1]);
+            }
+        }
+        (a, b)
+    }
+
+    /// Plain Gaussian elimination with partial pivoting, independent of `thomas`/
+    /// `cyclic_thomas`, for cross-checking their output.
+    fn dense_solve(mut a: Vec<Vec<f64>>, mut b: Vec<f64>) -> Vec<f64> {
+        let n = b.len();
+        for col in 0..n {
+            let pivot = (col..n)
+                .max_by(|&r1, &r2| a[r1][col].abs().partial_cmp(&a[r2][col].abs()).unwrap())
+                .unwrap();
+            a.swap(col, pivot);
+            b.swap(col, pivot);
+            for row in (col + 1)..n {
+                let factor = a[row][col] / a[col][col];
+                let pivot_row = a[col].clone();
+                for (c, pivot_val) in pivot_row.iter().enumerate().skip(col) {
+                    a[row][c] -= factor * pivot_val;
+                }
+                b[row] -= factor * b[col];
+            }
+        }
+        let mut x = vec![0.0; n];
+        for row in (0..n).rev() {
+            let sum: f64 = (row + 1..n).map(|c| a[row][c] * x[c]).sum();
+            x[row] = (b[row] - sum) / a[row][row];
+        }
+        x
+    }
+
+    #[test]
+    fn compute_m_matches_dense_solve_for_mixed_endpoints() {
+        // Non-uniform grid, non-polynomial data: exercises the linear algebra for real,
+        // rather than something any BC would reproduce exactly regardless of correctness.
+        let x = [0.0, 0.4, 1.1, 1.8, 2.9, 4.0];
+        let y = [0.5, 1.2, 0.3, 2.1, 1.0, 3.3];
+        let xv = ArrayView1::from(&x);
+        let yv = ArrayView1::from(&y);
+
+        let endpoints = [
+            CubicC2Endpoint::NotAKnot,
+            CubicC2Endpoint::SecondDerivative(0.0),
+            CubicC2Endpoint::SecondDerivative(2.5),
+            CubicC2Endpoint::FirstDerivative(0.0),
+            CubicC2Endpoint::FirstDerivative(-1.5),
+        ];
+        for lower in &endpoints {
+            for upper in &endpoints {
+                let bc = CubicC2BoundaryConditions::Endpoints {
+                    lower: lower.clone(),
+                    upper: upper.clone(),
+                };
+                let got = compute_m(xv, yv, &bc);
+                let (a, b) = dense_m_system(&x, &y, &bc);
+                let expected = dense_solve(a, b);
+                for (g, e) in got.iter().zip(expected.iter()) {
+                    assert_approx_eq!(*g, *e, 1e-9);
+                }
+            }
+        }
     }
 }
