@@ -36,7 +36,12 @@ impl<T> PerAxis<T> {
     ///
     /// Custom strategies built on `PerAxis` should call this from `validate`, before
     /// indexing via [`Index`](core::ops::Index), the same way [`Step`] and [`CubicC2`] do.
-    pub fn validate_len(&self, ndim: usize, label: &str, noun: &str) -> Result<(), ValidateError> {
+    pub fn validate_len(
+        &self,
+        ndim: usize,
+        label: &'static str,
+        noun: &'static str,
+    ) -> Result<(), ValidateError> {
         let PerAxis::Axes(values) = self else {
             return Ok(());
         };
@@ -44,14 +49,12 @@ impl<T> PerAxis<T> {
         if found == ndim {
             return Ok(());
         }
-        let expected = if ndim == 1 {
-            "1".to_string()
-        } else {
-            format!("1 or {ndim}")
-        };
-        Err(ValidateError::Other(format!(
-            "{label} has {found} {noun} but interpolator is {ndim}-D (expected {expected})"
-        )))
+        Err(ValidateError::PerAxisLen {
+            label,
+            noun,
+            ndim,
+            found,
+        })
     }
 }
 

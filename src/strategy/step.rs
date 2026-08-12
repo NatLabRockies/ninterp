@@ -100,14 +100,6 @@ impl Step {
     pub fn upper() -> Self {
         StepDirection::Upper.into()
     }
-
-    /// Checks the stored direction count against an interpolator's dimensionality: one
-    /// direction broadcasts to every dimension, otherwise there must be exactly one per
-    /// dimension. Shared by the `Strategy1D`/`2D`/`3D`/`ND` impls so all four report it
-    /// identically.
-    pub(crate) fn validate_len(&self, ndim: usize) -> Result<(), ValidateError> {
-        self.directions.validate_len(ndim, "Step", "directions")
-    }
 }
 
 #[cfg(feature = "serde")]

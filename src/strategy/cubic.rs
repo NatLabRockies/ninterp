@@ -358,19 +358,6 @@ pub(crate) fn validate_bc_min_points<T>(
     Ok(())
 }
 
-/// Checks `boundary_conditions`'s count against `ndim`: `Broadcast` always applies to
-/// every axis, `Axes` must have exactly `ndim` entries. Indexing `boundary_conditions`
-/// directly (e.g. `&self.boundary_conditions[dim]`) is unchecked, so every
-/// `Strategy1D`/`2D`/`3D`/`ND::validate` must call this before any such indexing. Mirrors
-/// [`Step::validate_len`](crate::strategy::Step::validate_len)'s check for the same kind
-/// of per-dimension config.
-pub(crate) fn validate_bc_count<T>(
-    bcs: &PerAxis<CubicC2BoundaryConditions<T>>,
-    ndim: usize,
-) -> Result<(), ValidateError> {
-    bcs.validate_len(ndim, "CubicC2", "boundary conditions")
-}
-
 /// Precomputes second-derivative coefficients for every 1-D pencil along the innermost
 /// (last) axis of `values`, for [`spline_eval_nd_cached`] to look up in O(1) instead of
 /// re-solving on every `interpolate` call. Only the innermost axis's system is

@@ -787,7 +787,7 @@ fn test_serde() {
 #[test]
 fn test_cubic_c2_bc_count_mismatch() {
     // Indexing `boundary_conditions` directly is unchecked, assuming it's `Broadcast` or
-    // has exactly `ndim` entries for `Axes`. Before `validate_bc_count`, a mismatched
+    // has exactly `ndim` entries for `Axes`. Before the `validate_len` check, a mismatched
     // length (here 2 entries for a 3-D grid) reached that indexing via the per-dim
     // `validate_bc_min_points` loop and panicked instead of returning a `ValidateError`,
     // even though `Interpolator::new` is documented as a fallible `Result`-returning
@@ -803,5 +803,8 @@ fn test_cubic_c2_bc_count_mismatch() {
         ]),
         Extrapolate::Error,
     );
-    assert!(matches!(result.unwrap_err(), ValidateError::Other(_)));
+    assert!(matches!(
+        result.unwrap_err(),
+        ValidateError::PerAxisLen { .. }
+    ));
 }

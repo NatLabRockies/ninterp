@@ -90,7 +90,7 @@ where
 {
     /// Ensures the number of provided step directions matches the interpolator dimensionality.
     fn validate(&self, _data: &InterpData1DBase<D>) -> Result<(), ValidateError> {
-        self.validate_len(1)
+        self.directions.validate_len(1, "Step", "directions")
     }
 
     fn interpolate(
@@ -116,7 +116,8 @@ where
     /// [`CubicC2BoundaryConditions::NotAKnot`] needs at least 4) before [`Strategy1D::init`]
     /// attempts the real computation.
     fn validate(&self, data: &InterpData1DBase<D>) -> Result<(), ValidateError> {
-        validate_bc_count(&self.boundary_conditions, 1)?;
+        self.boundary_conditions
+            .validate_len(1, "CubicC2", "boundary conditions")?;
         validate_bc_min_points(&self.boundary_conditions[0], data.grid[0].len(), 0)
     }
 

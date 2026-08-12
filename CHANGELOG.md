@@ -16,8 +16,9 @@ Everything below is merged to `main` but not yet tagged/released.
 - `strategy::per_axis::PerAxis<T>`: `Broadcast(T)` applies one value to every grid
   dimension, `Axes(Vec<T>)` gives one value per dimension. Shared by `Step` and `CubicC2`
   for their per-axis configuration; indexes via `Index<usize>` (panics like a slice if
-  `dim` is out of range) and validates via the public `validate_len`, both usable by
-  custom strategies built on `PerAxis`.
+  `dim` is out of range) and validates via the public `validate_len`, which reports a
+  mismatched count as `ValidateError::PerAxisLen { label, noun, ndim, found }`. Both are
+  usable by custom strategies built on `PerAxis`.
 - `strategy::Step`: a parameterized step (piecewise-constant) strategy across all
   dimensionalities, replacing `LeftNearest`/`RightNearest`. Its `directions` field is a
   `PerAxis<StepDirection>`: `Broadcast` applies one direction to every axis, `Axes` gives

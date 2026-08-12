@@ -28,6 +28,17 @@ pub enum ValidateError {
     /// [`ValidateError::IncompatibleShapes`], which compares extents within one axis.
     #[error("grid has {found} axes, expected {expected} to match the values")]
     GridAxisCount { expected: usize, found: usize },
+    /// Raised by [`crate::strategy::per_axis::PerAxis::validate_len`], so any strategy
+    /// built on [`crate::strategy::per_axis::PerAxis`] reports a mismatched per-axis count
+    /// the same way. `label` names the strategy (e.g. `"Step"`); `noun` names what's being
+    /// counted (e.g. `"directions"`).
+    #[error("{label} has {found} {noun} but interpolator is {ndim}-D (expected {})", if *ndim == 1 { "1".to_string() } else { format!("1 or {ndim}") })]
+    PerAxisLen {
+        label: &'static str,
+        noun: &'static str,
+        ndim: usize,
+        found: usize,
+    },
     /// Escape hatch for conditions this crate doesn't model, chiefly custom strategies
     /// validating their own configuration.
     #[error("{0}")]

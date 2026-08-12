@@ -181,7 +181,8 @@ where
 {
     /// Ensures the number of provided step directions matches the dimensionality of the interpolator
     fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
-        self.validate_len(data.values.ndim())
+        self.directions
+            .validate_len(data.values.ndim(), "Step", "directions")
     }
 
     fn interpolate(
@@ -209,7 +210,8 @@ where
     D::Elem: Float + Debug,
 {
     fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
-        validate_bc_count(&self.boundary_conditions, data.ndim())?;
+        self.boundary_conditions
+            .validate_len(data.ndim(), "CubicC2", "boundary conditions")?;
         for dim in 0..data.ndim() {
             validate_bc_min_points(&self.boundary_conditions[dim], data.grid[dim].len(), dim)?;
         }

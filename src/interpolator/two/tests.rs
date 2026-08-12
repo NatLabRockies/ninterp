@@ -603,7 +603,7 @@ fn test_set_strategy_runs_init() {
     let bad_step = strategy::Step::new(vec![strategy::step::StepDirection::Lower; 3]);
     assert!(matches!(
         interp.set_strategy(bad_step).unwrap_err(),
-        ValidateError::Other(_)
+        ValidateError::PerAxisLen { .. }
     ));
 }
 
