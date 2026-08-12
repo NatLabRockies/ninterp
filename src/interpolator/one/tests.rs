@@ -1,6 +1,305 @@
 use super::*;
 
 #[test]
+fn test_cubic_spline() {
+    // Linear data: any spline reproduces it exactly (all second derivatives = 0)
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3.],
+        array![1., 3., 5., 7.], // f(x) = 2x + 1
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    // Knot values
+    let x = interp.data.grid[0].clone();
+    for (i, xi) in x.iter().enumerate() {
+        assert_approx_eq!(interp.interpolate(&[*xi]).unwrap(), interp.data.values[i]);
+    }
+    // Midpoints
+    assert_approx_eq!(interp.interpolate(&[0.5]).unwrap(), 2.0);
+    assert_approx_eq!(interp.interpolate(&[1.5]).unwrap(), 4.0);
+    assert_approx_eq!(interp.interpolate(&[2.5]).unwrap(), 6.0);
+    // Extrapolation via boundary polynomials
+    assert_approx_eq!(interp.interpolate(&[-1.0]).unwrap(), -1.0);
+    assert_approx_eq!(interp.interpolate(&[4.0]).unwrap(), 9.0);
+}
+
+#[test]
+fn test_cubic_c2_knot_exactness() {
+    // Values at all knots must be reproduced exactly regardless of data shape
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0., 1., 4., 9., 16.], // f(x) = x^2
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let x = interp.data.grid[0].clone();
+    for (i, xi) in x.iter().enumerate() {
+        assert_approx_eq!(interp.interpolate(&[*xi]).unwrap(), interp.data.values[i]);
+    }
+}
+
+#[test]
+fn test_cubic_c2_two_points() {
+    // Degenerate case: 2 points → degenerates to linear interpolation.
+    // Uses Natural BC since NotAKnot requires ≥ 4 points.
+    let interp = Interp1D::new(
+        array![0., 1.],
+        array![0., 2.],
+        strategy::CubicC2::natural(),
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    assert_approx_eq!(interp.interpolate(&[0.5]).unwrap(), 1.0);
+    assert_approx_eq!(interp.interpolate(&[2.0]).unwrap(), 4.0); // extrapolation
+}
+
+#[test]
+fn test_cubic_c2_natural() {
+    // Uses example from https://tools.timodenk.com/cubic-spline-interpolation
+    let interp = Interp1D::new(
+        array![-1.5, -0.2, 1., 5., 10., 15., 20.],
+        array![-1.2, 0., 0.5, 1., 1.2, 2., 1.],
+        strategy::CubicC2::natural(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let inputs = &[[-1.4], [6.], [7.], [14.], [19.]];
+    let expected = &[
+        -1.095065419952828,
+        1.015165170952125,
+        1.0218810233458848,
+        1.932091193114578,
+        1.301403522754169,
+    ];
+    let outputs = interp.batch_interpolate(inputs).unwrap();
+    for (out, exp) in outputs.iter().zip(expected.iter()) {
+        assert_approx_eq!(out, exp);
+    }
+}
+
+#[test]
+fn test_cubic_c2_not_a_knot() {
+    let interp = Interp1D::new(
+        array![-1.5, -0.2, 1., 5., 10., 15., 20.],
+        array![-1.2, 0., 0.5, 1., 1.2, 2., 1.],
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let inputs = &[[-1.4], [6.], [7.], [14.], [19.]];
+    let expected = &[-1.07209658, 1.01588337, 1.02825421, 1.87938333, 1.50092501];
+    let outputs = interp.batch_interpolate(inputs).unwrap();
+    for (out, exp) in outputs.iter().zip(expected.iter()) {
+        assert_approx_eq!(out, exp);
+    }
+}
+
+#[test]
+fn test_cubic_c2_clamped() {
+    let interp = Interp1D::new(
+        array![-1.5, -0.2, 1., 5., 10., 15., 20.],
+        array![-1.2, 0., 0.5, 1., 1.2, 2., 1.],
+        strategy::CubicC2::clamped(-1., 1.),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let inputs = &[[-1.4], [6.], [7.], [14.], [19.]];
+    let expected = &[-1.27364033, 1.03070187, 1.01669998, 2.16516227, 0.41055472];
+    let outputs = interp.batch_interpolate(inputs).unwrap();
+    for (out, exp) in outputs.iter().zip(expected.iter()) {
+        assert_approx_eq!(out, exp);
+    }
+}
+
+#[test]
+fn test_cubic_c2_periodic() {
+    let interp = Interp1D::new(
+        array![-4., -1.5, -0.2, 1., 5., 10., 15., 20.],
+        array![1., -1.2, 0., 0.5, 1., 1.2, 2., 1.],
+        strategy::CubicC2::periodic(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let inputs = &[[-1.4], [6.], [7.], [14.], [19.]];
+    let expected = &[-1.15382906, 1.04798649, 1.07838449, 1.77694949, 1.87460604];
+    let outputs = interp.batch_interpolate(inputs).unwrap();
+    for (out, exp) in outputs.iter().zip(expected.iter()) {
+        assert_approx_eq!(out, exp);
+    }
+}
+
+#[test]
+fn test_cubic_c2_not_a_knot_cubic_exact() {
+    // f(x) = x^3: a genuine cubic (nonzero third derivative), unlike the quadratic data
+    // in `knot_exactness` above. `NotAKnot`'s defining property is exact reproduction of
+    // any degree-<=3 polynomial, at interior points and via boundary extrapolation, not
+    // just at grid points. Quadratics satisfy that trivially since their third
+    // derivative is already zero everywhere, so this is a stronger test.
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 8., 27.], // f(x) = x^3
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    assert_approx_eq!(interp.interpolate(&[0.5]).unwrap(), 0.125);
+    assert_approx_eq!(interp.interpolate(&[1.5]).unwrap(), 3.375);
+    assert_approx_eq!(interp.interpolate(&[2.5]).unwrap(), 15.625);
+    // Extrapolation via the boundary cubic polynomial is exact too, since the "boundary
+    // polynomial" already equals the true global cubic everywhere.
+    assert_approx_eq!(interp.interpolate(&[-1.0]).unwrap(), -1.0);
+    assert_approx_eq!(interp.interpolate(&[4.0]).unwrap(), 64.0);
+}
+
+#[test]
+fn test_cubic_c2_notaknot_enough_points() {
+    // NotAKnot requires ≥ 4 points to define a cubic spline
+    // not enough points
+    let result = Interp1D::new(
+        array![0., 1., 2.],
+        array![0., 1., 4.],
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    );
+    assert!(
+        result.is_err(),
+        "NotAKnot on a 3-point axis should fail validation, got Ok"
+    );
+    // enough points
+    let result = Interp1D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 4., 9.],
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    );
+    assert!(
+        result.is_ok(),
+        "NotAKnot on a 4-point axis should succeed, got Err: {:?}",
+        result.unwrap_err()
+    );
+}
+
+#[test]
+fn test_cubic_c2_one_sided_not_a_knot_needs_only_3_points() {
+    // A single `NotAKnot` endpoint, paired with a non-eliminating endpoint on the other
+    // side, only needs 3 points; the symmetric case above needs 4.
+    let result = Interp1D::new(
+        array![0., 1., 2.],
+        array![0., 1., 4.],
+        strategy::CubicC2::new(vec![
+            strategy::cubic::CubicC2BoundaryConditions::Endpoints {
+                lower: strategy::cubic::CubicC2Endpoint::NotAKnot,
+                upper: strategy::cubic::CubicC2Endpoint::SecondDerivative(0.0),
+            },
+        ]),
+        Extrapolate::Error,
+    );
+    assert!(
+        result.is_ok(),
+        "one-sided NotAKnot on a 3-point axis should succeed, got Err: {:?}",
+        result.unwrap_err()
+    );
+}
+
+#[test]
+fn test_cubic_c2_mixed_endpoints_cubic_exact() {
+    // `NotAKnot` on the lower end, the true first derivative (27.) on the upper end:
+    // for a genuine cubic like f(x) = x^3, the unique spline satisfying both conditions
+    // is the true global cubic itself, so this should reproduce it exactly, same as
+    // `not_a_knot_cubic_exact`/`clamped_cubic_exact` do for the symmetric cases.
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 8., 27.], // f(x) = x^3
+        strategy::CubicC2::new(vec![
+            strategy::cubic::CubicC2BoundaryConditions::Endpoints {
+                lower: strategy::cubic::CubicC2Endpoint::NotAKnot,
+                upper: strategy::cubic::CubicC2Endpoint::FirstDerivative(27.),
+            },
+        ]),
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    assert_approx_eq!(interp.interpolate(&[0.5]).unwrap(), 0.125);
+    assert_approx_eq!(interp.interpolate(&[1.5]).unwrap(), 3.375);
+    assert_approx_eq!(interp.interpolate(&[2.5]).unwrap(), 15.625);
+    assert_approx_eq!(interp.interpolate(&[-1.0]).unwrap(), -1.0);
+    assert_approx_eq!(interp.interpolate(&[4.0]).unwrap(), 64.0);
+}
+
+#[test]
+fn test_cubic_c2_mixed_endpoints_uses_given_derivative() {
+    // Differential check for the previous test, same reasoning as
+    // `clamped_uses_given_derivative`: `NotAKnot` alone already reproduces x^3 exactly,
+    // so a bug that dropped the upper endpoint's `FirstDerivative` value (silently
+    // treating it as `NotAKnot` too, or as some other default) would still pass
+    // `mixed_endpoints_cubic_exact`. A deliberately wrong value here, and a result that
+    // moves far from the true value, proves it's actually being read.
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 8., 27.], // f(x) = x^3; true upper derivative is 27
+        strategy::CubicC2::new(vec![
+            strategy::cubic::CubicC2BoundaryConditions::Endpoints {
+                lower: strategy::cubic::CubicC2Endpoint::NotAKnot,
+                upper: strategy::cubic::CubicC2Endpoint::FirstDerivative(999.),
+            },
+        ]),
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    let wrong = interp.interpolate(&[2.5]).unwrap();
+    assert!(
+        (wrong - 15.625_f64).abs() > 1.0,
+        "mixed FirstDerivative(999) gave {wrong}, suspiciously close to the true \
+         f(2.5) = 15.625 as if the supplied derivative were ignored"
+    );
+}
+
+#[test]
+fn test_cubic_c2_clamped_cubic_exact() {
+    // Same f(x) = x^3, but with `Clamped` given the true endpoint derivatives
+    // (f'(x) = 3x^2, so f'(0) = 0, f'(3) = 27). Exact reproduction here confirms
+    // `Clamped` correctly uses the supplied derivative, not just that the solve runs.
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 8., 27.],
+        strategy::CubicC2::clamped(0., 27.),
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    assert_approx_eq!(interp.interpolate(&[0.5]).unwrap(), 0.125);
+    assert_approx_eq!(interp.interpolate(&[1.5]).unwrap(), 3.375);
+    assert_approx_eq!(interp.interpolate(&[2.5]).unwrap(), 15.625);
+    assert_approx_eq!(interp.interpolate(&[-1.0]).unwrap(), -1.0);
+    assert_approx_eq!(interp.interpolate(&[4.0]).unwrap(), 64.0);
+}
+
+#[test]
+fn test_cubic_c2_clamped_uses_given_derivative() {
+    // Differential check for the previous test: `clamped_cubic_exact` alone can't tell
+    // "Clamped correctly used the supplied derivative" apart from "Clamped silently
+    // behaved like NotAKnot": for a genuine cubic like f(x) = x^3, NotAKnot *also*
+    // reproduces it exactly with no derivative info at all, so a bug that dropped
+    // `left`/`right` entirely would still pass that test. Supplying deliberately wrong
+    // derivatives here and confirming the result moves far from the true value proves
+    // they're actually being read.
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 8., 27.], // f(x) = x^3; true derivatives are 0 and 27
+        strategy::CubicC2::clamped(999., 999.),
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    let wrong = interp.interpolate(&[0.5]).unwrap();
+    assert!(
+        (wrong - 0.125_f64).abs() > 1.0,
+        "Clamped(999, 999) gave {wrong}, suspiciously close to the true f(0.5) = 0.125 \
+         as if the supplied derivatives were ignored"
+    );
+}
+
+#[test]
 fn test_invalid_args() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
@@ -83,6 +382,35 @@ fn test_insufficient_grid_points() {
 }
 
 #[test]
+fn test_grid_not_strictly_increasing() {
+    // A repeated adjacent coordinate gives a zero-width interval: strategies that
+    // compute a fractional position or slope across it (`Linear`'s `frac`, `CubicC2`'s
+    // `compute_m`) would divide by zero, silently producing NaN/Inf, if this weren't
+    // caught at validation.
+    assert!(matches!(
+        Interp1D::new(
+            array![0., 1., 1., 2.],
+            array![0., 1., 2., 3.],
+            strategy::Linear,
+            Extrapolate::Error
+        )
+        .unwrap_err(),
+        ValidateError::NotStrictlyIncreasing(0)
+    ));
+    // A genuine decrease is caught the same way.
+    assert!(matches!(
+        Interp1D::new(
+            array![0., 2., 1., 3.],
+            array![0., 1., 2., 3.],
+            strategy::Linear,
+            Extrapolate::Error
+        )
+        .unwrap_err(),
+        ValidateError::NotStrictlyIncreasing(0)
+    ));
+}
+
+#[test]
 fn test_linear() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
@@ -106,7 +434,7 @@ fn test_left_nearest() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0.2, 0.4, 0.6, 0.8, 1.0],
-        strategy::Step::from(strategy::StepDirection::Lower),
+        strategy::Step::from(strategy::step::StepDirection::Lower),
         Extrapolate::Error,
     )
     .unwrap();
@@ -126,7 +454,7 @@ fn test_right_nearest() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0.2, 0.4, 0.6, 0.8, 1.0],
-        strategy::Step::from(strategy::StepDirection::Upper),
+        strategy::Step::from(strategy::step::StepDirection::Upper),
         Extrapolate::Error,
     )
     .unwrap();
@@ -142,11 +470,11 @@ fn test_right_nearest() {
 }
 
 #[test]
-fn test_step_markers() {
+fn test_step_broadcast() {
     let lower = Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0.2, 0.4, 0.6, 0.8, 1.0],
-        strategy::StepLower,
+        strategy::Step::lower(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -156,7 +484,7 @@ fn test_step_markers() {
     let upper = Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0.2, 0.4, 0.6, 0.8, 1.0],
-        strategy::StepUpper,
+        strategy::Step::upper(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -202,7 +530,7 @@ fn test_integer_nearest_and_wrap_step() {
     let step_wrap = Interp1D::new(
         array![0, 10, 20],
         array![100, 200, 300],
-        strategy::Step::from(strategy::StepDirection::Lower),
+        strategy::Step::from(strategy::step::StepDirection::Lower),
         Extrapolate::Wrap,
     )
     .unwrap();
@@ -270,9 +598,9 @@ fn test_step_invalid_direction_count() {
     assert!(Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0.2, 0.4, 0.6, 0.8, 1.0],
-        strategy::Step(vec![
-            strategy::StepDirection::Lower,
-            strategy::StepDirection::Upper,
+        strategy::Step::new(vec![
+            strategy::step::StepDirection::Lower,
+            strategy::step::StepDirection::Upper,
         ]),
         Extrapolate::Error,
     )
@@ -486,7 +814,7 @@ fn test_serde() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0.2, 0.4, 0.6, 0.8, 1.0],
-        strategy::Step::from(strategy::StepDirection::Lower),
+        strategy::Step::from(strategy::step::StepDirection::Lower),
         Extrapolate::Error,
     )
     .unwrap();

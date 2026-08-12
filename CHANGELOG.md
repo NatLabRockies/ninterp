@@ -13,14 +13,39 @@ Everything below is merged to `main` but not yet tagged/released.
 ### Added
 - `strategy::LinearUniform`: an O(1)-index alternative to `Linear` for uniformly-spaced
   grids (1D/2D/3D/ND), validated at construction/`init` time.
+- `strategy::per_axis::PerAxis<T>`: `Broadcast(T)` applies one value to every grid
+  dimension, `Axes(Vec<T>)` gives one value per dimension. Shared by `Step` and `CubicC2`
+  for their per-axis configuration; indexes via `Index<usize>` (panics like a slice if
+  `dim` is out of range) and validates via the public `validate_len`, which reports a
+  mismatched count as `ValidateError::PerAxisLen { label, noun, ndim, found }`. Both are
+  usable by custom strategies built on `PerAxis`.
 - `strategy::Step`: a parameterized step (piecewise-constant) strategy across all
-  dimensionalities, replacing `LeftNearest`/`RightNearest`. A single `StepDirection`
-  broadcasts to every axis, or a `Vec` gives per-axis control.
-- `strategy::StepLower` / `strategy::StepUpper`: zero-sized, allocation-free markers for
-  the fixed-direction case; `Step` remains the choice for mixed or runtime-selected
-  direction.
-- `LinearUniform`, `Step`, `StepLower`, and `StepUpper` are available for every
-  dimensionality and included in the `Strategy*Enum` types.
+  dimensionalities, replacing `LeftNearest`/`RightNearest`. Its `directions` field is a
+  `PerAxis<StepDirection>`: `Broadcast` applies one direction to every axis, `Axes` gives
+  per-axis control. `Step::lower()`/`Step::upper()` construct the common broadcast cases;
+  `Step::new(Vec<StepDirection>)` constructs the per-axis case.
+- `LinearUniform` and `Step` are available for every dimensionality and included in the
+  `Strategy*Enum` types.
+- `strategy::CubicC2`: a C² piecewise cubic spline strategy (1D/2D/3D/ND) with
+  configurable boundary conditions given via
+  `boundary_conditions: PerAxis<CubicC2BoundaryConditions<T>>` (`Broadcast` for one
+  condition on every axis, `Axes` for one per axis), a single tridiagonal solve per axis.
+  `CubicC2BoundaryConditions` is either `Periodic`, or `Endpoints { lower, upper }` where
+  `lower`/`upper` are independent `CubicC2Endpoint`s (`NotAKnot`, `FirstDerivative(T)`
+  "clamped", or `SecondDerivative(T)`, zero being the classic "natural" case); the two
+  ends of an axis can mix types, e.g. `NotAKnot` on one side and a specific derivative on
+  the other. A single-`NotAKnot` axis needs 3 grid points; 4 if both ends are `NotAKnot`.
+  `not_a_knot()`/`natural()`/`clamped(lower, upper)`/`periodic()` construct the common
+  symmetric cases; `CubicC2BoundaryConditions::{not_a_knot, first_derivative,
+  second_derivative}` are the per-condition constructors mixed endpoints are built from.
+  `Strategy1D`/`ND` cache the innermost axis's coefficients; `Strategy2D`/`3D`
+  additionally cache the full corner-derivative tensor for O(1) queries.
+  `From<CubicC2BoundaryConditions<T>>` broadcasts a condition obtained generically (e.g.
+  from runtime config) without matching on it first. Included in the `Strategy*Enum`
+  types. With the `serde` feature, serializes keyed by `"CubicC2"` like the other
+  built-in strategies; `NotAKnot`/`Natural`/`Periodic` (symmetric, no explicit value)
+  serialize as bare strings, anything else (an explicit value, or mixed endpoint types)
+  as the general `{"Endpoints": {"lower": ..., "upper": ...}}` form.
 - `Nested` wrapper / `serialize_nested` helper / `SerializeNested` trait (`prelude`,
   `serde` feature): opt into the nested-array serialization format at a specific call
   site, e.g. `serde_json::to_string(&Nested(&interp))` or
@@ -81,6 +106,10 @@ Everything below is merged to `main` but not yet tagged/released.
   `Strategy1DEnum`/`2DEnum`/`3DEnum`/`NDEnum` are now `#[non_exhaustive]`. An existing
   exhaustive downstream `match` over any of these needs a `_` arm; construction is
   unaffected.
+- **Breaking:** `Strategy1DEnum`/`2DEnum`/`3DEnum`/`NDEnum` are now generic over the
+  element type (`Strategy1DEnum<T>` etc.), needed to hold `CubicC2<T>` as a variant.
+  Bare usages (e.g. `Interp1D<_, Strategy1DEnum>`) need a type argument:
+  `Interp1D<_, Strategy1DEnum<f64>>`.
 - **Breaking:** `Strategy1D`/`2D`/`3D`/`ND::init` is split into a pure
   `validate(&self, data)` and a mutating `init(&mut self, data)`, both default no-op
   (existing custom strategies keep compiling unchanged). `LinearUniform`'s uniform-grid
@@ -91,9 +120,8 @@ Everything below is merged to `main` but not yet tagged/released.
   (`step_index` -> `locate_step_index`, `uniform_lower_index` ->
   `locate_lower_index_uniform`, `exact_index`, `validate_uniform_grid`) move from
   `strategy::traits` to a new `strategy::utils` module.
-- **Breaking:** `LeftNearest`/`RightNearest` removed. Migrate to
-  `Step::from(StepDirection::Lower)`/`Step::from(StepDirection::Upper)`, or the leaner
-  `StepLower`/`StepUpper`.
+- **Breaking:** `LeftNearest`/`RightNearest` removed. Migrate to `Step::lower()`/
+  `Step::upper()`.
 - **Breaking:** `Linear`/`LinearUniform` now require `D::Elem: Float` (previously
   `Num + PartialOrd`); other strategies keep looser numeric bounds.
 - **Breaking:** interpolation-time failures carry structured positions instead of prose,
@@ -113,10 +141,14 @@ Everything below is merged to `main` but not yet tagged/released.
 - New `ValidateError::GridAxisCount { expected: usize, found: usize }`, for an
   `InterpDataND` whose grid axis count doesn't match its values' dimensionality
   (previously fell through to `ValidateError::Other(String)`).
-- **Breaking:** `ValidateError::Monotonicity` -> `NonMonotonic`;
+- **Breaking:** `ValidateError::Monotonicity` -> `NotStrictlyIncreasing`;
   `InterpolateError::ExtrapolateError` -> `OutOfBounds` (message rewritten to
   ``point out of bounds with `Extrapolate::Error` set``). `ValidateError::EmptyGrid` is
   removed; a grid dimension with 0 or 1 points is now `InsufficientGridPoints`.
+- **Breaking:** grid coordinates must now be strictly increasing; a repeated adjacent
+  coordinate previously passed validation and gave a zero-width interval, dividing by
+  zero (silent NaN/Inf) in any strategy that computes a fractional position or slope
+  across it, instead of the `NotStrictlyIncreasing` error it now raises.
 - **Breaking:** the `serde_ndim` Cargo feature is removed. It switched the nested-array
   write format on for every array field crate-wide, and because Cargo features are
   additive, enabling it anywhere in a binary silently flipped the wire format for every
@@ -142,9 +174,9 @@ Everything below is merged to `main` but not yet tagged/released.
   no longer linear-scan for exact grid-point matches; 2D/3D `Linear` short-circuits
   per-dimension on an exact match. Roughly 50-65% faster on 1D/2D hardcoded and
   multilinear paths (see PR #13).
-- Serde: `StepLower`/`StepUpper` accept the legacy `"LeftNearest"`/`"RightNearest"` names
-  on deserialization for backward compatibility; `Step`'s own wire format
-  (`{"Step": [...]}`) is unchanged and does not accept those aliases.
+- Serde: `Step` accepts the legacy bare `"LeftNearest"`/`"RightNearest"` strings (from the
+  removed unit structs of the same name) on deserialization, in addition to its own wire
+  format (`{"Step": "Lower"}` for `Broadcast`, `{"Step": ["Lower", "Upper"]}` for `Axes`).
 - Various documentation and README improvements; CI workflow polish.
 
 ### Fixed

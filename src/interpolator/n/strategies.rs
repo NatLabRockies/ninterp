@@ -181,7 +181,8 @@ where
 {
     /// Ensures the number of provided step directions matches the dimensionality of the interpolator
     fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
-        self.validate_len(data.values.ndim())
+        self.directions
+            .validate_len(data.values.ndim(), "Step", "directions")
     }
 
     fn interpolate(
@@ -192,7 +193,7 @@ where
         let n = data.values.ndim();
         let mut idx = vec![0usize; n];
         for dim in 0..n {
-            idx[dim] = locate_step_index(self.dir(dim), data.grid[dim].view(), &point[dim]);
+            idx[dim] = locate_step_index(self.directions[dim], data.grid[dim].view(), &point[dim]);
         }
         Ok(data.values.view()[idx.as_slice()])
     }
@@ -203,48 +204,56 @@ where
     }
 }
 
-impl<D> StrategyND<D> for StepLower
+impl<D> StrategyND<D> for CubicC2<D::Elem>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
+    fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
+        self.boundary_conditions
+            .validate_len(data.ndim(), "CubicC2", "boundary conditions")?;
+        for dim in 0..data.ndim() {
+            validate_bc_min_points(&self.boundary_conditions[dim], data.grid[dim].len(), dim)?;
+        }
+        Ok(())
+    }
+
+    fn init(&mut self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
+        if data.ndim() == 0 {
+            return Ok(());
+        }
+        let inner_dim = data.values.ndim().saturating_sub(1);
+        self.cache = compute_m_inner_cache(
+            data.grid[inner_dim].view(),
+            data.values.view(),
+            &self.boundary_conditions[inner_dim],
+        );
+        Ok(())
+    }
+
     fn interpolate(
         &self,
         data: &InterpDataNDBase<D>,
         point: &[D::Elem],
     ) -> Result<D::Elem, InterpolateError> {
-        let n = data.values.ndim();
-        let mut idx = vec![0usize; n];
-        for dim in 0..n {
-            idx[dim] = locate_step_index(StepDirection::Lower, data.grid[dim].view(), &point[dim]);
+        if data.ndim() == 0 {
+            return data.values.first().copied().ok_or_else(|| {
+                InterpolateError::Other("internal: 0-D interpolation data has no value".into())
+            });
         }
-        Ok(data.values.view()[idx.as_slice()])
+        let grids: Vec<ArrayView1<D::Elem>> = data.grid.iter().map(|g| g.view()).collect();
+        spline_eval_nd_cached(
+            &grids,
+            data.values.view(),
+            self.cache.view(),
+            point,
+            &self.boundary_conditions,
+            0,
+        )
     }
 
+    /// Returns `true`: the boundary cubic polynomials extend naturally.
     fn allow_extrapolate(&self) -> bool {
-        false
-    }
-}
-
-impl<D> StrategyND<D> for StepUpper
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialOrd + Copy + Debug,
-{
-    fn interpolate(
-        &self,
-        data: &InterpDataNDBase<D>,
-        point: &[D::Elem],
-    ) -> Result<D::Elem, InterpolateError> {
-        let n = data.values.ndim();
-        let mut idx = vec![0usize; n];
-        for dim in 0..n {
-            idx[dim] = locate_step_index(StepDirection::Upper, data.grid[dim].view(), &point[dim]);
-        }
-        Ok(data.values.view()[idx.as_slice()])
-    }
-
-    fn allow_extrapolate(&self) -> bool {
-        false
+        true
     }
 }

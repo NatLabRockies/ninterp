@@ -12,8 +12,8 @@ pub enum ValidateError {
     ExtrapolateUnsupported,
     #[error("at least 2 grid points are required per dimension: dim {0}")]
     InsufficientGridPoints(usize),
-    #[error("supplied coordinates must be monotonically increasing: dim {0}")]
-    NonMonotonic(usize),
+    #[error("supplied coordinates must be strictly increasing: dim {0}")]
+    NotStrictlyIncreasing(usize),
     /// Raised by [`crate::strategy::utils::validate_uniform_grid`], so any strategy
     /// requiring uniform spacing reports it the same way, not just `LinearUniform`.
     ///
@@ -28,6 +28,17 @@ pub enum ValidateError {
     /// [`ValidateError::IncompatibleShapes`], which compares extents within one axis.
     #[error("grid has {found} axes, expected {expected} to match the values")]
     GridAxisCount { expected: usize, found: usize },
+    /// Raised by [`crate::strategy::per_axis::PerAxis::validate_len`], so any strategy
+    /// built on [`crate::strategy::per_axis::PerAxis`] reports a mismatched per-axis count
+    /// the same way. `label` names the strategy (e.g. `"Step"`); `noun` names what's being
+    /// counted (e.g. `"directions"`).
+    #[error("{label} has {found} {noun} but interpolator is {ndim}-D (expected {ndim})")]
+    PerAxisLen {
+        label: &'static str,
+        noun: &'static str,
+        ndim: usize,
+        found: usize,
+    },
     /// Escape hatch for conditions this crate doesn't model, chiefly custom strategies
     /// validating their own configuration.
     #[error("{0}")]

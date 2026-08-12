@@ -106,9 +106,12 @@ where
             if i_grid_len < 2 {
                 return Err(ValidateError::InsufficientGridPoints(i));
             }
-            // Check that grid points are monotonically increasing
-            if !self.grid[i].windows(2).into_iter().all(|w| w[0] <= w[1]) {
-                return Err(ValidateError::NonMonotonic(i));
+            // Check that grid points are strictly increasing; a repeated coordinate would
+            // give a zero-width interval, dividing by zero in any strategy that computes a
+            // fractional position or slope across it (e.g. `Linear`'s `frac`, `CubicC2`'s
+            // `compute_m`), silently producing NaN/Inf instead of a validation error.
+            if !self.grid[i].windows(2).into_iter().all(|w| w[0] < w[1]) {
+                return Err(ValidateError::NotStrictlyIncreasing(i));
             }
             // Check that grid and values are compatible shapes
             if i_grid_len != self.values.shape()[i] {
@@ -571,5 +574,9 @@ where
 
 extrapolate_impl!(InterpNDBase, StrategyND);
 set_strategy_box_impl!(InterpNDBase, StrategyND);
-set_strategy_enum_impl!(InterpNDBase, strategy::enums::StrategyNDEnum);
+set_strategy_enum_impl!(
+    InterpNDBase,
+    strategy::enums::StrategyNDEnum,
+    strategy::enums::StrategyNDEnum<D::Elem>
+);
 any_interpolator_impl!(InterpND, StrategyND);

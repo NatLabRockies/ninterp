@@ -1,6 +1,450 @@
 use super::*;
 
 #[test]
+fn test_cubic_spline() {
+    // f(x, y) = 2x + y: linear in both dims, reproduced exactly by any spline
+    let interp = Interp2D::new(
+        array![0., 1., 2.],
+        array![0., 1., 2.],
+        array![[0., 1., 2.], [2., 3., 4.], [4., 5., 6.]],
+        strategy::CubicC2::natural(),
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    // Knots
+    assert_approx_eq!(interp.interpolate(&[1., 1.]).unwrap(), 3.);
+    assert_approx_eq!(interp.interpolate(&[2., 0.]).unwrap(), 4.);
+    // Midpoints
+    assert_approx_eq!(interp.interpolate(&[0.5, 0.5]).unwrap(), 1.5);
+    assert_approx_eq!(interp.interpolate(&[1.5, 1.0]).unwrap(), 4.);
+    // Extrapolation
+    assert_approx_eq!(interp.interpolate(&[3., 1.]).unwrap(), 7.);
+    assert_approx_eq!(interp.interpolate(&[1., 3.]).unwrap(), 5.);
+}
+
+#[test]
+fn test_cubic_spline_knot_exactness() {
+    let interp = Interp2D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        array![
+            [0., 1., 4., 9.],
+            [1., 2., 5., 10.],
+            [4., 5., 8., 13.],
+            [9., 10., 13., 18.],
+        ], // f(x, y) = x^2 + y
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let x = interp.data.grid[0].clone();
+    let y = interp.data.grid[1].clone();
+    for (i, xi) in x.iter().enumerate() {
+        for (j, yj) in y.iter().enumerate() {
+            assert_approx_eq!(
+                interp.interpolate(&[*xi, *yj]).unwrap(),
+                interp.data.values[[i, j]]
+            );
+        }
+    }
+}
+
+#[test]
+fn test_cubic_c2_interior_accuracy() {
+    // f(x, y) = x^2*y + x*y^2: quadratic in each axis (well within cubic-spline
+    // capacity), so a `NotAKnot` spline reproduces it exactly everywhere, not just at
+    // grid points. Unlike knot-exactness, this exercises the corner cache's
+    // mixed-partial term (d^2f/dxdy = 2x + 2y, non-constant) at interior points.
+    fn f(x: f64, y: f64) -> f64 {
+        x * x * y + x * y * y
+    }
+    let interp = Interp2D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        array![
+            [0., 0., 0., 0.],
+            [0., 2., 6., 12.],
+            [0., 6., 16., 30.],
+            [0., 12., 30., 54.],
+        ],
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &(x, y) in &[(0.5, 0.5), (1.5, 2.5), (2.5, 1.5), (0.25, 2.75)] {
+        assert_approx_eq!(interp.interpolate(&[x, y]).unwrap(), f(x, y));
+    }
+}
+
+#[test]
+fn test_cubic_c2_cached_vs_uncached() {
+    // `Strategy2D`'s corner-cache path (`compute_corner_cache` +
+    // `spline_eval_corner_cached`) must agree with `StrategyND`'s unchanged
+    // recursive-collapse path (`spline_eval_nd_cached`) on the same grid/values/BC.
+    let grid = array![0., 1., 2., 3.];
+    let values = array![
+        [0., 1., 4., 9.],
+        [1., 2., 5., 10.],
+        [4., 5., 8., 13.],
+        [9., 10., 13., 18.],
+    ]; // f(x, y) = x^2 + y
+    let interp2d = Interp2D::new(
+        grid.clone(),
+        grid.clone(),
+        values.clone(),
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let interp_nd = InterpND::new(
+        vec![grid.clone(), grid],
+        values.into_dyn(),
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &(x, y) in &[(0.5, 0.5), (1.5, 2.5), (2.5, 1.5), (0.25, 2.75)] {
+        assert_approx_eq!(
+            interp2d.interpolate(&[x, y]).unwrap(),
+            interp_nd.interpolate(&[x, y]).unwrap()
+        );
+    }
+}
+
+#[test]
+fn test_cubic_c2_clamped_cached_vs_uncached() {
+    // Same equivalence check as `cached_vs_uncached` above, but with `Clamped` on
+    // non-separable data. `Clamped`'s two BCs are separable
+    // (`clamped_cubic_exact`/`clamped_uses_given_derivative` below), so they can't
+    // exercise the corner cache's cross-derivative pass, which uses a different BC
+    // (`compute_corner_cache`'s `cross_bc`) than the axis's own first-derivative pass.
+    fn f(x: f64, y: f64) -> f64 {
+        x.powi(3) + x.powi(2) * y + x * y.powi(2) + y.powi(3)
+    }
+    let grid = array![0., 1., 2., 3.];
+    let values = Array2::from_shape_fn((4, 4), |(i, j)| f(grid[i], grid[j]));
+    let interp_2d = Interp2DView::new(
+        grid.view(),
+        grid.view(),
+        values.view(),
+        strategy::CubicC2::clamped(0., 27.),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let interp_nd = InterpNDView::new(
+        vec![grid.view(), grid.view()],
+        values.view().into_dyn(),
+        strategy::CubicC2::clamped(0., 27.),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &(x, y) in &[(0.5, 0.5), (1.5, 2.5), (2.5, 1.5), (0.25, 2.75)] {
+        assert_approx_eq!(
+            interp_2d.interpolate(&[x, y]).unwrap(),
+            interp_nd.interpolate(&[x, y]).unwrap()
+        );
+    }
+}
+
+#[test]
+fn test_cubic_c2_mixed_endpoints_cached_vs_uncached() {
+    // Same equivalence check again, but each axis now mixes endpoint *types*
+    // (`NotAKnot`/`FirstDerivative`/`SecondDerivative` on opposite ends of the same
+    // axis), not just different values of the same type like `clamped_cached_vs_uncached`
+    // above. This is what would break if `compute_corner_cache`'s per-endpoint
+    // cross-derivative fallback treated `lower`/`upper` inconsistently. Axis 1's nonzero
+    // `SecondDerivative` also exercises that fallback's own homogenization: axis 1 is the
+    // second axis processed, so its cross-derivative pass must zero this value out rather
+    // than reusing it for the already-differentiated field.
+    fn f(x: f64, y: f64) -> f64 {
+        x.powi(3) + x.powi(2) * y + x * y.powi(2) + y.powi(3)
+    }
+    let grid = array![0., 1., 2., 3.];
+    let values = Array2::from_shape_fn((4, 4), |(i, j)| f(grid[i], grid[j]));
+    let bcs = || {
+        vec![
+            strategy::cubic::CubicC2BoundaryConditions::Endpoints {
+                lower: strategy::cubic::CubicC2Endpoint::NotAKnot,
+                upper: strategy::cubic::CubicC2Endpoint::FirstDerivative(27.),
+            },
+            strategy::cubic::CubicC2BoundaryConditions::Endpoints {
+                lower: strategy::cubic::CubicC2Endpoint::SecondDerivative(5.),
+                upper: strategy::cubic::CubicC2Endpoint::FirstDerivative(-5.),
+            },
+        ]
+    };
+    let interp_2d = Interp2DView::new(
+        grid.view(),
+        grid.view(),
+        values.view(),
+        strategy::CubicC2::new(bcs()),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let interp_nd = InterpNDView::new(
+        vec![grid.view(), grid.view()],
+        values.view().into_dyn(),
+        strategy::CubicC2::new(bcs()),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &(x, y) in &[(0.5, 0.5), (1.5, 2.5), (2.5, 1.5), (0.25, 2.75)] {
+        assert_approx_eq!(
+            interp_2d.interpolate(&[x, y]).unwrap(),
+            interp_nd.interpolate(&[x, y]).unwrap()
+        );
+    }
+}
+
+#[test]
+fn test_cubic_c2_clamped_short_axis() {
+    // A `Clamped` axis with only 2 points must still validate under the corner-cache
+    // upgrade.
+    let interp = Interp2D::new(
+        array![0., 1.], // only 2 points on the Clamped axis
+        array![0., 1., 2., 3.],
+        array![[0., 1., 2., 3.], [1., 2., 3., 4.]], // f(x, y) = x + y
+        strategy::CubicC2::new(vec![
+            strategy::cubic::CubicC2BoundaryConditions::first_derivative(1., 1.),
+            strategy::cubic::CubicC2BoundaryConditions::second_derivative(0., 0.),
+        ]),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_approx_eq!(interp.interpolate(&[0.5, 1.5]).unwrap(), 2.0);
+}
+
+#[test]
+fn test_cubic_c2_not_a_knot_cubic_exact() {
+    // f(x, y) = x^3 + x^2*y + x*y^2 + y^3: a genuine cubic in both axes (every term has
+    // total degree 3), unlike `interior_accuracy`'s quadratic data above. `NotAKnot`
+    // reproduces any degree-<=3 polynomial exactly, so this is a stronger test of the
+    // corner cache's mixed-partial term (d^2f/dxdy = 2x + 2y, non-constant) than a
+    // quadratic can be, since a quadratic's third derivative is already zero everywhere.
+    fn f(x: f64, y: f64) -> f64 {
+        x.powi(3) + x.powi(2) * y + x * y.powi(2) + y.powi(3)
+    }
+    let grid = [0., 1., 2., 3.];
+    let values = Array2::from_shape_fn((4, 4), |(i, j)| f(grid[i], grid[j]));
+    let interp = Interp2D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        values,
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &(x, y) in &[(0.5, 0.5), (1.5, 2.5), (2.5, 1.5), (0.25, 2.75)] {
+        assert_approx_eq!(interp.interpolate(&[x, y]).unwrap(), f(x, y));
+    }
+}
+
+#[test]
+fn test_cubic_c2_notaknot_enough_points() {
+    // NotAKnot requires >= 4 points per axis; axis 0 has enough on its own, so this
+    // pins down that `validate` actually checks axis 1 too, not just the first one.
+    let result = Interp2D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2.],
+        array![[0., 1., 2.], [1., 2., 3.], [2., 3., 4.], [3., 4., 5.]],
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    );
+    assert!(
+        result.is_err(),
+        "NotAKnot with a 3-point axis should fail validation, got Ok"
+    );
+    let result = Interp2D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        array![
+            [0., 1., 2., 3.],
+            [1., 2., 3., 4.],
+            [2., 3., 4., 5.],
+            [3., 4., 5., 6.],
+        ],
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    );
+    assert!(
+        result.is_ok(),
+        "NotAKnot with all axes >= 4 points should succeed, got Err: {:?}",
+        result.unwrap_err()
+    );
+}
+
+#[test]
+fn test_cubic_c2_clamped_cubic_exact() {
+    // f(x, y) = x^3 + y^3 (separable, no cross term). `Clamped`'s endpoint derivative is
+    // a single scalar per axis, applied to every pencil along it regardless of the other
+    // axis's position, so it can only be exact if the true partial derivative at each
+    // boundary doesn't vary with the other axis. A cross-term function (like the
+    // `NotAKnot` test above) can't satisfy that in general; this separable one
+    // (fx = 3x^2, fy = 3y^2, each independent of the other axis) can. Cross-term
+    // correctness is already covered by `not_a_knot_cubic_exact`; this test is about
+    // `Clamped` correctly using its supplied derivatives, not re-proving that.
+    fn f(x: f64, y: f64) -> f64 {
+        x.powi(3) + y.powi(3)
+    }
+    let grid = [0., 1., 2., 3.];
+    let values = Array2::from_shape_fn((4, 4), |(i, j)| f(grid[i], grid[j]));
+    let interp = Interp2D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        values,
+        strategy::CubicC2::clamped(0., 27.), // f'(0) = 0, f'(3) = 27, broadcast to both axes
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &(x, y) in &[(0.5, 0.5), (1.5, 2.5), (2.5, 1.5), (0.25, 2.75)] {
+        assert_approx_eq!(interp.interpolate(&[x, y]).unwrap(), f(x, y));
+    }
+}
+
+#[test]
+fn test_cubic_c2_clamped_uses_given_derivative() {
+    // Differential check for the previous test. See the 1D version of this test for
+    // the full reasoning: exact reproduction alone can't tell "Clamped used the
+    // supplied derivative" apart from "Clamped silently behaved like NotAKnot", since
+    // NotAKnot reproduces this same separable-cubic data exactly with no derivative
+    // info at all.
+    fn f(x: f64, y: f64) -> f64 {
+        x.powi(3) + y.powi(3)
+    }
+    let grid = [0., 1., 2., 3.];
+    let values = Array2::from_shape_fn((4, 4), |(i, j)| f(grid[i], grid[j]));
+    let interp = Interp2D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        values,
+        strategy::CubicC2::clamped(999., 999.), // true derivatives are 0 and 27
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let wrong = interp.interpolate(&[0.5, 0.5]).unwrap();
+    assert!(
+        (wrong - f(0.5, 0.5)).abs() > 1.0,
+        "Clamped(999, 999) gave {wrong}, suspiciously close to the true f(0.5, 0.5) = {} \
+         as if the supplied derivatives were ignored",
+        f(0.5, 0.5)
+    );
+}
+
+#[test]
+fn test_cubic_c2_2d_periodic() {
+    // Ground truth: a *product* of two independent periodic 1D cubic splines,
+    // S_A(x) * S_B(y), rather than a sum. Cubic spline construction is a linear
+    // operator on its data values, so within any single grid cell S_A(x)*S_B(y)
+    // is exactly a bicubic polynomial in that cell, reproduced exactly by the
+    // Hermite patch given exact corner derivatives (product rule):
+    //   value = S_A(x)*S_B(y),  dx = S_A'(x)*S_B(y),
+    //   dy = S_A(x)*S_B'(y),    dxy = S_A'(x)*S_B'(y)
+    // Unlike an additive S_A(x)+S_B(y) oracle, the mixed partial dxy here is
+    // genuinely nonzero, so this actually exercises the corner-derivative
+    // cache's cross-derivative computation rather than trivially validating
+    // against zero regardless of whether that code is correct.
+    let interp = Interp2D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0., 1., 2.],
+        array![
+            [2., 1., 2.],
+            [4., 2., 4.],
+            [2., 1., 2.],
+            [6., 3., 6.],
+            [2., 1., 2.],
+        ],
+        strategy::CubicC2::periodic(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+
+    // (query x, query y, scipy-derived S_A(x) * S_B(y))
+    let cases = [
+        (0.5, 0.5, 2.109375),
+        (2.5, 1.5, 3.140625),
+        (3.5, 0.5, 3.140625),
+        (0.25, 1.75, 1.9373779296875),
+    ];
+
+    for (x, y, expected) in cases {
+        assert_approx_eq!(interp.interpolate(&[x, y]).unwrap(), expected);
+    }
+}
+
+#[test]
+fn test_cubic_c2_mixed_endpoints_scipy_oracle() {
+    // Unlike `test_cubic_c2_mixed_endpoints_cached_vs_uncached` above (which only proves
+    // `Interp2D` and `InterpND` agree on data both reproduce *exactly*, since it's a
+    // genuine bicubic polynomial that any consistent scheme reproduces trivially), this
+    // uses arbitrary, non-polynomial grid data and an independent numerical ground
+    // truth, so a scheme that's internally consistent but numerically wrong on generic
+    // data wouldn't be caught by the other test alone.
+    //
+    // Ground truth: scipy's own tensor-product method, i.e. spline every inner-axis (y)
+    // row independently, then spline the resulting points along the outer axis (x) --
+    // exactly what `InterpND`'s recursive collapse (`spline_eval_nd_cached`) does, and
+    // (per `compute_corner_cache`'s doc comment) what `Interp2D`'s corner-cache Hermite
+    // blend is also claimed to reproduce to float precision. Each axis mixes BC types
+    // across its own endpoints (`NotAKnot`/`FirstDerivative` on x, `SecondDerivative`/
+    // `FirstDerivative` on y), matching scipy's `CubicSpline(bc_type=(bc_start, bc_end))`
+    // 2-tuple form confirmed against the installed scipy (1.13.1) to support an
+    // independent string-or-`(order, value)` pair per side:
+    //   bc_x = ('not-a-knot', (1, 2.0))
+    //   bc_y = ((2, 0.0), (1, -1.0))
+    //   g[i] = CubicSpline(y, values[i, :], bc_type=bc_y)(qy)
+    //   expected = CubicSpline(x, g, bc_type=bc_x)(qx)
+    let grid_x = array![0., 1., 2., 3., 4.];
+    let grid_y = array![0., 1., 2.];
+    let values = array![
+        [2., 5., 3.],
+        [7., 1., 6.],
+        [4., 8., 2.],
+        [9., 3., 5.],
+        [1., 6., 4.],
+    ];
+    let bcs = || {
+        vec![
+            strategy::cubic::CubicC2BoundaryConditions::Endpoints {
+                lower: strategy::cubic::CubicC2Endpoint::NotAKnot,
+                upper: strategy::cubic::CubicC2Endpoint::FirstDerivative(2.0),
+            },
+            strategy::cubic::CubicC2BoundaryConditions::Endpoints {
+                lower: strategy::cubic::CubicC2Endpoint::SecondDerivative(0.0),
+                upper: strategy::cubic::CubicC2Endpoint::FirstDerivative(-1.0),
+            },
+        ]
+    };
+    let interp_2d = Interp2D::new(
+        grid_x.clone(),
+        grid_y.clone(),
+        values.clone(),
+        strategy::CubicC2::new(bcs()),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let interp_nd = InterpND::new(
+        vec![grid_x, grid_y],
+        values.into_dyn(),
+        strategy::CubicC2::new(bcs()),
+        Extrapolate::Error,
+    )
+    .unwrap();
+
+    // (query x, query y, scipy-derived expected value)
+    let cases = [
+        (0.5, 0.5, 1.2447630494505497),
+        (2.5, 1.5, 4.393844436813188),
+        (3.5, 0.5, 4.001802884615384),
+        (1.25, 1.75, 4.685137067522321),
+    ];
+
+    for (x, y, expected) in cases {
+        assert_approx_eq!(interp_2d.interpolate(&[x, y]).unwrap(), expected);
+        assert_approx_eq!(interp_nd.interpolate(&[x, y]).unwrap(), expected);
+    }
+}
+
+#[test]
 fn test_invalid_args() {
     let interp = Interp2D::new(
         array![0.05, 0.10, 0.15],
@@ -124,7 +568,7 @@ fn test_step() {
         grid_x.view(),
         grid_y.view(),
         values.view(),
-        strategy::Step::from(strategy::StepDirection::Lower),
+        strategy::Step::lower(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -139,21 +583,11 @@ fn test_step() {
     assert_eq!(interp.interpolate(&[0.7, 1.4]).unwrap(), f[[0, 1]]); // floor x→0, floor y→1
     assert_eq!(interp.interpolate(&[1.9, 0.1]).unwrap(), f[[1, 0]]); // floor x→1, floor y→0
 
-    let interp_lower = Interp2DView::new(
-        grid_x.view(),
-        grid_y.view(),
-        values.view(),
-        strategy::StepLower,
-        Extrapolate::Error,
-    )
-    .unwrap();
-    assert_eq!(interp_lower.interpolate(&[0.7, 1.4]).unwrap(), f[[0, 1]]);
-
     let interp_upper = Interp2DView::new(
         grid_x.view(),
         grid_y.view(),
         values.view(),
-        strategy::StepUpper,
+        strategy::Step::upper(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -164,9 +598,9 @@ fn test_step() {
         grid_x.view(),
         grid_y.view(),
         values.view(),
-        strategy::Step(vec![
-            strategy::StepDirection::Lower,
-            strategy::StepDirection::Upper,
+        strategy::Step::new(vec![
+            strategy::step::StepDirection::Lower,
+            strategy::step::StepDirection::Upper,
         ]),
         Extrapolate::Error,
     )
@@ -179,10 +613,10 @@ fn test_step() {
         grid_x.view(),
         grid_y.view(),
         values.view(),
-        strategy::Step(vec![
-            strategy::StepDirection::Lower,
-            strategy::StepDirection::Lower,
-            strategy::StepDirection::Lower,
+        strategy::Step::new(vec![
+            strategy::step::StepDirection::Lower,
+            strategy::step::StepDirection::Lower,
+            strategy::step::StepDirection::Lower,
         ]),
         Extrapolate::Error,
     )
@@ -278,7 +712,7 @@ fn test_set_strategy_runs_init() {
     // `Step`'s `validate` checks its direction count against dimensionality,
     // so swapping in a `Step` with the wrong count via `set_strategy` must
     // surface that error rather than silently leaving the strategy unvalidated.
-    let mut interp: Interp2D<_, strategy::enums::Strategy2DEnum> = Interp2D::new(
+    let mut interp: Interp2D<_, strategy::enums::Strategy2DEnum<f64>> = Interp2D::new(
         array![0., 1.],
         array![0., 1.],
         array![[0., 1.], [2., 3.]],
@@ -286,10 +720,10 @@ fn test_set_strategy_runs_init() {
         Extrapolate::Error,
     )
     .unwrap();
-    let bad_step = strategy::Step(vec![strategy::StepDirection::Lower; 3]);
+    let bad_step = strategy::Step::new(vec![strategy::step::StepDirection::Lower; 3]);
     assert!(matches!(
         interp.set_strategy(bad_step).unwrap_err(),
-        ValidateError::Other(_)
+        ValidateError::PerAxisLen { .. }
     ));
 }
 
@@ -300,7 +734,7 @@ fn test_set_strategy_runs_validate() {
     // fine, but swapping to `LinearUniform` via `set_strategy` must catch it via
     // `Strategy2D::validate` rather than silently accepting a strategy that will
     // produce wrong results at query time.
-    let mut interp: Interp2D<_, strategy::enums::Strategy2DEnum> = Interp2D::new(
+    let mut interp: Interp2D<_, strategy::enums::Strategy2DEnum<f64>> = Interp2D::new(
         array![0., 1., 5.], // non-uniform
         array![0., 1., 2.],
         array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],

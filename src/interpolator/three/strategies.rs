@@ -257,7 +257,7 @@ where
 {
     /// Ensures the number of provided step directions matches the interpolator dimensionality.
     fn validate(&self, _data: &InterpData3DBase<D>) -> Result<(), ValidateError> {
-        self.validate_len(3)
+        self.directions.validate_len(3, "Step", "directions")
     }
 
     fn interpolate(
@@ -265,9 +265,9 @@ where
         data: &InterpData3DBase<D>,
         point: &[D::Elem; 3],
     ) -> Result<D::Elem, InterpolateError> {
-        let i = locate_step_index(self.dir(0), data.grid[0].view(), &point[0]);
-        let j = locate_step_index(self.dir(1), data.grid[1].view(), &point[1]);
-        let k = locate_step_index(self.dir(2), data.grid[2].view(), &point[2]);
+        let i = locate_step_index(self.directions[0], data.grid[0].view(), &point[0]);
+        let j = locate_step_index(self.directions[1], data.grid[1].view(), &point[1]);
+        let k = locate_step_index(self.directions[2], data.grid[2].view(), &point[2]);
         Ok(data.values[[i, j, k]])
     }
 
@@ -277,44 +277,44 @@ where
     }
 }
 
-impl<D> Strategy3D<D> for StepLower
+impl<D> Strategy3D<D> for CubicC2<D::Elem>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
+    fn validate(&self, data: &InterpData3DBase<D>) -> Result<(), ValidateError> {
+        self.boundary_conditions
+            .validate_len(3, "CubicC2", "boundary conditions")?;
+        for (dim, grid) in data.grid.iter().enumerate() {
+            validate_bc_min_points(&self.boundary_conditions[dim], grid.len(), dim)?;
+        }
+        Ok(())
+    }
+
+    /// Precomputes the full corner-derivative tensor via `compute_corner_cache`, so
+    /// [`interpolate`](Self::interpolate) is an O(1) Hermite-patch lookup instead of
+    /// re-solving the outer axes on every call.
+    fn init(&mut self, data: &InterpData3DBase<D>) -> Result<(), ValidateError> {
+        let grids: Vec<ArrayView1<D::Elem>> = data.grid.iter().map(|g| g.view()).collect();
+        self.cache = compute_corner_cache(
+            &grids,
+            data.values.view().into_dyn(),
+            &self.boundary_conditions,
+        );
+        Ok(())
+    }
+
     fn interpolate(
         &self,
         data: &InterpData3DBase<D>,
         point: &[D::Elem; 3],
     ) -> Result<D::Elem, InterpolateError> {
-        let i = locate_step_index(StepDirection::Lower, data.grid[0].view(), &point[0]);
-        let j = locate_step_index(StepDirection::Lower, data.grid[1].view(), &point[1]);
-        let k = locate_step_index(StepDirection::Lower, data.grid[2].view(), &point[2]);
-        Ok(data.values[[i, j, k]])
+        let grids: Vec<ArrayView1<D::Elem>> = data.grid.iter().map(|g| g.view()).collect();
+        Ok(spline_eval_corner_cached(&grids, self.cache.view(), point))
     }
 
+    /// Returns `true`: the boundary cubic polynomials extend naturally.
     fn allow_extrapolate(&self) -> bool {
-        false
-    }
-}
-
-impl<D> Strategy3D<D> for StepUpper
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialOrd + Copy + Debug,
-{
-    fn interpolate(
-        &self,
-        data: &InterpData3DBase<D>,
-        point: &[D::Elem; 3],
-    ) -> Result<D::Elem, InterpolateError> {
-        let i = locate_step_index(StepDirection::Upper, data.grid[0].view(), &point[0]);
-        let j = locate_step_index(StepDirection::Upper, data.grid[1].view(), &point[1]);
-        let k = locate_step_index(StepDirection::Upper, data.grid[2].view(), &point[2]);
-        Ok(data.values[[i, j, k]])
-    }
-
-    fn allow_extrapolate(&self) -> bool {
-        false
+        true
     }
 }

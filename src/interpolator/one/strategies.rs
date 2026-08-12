@@ -90,7 +90,7 @@ where
 {
     /// Ensures the number of provided step directions matches the interpolator dimensionality.
     fn validate(&self, _data: &InterpData1DBase<D>) -> Result<(), ValidateError> {
-        self.validate_len(1)
+        self.directions.validate_len(1, "Step", "directions")
     }
 
     fn interpolate(
@@ -98,7 +98,7 @@ where
         data: &InterpData1DBase<D>,
         point: &[D::Elem; 1],
     ) -> Result<D::Elem, InterpolateError> {
-        Ok(data.values[locate_step_index(self.dir(0), data.grid[0].view(), &point[0])])
+        Ok(data.values[locate_step_index(self.directions[0], data.grid[0].view(), &point[0])])
     }
 
     fn allow_extrapolate(&self) -> bool {
@@ -106,40 +106,49 @@ where
     }
 }
 
-impl<D> Strategy1D<D> for StepLower
+impl<D> Strategy1D<D> for CubicC2<D::Elem>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: PartialOrd + Copy + Debug,
+    D::Elem: Float + Debug,
 {
+    /// Checks the boundary-condition count (must be 1) and the grid size against the
+    /// configured BC's minimum point requirement (e.g. [`CubicC2Endpoint::NotAKnot`]
+    /// needs at least 3 or 4, depending on whether one or both endpoints use it) before
+    /// [`Strategy1D::init`] attempts the real computation.
+    fn validate(&self, data: &InterpData1DBase<D>) -> Result<(), ValidateError> {
+        self.boundary_conditions
+            .validate_len(1, "CubicC2", "boundary conditions")?;
+        validate_bc_min_points(&self.boundary_conditions[0], data.grid[0].len(), 0)
+    }
+
+    /// Computes and caches `M[0..=n]` for the configured BC via `compute_m_inner_cache`
+    /// (a single pencil, since 1-D data has no outer axes to vary over).
+    fn init(&mut self, data: &InterpData1DBase<D>) -> Result<(), ValidateError> {
+        self.cache = compute_m_inner_cache(
+            data.grid[0].view(),
+            data.values.view().into_dyn(),
+            &self.boundary_conditions[0],
+        );
+        Ok(())
+    }
+
     fn interpolate(
         &self,
         data: &InterpData1DBase<D>,
         point: &[D::Elem; 1],
     ) -> Result<D::Elem, InterpolateError> {
-        Ok(data.values[locate_step_index(StepDirection::Lower, data.grid[0].view(), &point[0])])
+        spline_eval_nd_cached(
+            &[data.grid[0].view()],
+            data.values.view().into_dyn(),
+            self.cache.view(),
+            point,
+            &self.boundary_conditions,
+            0,
+        )
     }
 
-    /// Returns `false`.
+    /// Returns `true`: the boundary cubic polynomials extend naturally.
     fn allow_extrapolate(&self) -> bool {
-        false
-    }
-}
-
-impl<D> Strategy1D<D> for StepUpper
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialOrd + Copy + Debug,
-{
-    fn interpolate(
-        &self,
-        data: &InterpData1DBase<D>,
-        point: &[D::Elem; 1],
-    ) -> Result<D::Elem, InterpolateError> {
-        Ok(data.values[locate_step_index(StepDirection::Upper, data.grid[0].view(), &point[0])])
-    }
-
-    /// Returns `false`.
-    fn allow_extrapolate(&self) -> bool {
-        false
+        true
     }
 }
