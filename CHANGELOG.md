@@ -27,15 +27,25 @@ Everything below is merged to `main` but not yet tagged/released.
 - `LinearUniform` and `Step` are available for every dimensionality and included in the
   `Strategy*Enum` types.
 - `strategy::CubicC2`: a C² piecewise cubic spline strategy (1D/2D/3D/ND) with
-  configurable boundary conditions (`CubicC2BoundaryConditions::{NotAKnot, Natural,
-  Clamped, Periodic}`) given via `boundary_conditions: PerAxis<CubicC2BoundaryConditions<T>>`
-  (`Broadcast` for one condition on every axis, `Axes` for one per axis), a single
-  tridiagonal solve per axis. `Strategy1D`/`ND` cache the innermost axis's coefficients;
-  `Strategy2D`/`3D` additionally cache the full corner-derivative tensor for O(1) queries.
+  configurable boundary conditions given via
+  `boundary_conditions: PerAxis<CubicC2BoundaryConditions<T>>` (`Broadcast` for one
+  condition on every axis, `Axes` for one per axis), a single tridiagonal solve per axis.
+  `CubicC2BoundaryConditions` is either `Periodic`, or `Endpoints { lower, upper }` where
+  `lower`/`upper` are independent `CubicC2Endpoint`s (`NotAKnot`, `FirstDerivative(T)`
+  "clamped", or `SecondDerivative(T)`, zero being the classic "natural" case); the two
+  ends of an axis can mix types, e.g. `NotAKnot` on one side and a specific derivative on
+  the other. A single-`NotAKnot` axis needs 3 grid points; 4 if both ends are `NotAKnot`.
+  `not_a_knot()`/`natural()`/`clamped(lower, upper)`/`periodic()` construct the common
+  symmetric cases; `CubicC2BoundaryConditions::{not_a_knot, first_derivative,
+  second_derivative}` are the per-condition constructors mixed endpoints are built from.
+  `Strategy1D`/`ND` cache the innermost axis's coefficients; `Strategy2D`/`3D`
+  additionally cache the full corner-derivative tensor for O(1) queries.
   `From<CubicC2BoundaryConditions<T>>` broadcasts a condition obtained generically (e.g.
-  from runtime config) without matching on it first; `not_a_knot()`/`natural()`/
-  `clamped()`/`periodic()` remain the direct way to construct each variant. Included in the
-  `Strategy*Enum` types.
+  from runtime config) without matching on it first. Included in the `Strategy*Enum`
+  types. With the `serde` feature, serializes keyed by `"CubicC2"` like the other
+  built-in strategies; `NotAKnot`/`Natural`/`Periodic` (symmetric, no explicit value)
+  serialize as bare strings, anything else (an explicit value, or mixed endpoint types)
+  as the general `{"Endpoints": {"lower": ..., "upper": ...}}` form.
 - `Nested` wrapper / `serialize_nested` helper / `SerializeNested` trait (`prelude`,
   `serde` feature): opt into the nested-array serialization format at a specific call
   site, e.g. `serde_json::to_string(&Nested(&interp))` or

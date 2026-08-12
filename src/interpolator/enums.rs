@@ -368,10 +368,12 @@ macro_rules! slice_to_array_forward {
 #[cfg_attr(
     feature = "serde",
     serde(bound(
-        serialize = "D::Elem: Serialize",
+        // `Zero` is `CubicC2`'s requirement (via `Strategy*Enum`'s own bound), not
+        // something every variant here needs on its own.
+        serialize = "D::Elem: Serialize + Zero",
         deserialize = "
             D: DataOwned,
-            D::Elem: Deserialize<'de>,
+            D::Elem: Deserialize<'de> + Zero,
         "
     ))
 )]
@@ -395,7 +397,9 @@ pub type InterpolatorEnumView<T> = InterpolatorEnumBase<ViewRepr<T>>;
 impl<D> SerializeNested for InterpolatorEnumBase<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: PartialEq + Debug + Clone + Serialize,
+    // `Zero` is `CubicC2`'s requirement (via `Strategy*Enum`'s own bound), not
+    // something every variant here needs on its own.
+    D::Elem: PartialEq + Debug + Clone + Serialize + Zero,
 {
     /// `#[serde(untagged)]`, so each variant serializes as its inner value.
     fn serialize_nested<S>(&self, serializer: S) -> Result<S::Ok, S::Error>

@@ -32,8 +32,19 @@ use ndarray::Zip;
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(
+        serialize = "T: Serialize + Zero",
+        deserialize = "T: Deserialize<'de> + Zero"
+    ))
+)]
 pub struct CubicC2<T> {
     /// Boundary conditions, one per dimension or a single entry broadcast to all.
+    // Serializes under the key "CubicC2" rather than "boundary_conditions", making the
+    // strategy type explicit in the output, consistent with how Linear, Nearest, Step,
+    // etc. serialize to their type name.
+    #[cfg_attr(feature = "serde", serde(rename = "CubicC2"))]
     pub boundary_conditions: PerAxis<CubicC2BoundaryConditions<T>>,
     /// Precomputed derivative data, populated by `Strategy1D`/`2D`/`3D`/`ND::init`. Its
     /// shape depends on which of those populated it:
@@ -66,8 +77,14 @@ pub struct CubicC2<T> {
 /// common symmetric cases have shorthand constructors: [`not_a_knot`](Self::not_a_knot),
 /// [`first_derivative`](Self::first_derivative), [`second_derivative`](Self::second_derivative);
 /// [`CubicC2::natural`] additionally shorthands `second_derivative(0, 0)`.
+///
+/// Serializes as a bare string for [`NotAKnot`](CubicC2Endpoint::NotAKnot) (both
+/// endpoints) and `Periodic`, matching their pre-`Endpoints` representation; a bare
+/// `"Natural"` string is accepted and produced as a shorthand for symmetric zero
+/// [`SecondDerivative`](CubicC2Endpoint::SecondDerivative) too. Anything else (an
+/// explicit value, or asymmetric endpoints) uses the general `{"Endpoints": {"lower":
+/// ..., "upper": ...}}` form.
 #[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub enum CubicC2BoundaryConditions<T> {
     /// Condition applied independently at each end of the axis.
     Endpoints {
@@ -746,6 +763,97 @@ fn spline_eval_corner_cached_local<T: Float>(cache: ArrayViewD<T>, hts: &[(T, T)
     spline_eval_corner_cached_local(new_field.view(), &hts[1..])
 }
 
+#[cfg(feature = "serde")]
+mod cubic_serde {
+    use super::*;
+    use serde::Deserializer;
+
+    /// Bare-string wire form for the two `CubicC2BoundaryConditions::Endpoints` cases
+    /// that carry no distinguishing per-endpoint data (symmetric `NotAKnot`, symmetric
+    /// zero `SecondDerivative`, i.e. "natural"), plus `Periodic`. Anything else uses the
+    /// general `Endpoints` shape instead.
+    #[derive(Deserialize, Serialize)]
+    enum BcName {
+        NotAKnot,
+        Natural,
+        Periodic,
+    }
+
+    /// General `Endpoints` shape, owned form for [`Deserialize`].
+    #[derive(Deserialize)]
+    struct EndpointsOwned<T> {
+        lower: CubicC2Endpoint<T>,
+        upper: CubicC2Endpoint<T>,
+    }
+
+    /// General `Endpoints` shape, borrowed form for [`Serialize`]: avoids requiring `T:
+    /// Clone` just to serialize.
+    #[derive(Serialize)]
+    struct EndpointsRef<'a, T> {
+        lower: &'a CubicC2Endpoint<T>,
+        upper: &'a CubicC2Endpoint<T>,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum BcWireDe<T> {
+        Named(BcName),
+        Endpoints {
+            #[serde(rename = "Endpoints")]
+            endpoints: EndpointsOwned<T>,
+        },
+    }
+
+    #[derive(Serialize)]
+    #[serde(untagged)]
+    enum BcWireSer<'a, T> {
+        Named(BcName),
+        Endpoints {
+            #[serde(rename = "Endpoints")]
+            endpoints: EndpointsRef<'a, T>,
+        },
+    }
+
+    impl<T: Serialize + Zero> Serialize for CubicC2BoundaryConditions<T> {
+        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+            match self {
+                Self::Periodic => BcWireSer::<T>::Named(BcName::Periodic).serialize(serializer),
+                Self::Endpoints {
+                    lower: CubicC2Endpoint::NotAKnot,
+                    upper: CubicC2Endpoint::NotAKnot,
+                } => BcWireSer::<T>::Named(BcName::NotAKnot).serialize(serializer),
+                Self::Endpoints {
+                    lower: CubicC2Endpoint::SecondDerivative(lower),
+                    upper: CubicC2Endpoint::SecondDerivative(upper),
+                } if lower.is_zero() && upper.is_zero() => {
+                    BcWireSer::<T>::Named(BcName::Natural).serialize(serializer)
+                }
+                Self::Endpoints { lower, upper } => BcWireSer::Endpoints {
+                    endpoints: EndpointsRef { lower, upper },
+                }
+                .serialize(serializer),
+            }
+        }
+    }
+
+    impl<'de, T: Deserialize<'de> + Zero> Deserialize<'de> for CubicC2BoundaryConditions<T> {
+        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+            Ok(match BcWireDe::<T>::deserialize(deserializer)? {
+                BcWireDe::Named(BcName::NotAKnot) => CubicC2BoundaryConditions::not_a_knot(),
+                BcWireDe::Named(BcName::Natural) => Self::Endpoints {
+                    lower: CubicC2Endpoint::SecondDerivative(T::zero()),
+                    upper: CubicC2Endpoint::SecondDerivative(T::zero()),
+                },
+                BcWireDe::Named(BcName::Periodic) => Self::Periodic,
+                BcWireDe::Endpoints { endpoints } => Self::Endpoints {
+                    lower: endpoints.lower,
+                    upper: endpoints.upper,
+                },
+            })
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -889,5 +997,67 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    #[cfg(feature = "serde")]
+    fn test_serde() {
+        // The whole-axis cases collapse to a bare string, keyed by strategy name like
+        // every other built-in strategy.
+        assert_eq!(
+            serde_json::to_string(&CubicC2::<f64>::not_a_knot()).unwrap(),
+            r#"{"CubicC2":"NotAKnot"}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&CubicC2::<f64>::natural()).unwrap(),
+            r#"{"CubicC2":"Natural"}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&CubicC2::<f64>::periodic()).unwrap(),
+            r#"{"CubicC2":"Periodic"}"#
+        );
+        // Anything carrying an explicit value, or mixing endpoint types, uses the
+        // general `Endpoints` form instead.
+        assert_eq!(
+            serde_json::to_string(&CubicC2::<f64>::clamped(1.0, 2.0)).unwrap(),
+            r#"{"CubicC2":{"Endpoints":{"lower":{"FirstDerivative":1.0},"upper":{"FirstDerivative":2.0}}}}"#
+        );
+        let mixed = CubicC2::<f64>::from(CubicC2BoundaryConditions::Endpoints {
+            lower: CubicC2Endpoint::NotAKnot,
+            upper: CubicC2Endpoint::FirstDerivative(3.0),
+        });
+        assert_eq!(
+            serde_json::to_string(&mixed).unwrap(),
+            r#"{"CubicC2":{"Endpoints":{"lower":"NotAKnot","upper":{"FirstDerivative":3.0}}}}"#
+        );
+        assert_eq!(
+            serde_json::from_str::<CubicC2<f64>>(&serde_json::to_string(&mixed).unwrap()).unwrap(),
+            mixed
+        );
+
+        // Bare "NotAKnot"/"Natural" round-trip; the fully expanded `Endpoints` form is
+        // also accepted on read for both, even though only the bare form is ever written.
+        assert_eq!(
+            serde_json::from_str::<CubicC2<f64>>(r#"{"CubicC2":"NotAKnot"}"#).unwrap(),
+            CubicC2::<f64>::not_a_knot()
+        );
+        assert_eq!(
+            serde_json::from_str::<CubicC2<f64>>(r#"{"CubicC2":"Natural"}"#).unwrap(),
+            CubicC2::<f64>::natural()
+        );
+        assert_eq!(
+            serde_json::from_str::<CubicC2<f64>>(
+                r#"{"CubicC2":{"Endpoints":{"lower":"NotAKnot","upper":"NotAKnot"}}}"#
+            )
+            .unwrap(),
+            CubicC2::<f64>::not_a_knot()
+        );
+        assert_eq!(
+            serde_json::from_str::<CubicC2<f64>>(
+                r#"{"CubicC2":{"Endpoints":{"lower":{"SecondDerivative":0.0},"upper":{"SecondDerivative":0.0}}}}"#
+            )
+            .unwrap(),
+            CubicC2::<f64>::natural()
+        );
     }
 }

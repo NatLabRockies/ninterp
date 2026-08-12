@@ -66,6 +66,17 @@ macro_rules! strategy_enum_impl {
         #[derive(Debug, Clone, PartialEq)]
         #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
         #[cfg_attr(feature = "serde", serde(untagged))]
+        // `T` is otherwise unused by every non-generic strategy (`Linear`, `Nearest`,
+        // `Step`, `LinearUniform`); only `CubicC2<T>` actually depends on it, and its own
+        // `Serialize`/`Deserialize` needs `Zero` (for the `Natural` bare-string
+        // shorthand), so that's the bound the whole enum needs too.
+        #[cfg_attr(
+            feature = "serde",
+            serde(bound(
+                serialize = "T: Serialize + Zero",
+                deserialize = "T: Deserialize<'de> + Zero"
+            ))
+        )]
         #[non_exhaustive]
         pub enum $EnumName<T> {
             $($Variant($StrategyType),)*
