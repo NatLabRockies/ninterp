@@ -112,10 +112,44 @@ fn test_cubic_c2_cached_vs_uncached() {
 }
 
 #[test]
+fn test_cubic_c2_clamped_cached_vs_uncached() {
+    // Same equivalence check as `cached_vs_uncached` above, but with `Clamped` on
+    // non-separable data. `Clamped`'s two BCs are separable
+    // (`clamped_cubic_exact`/`clamped_uses_given_derivative` below), so they can't
+    // exercise the corner cache's cross-derivative pass, which uses a different BC
+    // (`compute_corner_cache`'s `cross_bc`) than the axis's own first-derivative pass.
+    fn f(x: f64, y: f64) -> f64 {
+        x.powi(3) + x.powi(2) * y + x * y.powi(2) + y.powi(3)
+    }
+    let grid = array![0., 1., 2., 3.];
+    let values = Array2::from_shape_fn((4, 4), |(i, j)| f(grid[i], grid[j]));
+    let interp_2d = Interp2DView::new(
+        grid.view(),
+        grid.view(),
+        values.view(),
+        strategy::CubicC2::clamped(0., 27.),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let interp_nd = InterpNDView::new(
+        vec![grid.view(), grid.view()],
+        values.view().into_dyn(),
+        strategy::CubicC2::clamped(0., 27.),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &(x, y) in &[(0.5, 0.5), (1.5, 2.5), (2.5, 1.5), (0.25, 2.75)] {
+        assert_approx_eq!(
+            interp_2d.interpolate(&[x, y]).unwrap(),
+            interp_nd.interpolate(&[x, y]).unwrap()
+        );
+    }
+}
+
+#[test]
 fn test_cubic_c2_clamped_short_axis() {
     // A `Clamped` axis with only 2 points must still validate under the corner-cache
-    // upgrade: the second-pass BC substituted for `Clamped` (`Natural`, not `NotAKnot`)
-    // has no minimum-point requirement -- regression test for that fallback choice.
+    // upgrade.
     let interp = Interp2D::new(
         array![0., 1.], // only 2 points on the Clamped axis
         array![0., 1., 2., 3.],

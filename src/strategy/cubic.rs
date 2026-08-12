@@ -50,8 +50,10 @@ pub struct CubicC2<T> {
     ///   value grid with one extra trailing axis of length `2^N` (`N` = 2 or 3): see
     ///   [`compute_corner_cache`]. Every query is then an O(1) lookup, no solving.
     ///
-    /// Not included in the serialized form. Call [`Interpolator::validate`] after
-    /// deserializing to recompute this before use.
+    /// Not included in the serialized form. After deserializing, call the
+    /// interpolator's `init_strategy` method (e.g.
+    /// [`Interp1D::init_strategy`](crate::interpolator::Interp1D::init_strategy)) to
+    /// recompute this before use.
     #[cfg_attr(feature = "serde", serde(skip, default = "empty_cache"))]
     pub(crate) cache: ArrayD<T>,
 }
@@ -75,7 +77,9 @@ pub enum CubicC2BoundaryConditions<T> {
     },
     /// First and second derivatives match at both endpoints. By convention
     /// `values[n]` (the last point along this axis) should equal `values[0]`, since
-    /// that's what makes the axis periodic, but it isn't read or enforced.
+    /// that's what makes the axis periodic. This isn't enforced: `values[n]` is read and
+    /// used like any other data point (both to build the periodic system and to
+    /// evaluate the last interval), just never compared against `values[0]`.
     Periodic,
 }
 
@@ -268,9 +272,10 @@ pub(crate) fn compute_m<T: Float>(
             thomas(&h, &diag, &h, &rhs)
         }
         CubicC2BoundaryConditions::Periodic => {
-            // `y[n]` is never read below: the cyclic solve only uses `y[0..n]`, treating
-            // the axis as wrapping from index `n-1` back to `0`. By convention `y[n]`
-            // should equal `y[0]`, but nothing here depends on or checks that.
+            // `y[n]` is read below, via `slopes[n - 1]` in the `rhs[0]` line, and
+            // `eval_spline_from_m` also reads `y[n]` directly when evaluating the last
+            // interval. By convention `y[n]` should equal `y[0]`, but nothing here
+            // compares them; `y[n]` is just used as ordinary data either way.
             if n < 2 {
                 vec![T::zero(); n + 1]
             } else {
@@ -506,12 +511,15 @@ fn corner_cache_axis_pass<T: Float>(
 /// bit, splines the corresponding field along axis `i` ([`corner_cache_axis_pass`]) to
 /// populate the entry with that bit added. Boundary condition per axis is
 /// [`CubicC2::bc_for_dim`] when splining the raw values (`mask == 0`, this axis's own
-/// first-derivative pass) -- but for every other `mask` (a cross-derivative pass over an
+/// first-derivative pass). For every other `mask` (a cross-derivative pass over an
 /// already-differentiated field, not the original data), `Clamped` falls back to
-/// `Natural`: the user's clamped value is a first derivative *of the original function*,
-/// not the right shape of data for splining a field that's already a derivative. Unlike
-/// `NotAKnot`, `Natural` has no minimum-point requirement, so it never rejects a
-/// `Clamped` axis with only 2-3 points that validated fine before this cache.
+/// `Clamped { left: 0, right: 0 }`: a clamped axis fixes the same scalar derivative at
+/// every point along that boundary, so differentiating that (constant-along-the-boundary)
+/// field with respect to any other axis must itself be zero at that axis's own endpoints.
+/// That's a zero-*first*-derivative condition on the field being splined, not `Natural`'s
+/// zero-*second*-derivative one. Verified empirically: with non-separable data, only the
+/// homogeneous-`Clamped` fallback makes this cached path agree (to float precision) with
+/// `StrategyND`'s independent recursive solve; `Natural` does not.
 pub(crate) fn compute_corner_cache<T: Float>(
     grids: &[ArrayView1<T>],
     values: ArrayViewD<T>,
@@ -530,7 +538,10 @@ pub(crate) fn compute_corner_cache<T: Float>(
         let bit = 1usize << axis;
         let bc_axis = &bcs[if bcs.len() == 1 { 0 } else { axis }];
         let cross_bc = match bc_axis {
-            CubicC2BoundaryConditions::Clamped { .. } => CubicC2BoundaryConditions::Natural,
+            CubicC2BoundaryConditions::Clamped { .. } => CubicC2BoundaryConditions::Clamped {
+                left: T::zero(),
+                right: T::zero(),
+            },
             other => other.clone(),
         };
         for mask in 0..bit {
@@ -559,15 +570,21 @@ fn hermite_eval_1d<T: Float>(p0: T, m0: T, p1: T, m1: T, h: T, t: T) -> T {
 }
 
 /// Evaluates a Hermite patch from the full corner-derivative tensor built by
-/// [`compute_corner_cache`] in O(1) -- no solving, unlike [`spline_eval_nd_cached`]'s
-/// outer axes. Used by [`Strategy2D`]/[`Strategy3D`]'s `CubicC2::interpolate`.
+/// [`compute_corner_cache`] in O(1), no solving, unlike [`spline_eval_nd_cached`]'s outer
+/// axes. Used by [`Strategy2D`]/[`Strategy3D`]'s `CubicC2::interpolate`.
 ///
-/// Recurses like [`spline_eval_nd_cached`] (peels `grids[0]`, recurses on `grids[1..]`),
-/// but instead of solving a fresh 1-D spline per level, Hermite-blends pairs of cache
-/// entries. Bit `i` of the cache's trailing mask axis is assigned to `grids[i]` (see
+/// First localizes every axis down to just its query cell's two bounding grid indices,
+/// into an owned `2 x 2 x ... x 2 x 2^N` buffer (`N = grids.len()`) that's independent of
+/// grid size. Without this step the recursive blend would run over the full extent of
+/// every not-yet-eliminated axis at each level, making the cost grow with grid size
+/// instead of being the O(1) this cache exists to provide.
+/// [`spline_eval_corner_cached_local`] then recurses on that small buffer like
+/// [`spline_eval_nd_cached`] (peels the first axis, recurses on the rest),
+/// Hermite-blending pairs of entries instead of solving a fresh 1-D spline per level. Bit
+/// `i` of the cache's trailing mask axis is assigned to `grids[i]` (see
 /// [`compute_corner_cache`]), and recursion always eliminates the lowest-numbered
 /// remaining axis first, so at every level the bit being eliminated is bit 0 of the
-/// *current* mask numbering -- exactly the even/odd split of that axis. Each level's
+/// *current* mask numbering: exactly the even/odd split of that axis. Each level's
 /// blended output re-numbers the survivors contiguously (`mask / 2`), matching what the
 /// next level expects.
 pub(crate) fn spline_eval_corner_cached<T: Float>(
@@ -578,22 +595,50 @@ pub(crate) fn spline_eval_corner_cached<T: Float>(
     debug_assert_eq!(grids.len(), point.len());
     debug_assert_eq!(cache.ndim(), grids.len() + 1);
 
-    if grids.is_empty() {
+    let n_axes = grids.len();
+    let n_bits = cache.len_of(Axis(n_axes));
+
+    let mut lower = vec![0usize; n_axes];
+    let mut hts = Vec::with_capacity(n_axes);
+    for (axis, grid) in grids.iter().enumerate() {
+        let l = locate_lower_index(*grid, &point[axis]);
+        let h = grid[l + 1] - grid[l];
+        let t = (point[axis] - grid[l]) / h;
+        lower[axis] = l;
+        hts.push((h, t));
+    }
+
+    let mut local_shape = vec![2usize; n_axes];
+    local_shape.push(n_bits);
+    let local = ArrayD::from_shape_fn(IxDyn(&local_shape), |idx| {
+        let mut src = vec![0usize; n_axes + 1];
+        for axis in 0..n_axes {
+            src[axis] = lower[axis] + idx[axis];
+        }
+        src[n_axes] = idx[n_axes];
+        cache[IxDyn(&src)]
+    });
+
+    spline_eval_corner_cached_local(local.view(), &hts)
+}
+
+/// Recursive Hermite-blend step of [`spline_eval_corner_cached`], operating on the small
+/// grid-size-independent local buffer it builds. See that function's doc for the
+/// recursion scheme.
+fn spline_eval_corner_cached_local<T: Float>(cache: ArrayViewD<T>, hts: &[(T, T)]) -> T {
+    if hts.is_empty() {
         return *cache
             .iter()
             .next()
             .expect("corner cache base case has exactly one entry");
     }
 
+    let (h, t) = hts[0];
     let mask_axis = Axis(cache.ndim() - 1);
     let half = cache.len_of(mask_axis) / 2;
 
-    let lower = locate_lower_index(grids[0], &point[0]);
-    let h = grids[0][lower + 1] - grids[0][lower];
-    let t = (point[0] - grids[0][lower]) / h;
-
-    let lower_slice = cache.index_axis(Axis(0), lower);
-    let upper_slice = cache.index_axis(Axis(0), lower + 1);
+    let lower_slice = cache.index_axis(Axis(0), 0);
+    let upper_slice = cache.index_axis(Axis(0), 1);
     let slice_mask_axis = Axis(lower_slice.ndim() - 1);
 
     let mut new_shape = lower_slice.shape()[..lower_slice.ndim() - 1].to_vec();
@@ -617,5 +662,5 @@ pub(crate) fn spline_eval_corner_cached<T: Float>(
             });
     }
 
-    spline_eval_corner_cached(&grids[1..], new_field.view(), &point[1..])
+    spline_eval_corner_cached_local(new_field.view(), &hts[1..])
 }

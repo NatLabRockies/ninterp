@@ -43,7 +43,7 @@ fn test_cubic_c2_knot_exactness() {
 #[test]
 fn test_cubic_c2_two_points() {
     // Degenerate case: 2 points → degenerates to linear interpolation.
-    // Uses Natural BC since NotAKnot requires ≥ 3 points.
+    // Uses Natural BC since NotAKnot requires ≥ 4 points.
     let interp = Interp1D::new(
         array![0., 1.],
         array![0., 2.],
