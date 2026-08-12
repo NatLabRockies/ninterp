@@ -6,12 +6,12 @@ strategy_enum_impl!(
     InterpData2DBase,
     &[D::Elem; 2],
     [
-        (Linear, strategy::Linear),
-        (LinearUniform, strategy::LinearUniform),
         (Nearest, strategy::Nearest),
         (Step, strategy::Step),
         (StepLower, strategy::StepLower),
         (StepUpper, strategy::StepUpper),
+        (Linear, strategy::Linear),
+        (LinearUniform, strategy::LinearUniform),
     ]
 );
 

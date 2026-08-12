@@ -12,11 +12,11 @@
 ///   - `Base` (generic) and `View` (borrowed) type aliases for all of the above
 /// - Their common trait: [`Interpolator`](`interpolator::Interpolator`)
 /// - The [`strategy`] mod, containing pre-defined interpolation strategies:
-///   - [`strategy::Linear`]
-///   - [`strategy::LinearUniform`]
 ///   - [`strategy::Nearest`]
 ///   - [`strategy::Step`] (per-dimension and/or runtime-selected step directions)
 ///   - [`strategy::StepLower`] / [`strategy::StepUpper`]
+///   - [`strategy::Linear`]
+///   - [`strategy::LinearUniform`]
 ///   - [`strategy::CubicC2`] (C² cubic spline)
 ///   - `serde`-compatible strategy enums: [`strategy::enums::Strategy1DEnum`]/etc.
 /// - The extrapolation setting enum: [`Extrapolate`](`interpolator::Extrapolate`)
