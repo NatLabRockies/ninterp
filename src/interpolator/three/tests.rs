@@ -279,6 +279,85 @@ fn test_cubic_c2_3d_periodic() {
 }
 
 #[test]
+fn test_cubic_c2_mixed_endpoints_scipy_oracle() {
+    // 3-D counterpart of `Interp2D`'s `test_cubic_c2_mixed_endpoints_scipy_oracle`.
+    // `Strategy3D`'s corner cache shares `compute_corner_cache` with `Strategy2D`, but at
+    // N=3 it exercises mask combinations 2-D never reaches -- `dxz`, `dyz`, and especially
+    // `dxyz`, the full triple mixed partial -- so this is genuinely new coverage, not just
+    // a bigger version of the 2-D test. As there, arbitrary non-polynomial grid data is
+    // used (not the periodic test's separable triple product above), so a scheme that's
+    // internally self-consistent but numerically wrong on generic data wouldn't be caught.
+    //
+    // Ground truth: scipy's own tensor-product method generalized to three axes -- spline
+    // every innermost-axis (z) pencil, then every middle-axis (y) pencil of those results,
+    // then the outer axis (x) -- exactly what `InterpND`'s recursive collapse
+    // (`spline_eval_nd_cached`) does. Each axis mixes BC types across its own endpoints,
+    // confirmed against the installed scipy (1.13.1) via its `bc_type=(bc_start, bc_end)`
+    // 2-tuple form:
+    //   bc_x = ('not-a-knot', (1, 2.0))
+    //   bc_y = ((2, 0.0), (1, -1.0))
+    //   bc_z = ((1, 1.5), 'not-a-knot')
+    //   h[i, j] = CubicSpline(z, values[i, j, :], bc_type=bc_z)(qz)
+    //   g[i] = CubicSpline(y, h[i, :], bc_type=bc_y)(qy)
+    //   expected = CubicSpline(x, g, bc_type=bc_x)(qx)
+    let grid_x = array![0., 1., 2., 3., 4.];
+    let grid_y = array![0., 1., 2.];
+    let grid_z = array![0., 1., 2., 3.];
+    let values = array![
+        [[1., 7., 6., 4.], [4., 8., 1., 7.], [2., 1., 5., 9.]],
+        [[7., 7., 7., 8.], [5., 2., 8., 5.], [5., 4., 2., 9.]],
+        [[8., 6., 4., 8.], [5., 4., 5., 3.], [1., 5., 8., 1.]],
+        [[8., 8., 3., 6.], [2., 7., 7., 4.], [1., 9., 5., 9.]],
+        [[7., 8., 7., 2.], [4., 5., 5., 1.], [5., 2., 7., 7.]],
+    ];
+    let bcs = || {
+        vec![
+            strategy::cubic::CubicC2BoundaryConditions::Endpoints {
+                lower: strategy::cubic::CubicC2Endpoint::NotAKnot,
+                upper: strategy::cubic::CubicC2Endpoint::FirstDerivative(2.0),
+            },
+            strategy::cubic::CubicC2BoundaryConditions::Endpoints {
+                lower: strategy::cubic::CubicC2Endpoint::SecondDerivative(0.0),
+                upper: strategy::cubic::CubicC2Endpoint::FirstDerivative(-1.0),
+            },
+            strategy::cubic::CubicC2BoundaryConditions::Endpoints {
+                lower: strategy::cubic::CubicC2Endpoint::FirstDerivative(1.5),
+                upper: strategy::cubic::CubicC2Endpoint::NotAKnot,
+            },
+        ]
+    };
+    let interp_3d = Interp3DView::new(
+        grid_x.view(),
+        grid_y.view(),
+        grid_z.view(),
+        values.view(),
+        strategy::CubicC2::new(bcs()),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let interp_nd = InterpNDView::new(
+        vec![grid_x.view(), grid_y.view(), grid_z.view()],
+        values.view().into_dyn(),
+        strategy::CubicC2::new(bcs()),
+        Extrapolate::Error,
+    )
+    .unwrap();
+
+    // (query x, query y, query z, scipy-derived expected value)
+    let cases = [
+        (0.5, 0.5, 0.5, 4.68489762190934),
+        (2.5, 1.5, 1.5, 8.19824333729886),
+        (3.5, 0.5, 2.5, 3.5622838378139723),
+        (1.25, 1.75, 0.75, 4.001637223002674),
+    ];
+
+    for (x, y, z, expected) in cases {
+        assert_approx_eq!(interp_3d.interpolate(&[x, y, z]).unwrap(), expected);
+        assert_approx_eq!(interp_nd.interpolate(&[x, y, z]).unwrap(), expected);
+    }
+}
+
+#[test]
 fn test_cubic_c2_clamped_cubic_exact() {
     // f(x, y, z) = x^3 + y^3 + z^3 (separable, no cross terms). `Clamped`'s endpoint
     // derivative is one scalar per axis shared by every pencil along it, so it's only

@@ -369,6 +369,79 @@ fn test_cubic_c2_2d_periodic() {
 }
 
 #[test]
+fn test_cubic_c2_mixed_endpoints_scipy_oracle() {
+    // Unlike `test_cubic_c2_mixed_endpoints_cached_vs_uncached` above (which only proves
+    // `Interp2D` and `InterpND` agree on data both reproduce *exactly*, since it's a
+    // genuine bicubic polynomial that any consistent scheme reproduces trivially), this
+    // uses arbitrary, non-polynomial grid data and an independent numerical ground
+    // truth, so a scheme that's internally consistent but numerically wrong on generic
+    // data wouldn't be caught by the other test alone.
+    //
+    // Ground truth: scipy's own tensor-product method, i.e. spline every inner-axis (y)
+    // row independently, then spline the resulting points along the outer axis (x) --
+    // exactly what `InterpND`'s recursive collapse (`spline_eval_nd_cached`) does, and
+    // (per `compute_corner_cache`'s doc comment) what `Interp2D`'s corner-cache Hermite
+    // blend is also claimed to reproduce to float precision. Each axis mixes BC types
+    // across its own endpoints (`NotAKnot`/`FirstDerivative` on x, `SecondDerivative`/
+    // `FirstDerivative` on y), matching scipy's `CubicSpline(bc_type=(bc_start, bc_end))`
+    // 2-tuple form confirmed against the installed scipy (1.13.1) to support an
+    // independent string-or-`(order, value)` pair per side:
+    //   bc_x = ('not-a-knot', (1, 2.0))
+    //   bc_y = ((2, 0.0), (1, -1.0))
+    //   g[i] = CubicSpline(y, values[i, :], bc_type=bc_y)(qy)
+    //   expected = CubicSpline(x, g, bc_type=bc_x)(qx)
+    let grid_x = array![0., 1., 2., 3., 4.];
+    let grid_y = array![0., 1., 2.];
+    let values = array![
+        [2., 5., 3.],
+        [7., 1., 6.],
+        [4., 8., 2.],
+        [9., 3., 5.],
+        [1., 6., 4.],
+    ];
+    let bcs = || {
+        vec![
+            strategy::cubic::CubicC2BoundaryConditions::Endpoints {
+                lower: strategy::cubic::CubicC2Endpoint::NotAKnot,
+                upper: strategy::cubic::CubicC2Endpoint::FirstDerivative(2.0),
+            },
+            strategy::cubic::CubicC2BoundaryConditions::Endpoints {
+                lower: strategy::cubic::CubicC2Endpoint::SecondDerivative(0.0),
+                upper: strategy::cubic::CubicC2Endpoint::FirstDerivative(-1.0),
+            },
+        ]
+    };
+    let interp_2d = Interp2D::new(
+        grid_x.clone(),
+        grid_y.clone(),
+        values.clone(),
+        strategy::CubicC2::new(bcs()),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let interp_nd = InterpND::new(
+        vec![grid_x, grid_y],
+        values.into_dyn(),
+        strategy::CubicC2::new(bcs()),
+        Extrapolate::Error,
+    )
+    .unwrap();
+
+    // (query x, query y, scipy-derived expected value)
+    let cases = [
+        (0.5, 0.5, 1.2447630494505497),
+        (2.5, 1.5, 4.393844436813188),
+        (3.5, 0.5, 4.001802884615384),
+        (1.25, 1.75, 4.685137067522321),
+    ];
+
+    for (x, y, expected) in cases {
+        assert_approx_eq!(interp_2d.interpolate(&[x, y]).unwrap(), expected);
+        assert_approx_eq!(interp_nd.interpolate(&[x, y]).unwrap(), expected);
+    }
+}
+
+#[test]
 fn test_invalid_args() {
     let interp = Interp2D::new(
         array![0.05, 0.10, 0.15],
