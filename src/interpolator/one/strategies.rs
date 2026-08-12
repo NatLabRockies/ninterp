@@ -141,7 +141,8 @@ where
             data.values.view().into_dyn(),
             self.cache.view(),
             point,
-            self.boundary_conditions.as_slice(),
+            &self.boundary_conditions,
+            0,
         )
     }
 

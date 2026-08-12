@@ -395,19 +395,19 @@ pub(crate) fn compute_m_inner_cache<T: Float>(
 /// Looks up `m_cache` (from [`compute_m_inner_cache`]) at the innermost axis instead of
 /// re-solving it; outer axes still solve fresh via [`spline_eval_1d`].
 ///
-/// `bcs` length 1 broadcasts to all dimensions; length N applies per-dimension.
+/// `dim` is this call's axis index into `bcs` (0 at the top-level call, incrementing by
+/// one per recursive step, since `grids`/`values`/`m_cache`/`point` are all peeled down to
+/// the remaining axes but `bcs` is looked up by absolute axis index via
+/// [`PerAxis::get`]).
 pub(crate) fn spline_eval_nd_cached<T: Float>(
     grids: &[ArrayView1<T>],
     values: ArrayViewD<T>,
     m_cache: ArrayViewD<T>,
     point: &[T],
-    bcs: &[CubicC2BoundaryConditions<T>],
+    bcs: &PerAxis<CubicC2BoundaryConditions<T>>,
+    dim: usize,
 ) -> Result<T, InterpolateError> {
     debug_assert_eq!(grids.len(), point.len());
-    debug_assert!(!bcs.is_empty());
-
-    let current_bc = &bcs[0];
-    let next_bcs = if bcs.len() > 1 { &bcs[1..] } else { bcs };
 
     if grids.len() == 1 {
         let y = values.into_dimensionality::<Ix1>().map_err(|_| {
@@ -431,7 +431,8 @@ pub(crate) fn spline_eval_nd_cached<T: Float>(
                 values.index_axis(Axis(0), i),
                 m_cache.index_axis(Axis(0), i),
                 &point[1..],
-                next_bcs,
+                bcs,
+                dim + 1,
             )
         })
         .collect::<Result<Vec<T>, _>>()?;
@@ -440,7 +441,7 @@ pub(crate) fn spline_eval_nd_cached<T: Float>(
         grids[0],
         ArrayView1::from(&g),
         point[0],
-        current_bc,
+        bcs.get(dim),
     ))
 }
 
@@ -512,7 +513,7 @@ fn corner_cache_axis_pass<T: Float>(
 pub(crate) fn compute_corner_cache<T: Float>(
     grids: &[ArrayView1<T>],
     values: ArrayViewD<T>,
-    bcs: &[CubicC2BoundaryConditions<T>],
+    bcs: &PerAxis<CubicC2BoundaryConditions<T>>,
 ) -> ArrayD<T> {
     let n_axes = grids.len();
     let n_bits = 1usize << n_axes;
@@ -523,9 +524,9 @@ pub(crate) fn compute_corner_cache<T: Float>(
     let mut cache = ArrayD::<T>::zeros(IxDyn(&out_shape));
     cache.index_axis_mut(mask_axis, 0).assign(&values);
 
-    for axis in 0..n_axes {
+    for (axis, grid) in grids.iter().enumerate() {
         let bit = 1usize << axis;
-        let bc_axis = &bcs[if bcs.len() == 1 { 0 } else { axis }];
+        let bc_axis = bcs.get(axis);
         let cross_bc = match bc_axis {
             CubicC2BoundaryConditions::Clamped { .. } => CubicC2BoundaryConditions::Clamped {
                 left: T::zero(),
@@ -536,7 +537,7 @@ pub(crate) fn compute_corner_cache<T: Float>(
         for mask in 0..bit {
             let bc = if mask == 0 { bc_axis } else { &cross_bc };
             let field = cache.index_axis(mask_axis, mask).to_owned();
-            let deriv = corner_cache_axis_pass(grids[axis], field.view(), axis, bc);
+            let deriv = corner_cache_axis_pass(*grid, field.view(), axis, bc);
             cache.index_axis_mut(mask_axis, mask | bit).assign(&deriv);
         }
     }

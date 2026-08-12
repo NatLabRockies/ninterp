@@ -40,17 +40,6 @@ impl<T> PerAxis<T> {
         }
     }
 
-    /// Returns this configuration as a slice: length 1 for `Broadcast`, length N for
-    /// `Axes`. Bridges to the numeric code in [`cubic`](super::cubic), which already treats
-    /// a length-1 slice as "reuse this for every axis" and is left untouched by this
-    /// wrapper.
-    pub(crate) fn as_slice(&self) -> &[T] {
-        match self {
-            PerAxis::Broadcast(value) => core::slice::from_ref(value),
-            PerAxis::Axes(values) => values,
-        }
-    }
-
     /// Checks the stored count against an interpolator's dimensionality: `Broadcast` is
     /// always valid, `Axes` must have exactly `ndim` entries. `label` names the strategy
     /// (e.g. `"Step strategy"`) and `noun` names what's being counted (e.g.
