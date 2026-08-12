@@ -32,7 +32,7 @@ pub enum ValidateError {
     /// built on [`crate::strategy::per_axis::PerAxis`] reports a mismatched per-axis count
     /// the same way. `label` names the strategy (e.g. `"Step"`); `noun` names what's being
     /// counted (e.g. `"directions"`).
-    #[error("{label} has {found} {noun} but interpolator is {ndim}-D (expected {})", if *ndim == 1 { "1".to_string() } else { format!("1 or {ndim}") })]
+    #[error("{label} has {found} {noun} but interpolator is {ndim}-D (expected {ndim})")]
     PerAxisLen {
         label: &'static str,
         noun: &'static str,

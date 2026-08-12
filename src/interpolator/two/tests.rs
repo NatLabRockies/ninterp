@@ -152,7 +152,10 @@ fn test_cubic_c2_mixed_endpoints_cached_vs_uncached() {
     // (`NotAKnot`/`FirstDerivative`/`SecondDerivative` on opposite ends of the same
     // axis), not just different values of the same type like `clamped_cached_vs_uncached`
     // above. This is what would break if `compute_corner_cache`'s per-endpoint
-    // cross-derivative fallback treated `lower`/`upper` inconsistently.
+    // cross-derivative fallback treated `lower`/`upper` inconsistently. Axis 1's nonzero
+    // `SecondDerivative` also exercises that fallback's own homogenization: axis 1 is the
+    // second axis processed, so its cross-derivative pass must zero this value out rather
+    // than reusing it for the already-differentiated field.
     fn f(x: f64, y: f64) -> f64 {
         x.powi(3) + x.powi(2) * y + x * y.powi(2) + y.powi(3)
     }
@@ -165,7 +168,7 @@ fn test_cubic_c2_mixed_endpoints_cached_vs_uncached() {
                 upper: strategy::cubic::CubicC2Endpoint::FirstDerivative(27.),
             },
             strategy::cubic::CubicC2BoundaryConditions::Endpoints {
-                lower: strategy::cubic::CubicC2Endpoint::SecondDerivative(0.),
+                lower: strategy::cubic::CubicC2Endpoint::SecondDerivative(5.),
                 upper: strategy::cubic::CubicC2Endpoint::FirstDerivative(-5.),
             },
         ]

@@ -603,15 +603,15 @@ fn corner_cache_axis_pass<T: Float>(
 /// `bcs[axis]` when splining the raw values (`mask == 0`, this axis's own
 /// first-derivative pass). For every other `mask` (a cross-derivative pass over an
 /// already-differentiated field, not the original data), each endpoint's
-/// [`FirstDerivative`](CubicC2Endpoint::FirstDerivative) falls back to
-/// `FirstDerivative(0)`: a clamped endpoint fixes the same scalar derivative at every
-/// point along that boundary, so differentiating that (constant-along-the-boundary) field
-/// with respect to any other axis must itself be zero at that endpoint. That's a
-/// zero-*first*-derivative condition on the field being splined, not a zero-*second*-
-/// derivative one, so `NotAKnot`/`SecondDerivative` endpoints pass through unchanged.
-/// Verified empirically: with non-separable data, only the homogeneous-`FirstDerivative`
-/// fallback makes this cached path agree (to float precision) with `StrategyND`'s
-/// independent recursive solve; a `SecondDerivative`-based fallback does not.
+/// [`FirstDerivative`](CubicC2Endpoint::FirstDerivative)/[`SecondDerivative`](CubicC2Endpoint::SecondDerivative)
+/// falls back to the same-order condition with a zero value: a `FirstDerivative`/
+/// `SecondDerivative` endpoint fixes the same scalar derivative at every point along that
+/// boundary, so differentiating that (constant-along-the-boundary) field with respect to
+/// any other axis must itself be zero at that endpoint, at the same order. `NotAKnot`
+/// endpoints pass through unchanged (they carry no value to homogenize). Verified
+/// empirically: with non-separable data, only these homogeneous fallbacks make this
+/// cached path agree (to float precision) with `StrategyND`'s independent recursive
+/// solve; leaving a nonzero endpoint value unchanged in a cross-derivative pass does not.
 pub(crate) fn compute_corner_cache<T: Float>(
     grids: &[ArrayView1<T>],
     values: ArrayViewD<T>,
@@ -631,7 +631,8 @@ pub(crate) fn compute_corner_cache<T: Float>(
         let bc_axis = &bcs[axis];
         let cross_endpoint = |e: &CubicC2Endpoint<T>| match e {
             CubicC2Endpoint::FirstDerivative(_) => CubicC2Endpoint::FirstDerivative(T::zero()),
-            other => other.clone(),
+            CubicC2Endpoint::SecondDerivative(_) => CubicC2Endpoint::SecondDerivative(T::zero()),
+            other @ CubicC2Endpoint::NotAKnot => other.clone(),
         };
         let cross_bc = match bc_axis {
             CubicC2BoundaryConditions::Endpoints { lower, upper } => {
