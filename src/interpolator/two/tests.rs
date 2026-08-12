@@ -147,6 +147,53 @@ fn test_cubic_c2_clamped_cached_vs_uncached() {
 }
 
 #[test]
+fn test_cubic_c2_mixed_endpoints_cached_vs_uncached() {
+    // Same equivalence check again, but each axis now mixes endpoint *types*
+    // (`NotAKnot`/`FirstDerivative`/`SecondDerivative` on opposite ends of the same
+    // axis), not just different values of the same type like `clamped_cached_vs_uncached`
+    // above. This is what would break if `compute_corner_cache`'s per-endpoint
+    // cross-derivative fallback treated `lower`/`upper` inconsistently.
+    fn f(x: f64, y: f64) -> f64 {
+        x.powi(3) + x.powi(2) * y + x * y.powi(2) + y.powi(3)
+    }
+    let grid = array![0., 1., 2., 3.];
+    let values = Array2::from_shape_fn((4, 4), |(i, j)| f(grid[i], grid[j]));
+    let bcs = || {
+        vec![
+            strategy::cubic::CubicC2BoundaryConditions::Endpoints {
+                lower: strategy::cubic::CubicC2Endpoint::NotAKnot,
+                upper: strategy::cubic::CubicC2Endpoint::FirstDerivative(27.),
+            },
+            strategy::cubic::CubicC2BoundaryConditions::Endpoints {
+                lower: strategy::cubic::CubicC2Endpoint::SecondDerivative(0.),
+                upper: strategy::cubic::CubicC2Endpoint::FirstDerivative(-5.),
+            },
+        ]
+    };
+    let interp_2d = Interp2DView::new(
+        grid.view(),
+        grid.view(),
+        values.view(),
+        strategy::CubicC2::new(bcs()),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let interp_nd = InterpNDView::new(
+        vec![grid.view(), grid.view()],
+        values.view().into_dyn(),
+        strategy::CubicC2::new(bcs()),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &(x, y) in &[(0.5, 0.5), (1.5, 2.5), (2.5, 1.5), (0.25, 2.75)] {
+        assert_approx_eq!(
+            interp_2d.interpolate(&[x, y]).unwrap(),
+            interp_nd.interpolate(&[x, y]).unwrap()
+        );
+    }
+}
+
+#[test]
 fn test_cubic_c2_clamped_short_axis() {
     // A `Clamped` axis with only 2 points must still validate under the corner-cache
     // upgrade.

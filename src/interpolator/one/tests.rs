@@ -204,6 +204,59 @@ fn test_cubic_c2_one_sided_not_a_knot_needs_only_3_points() {
 }
 
 #[test]
+fn test_cubic_c2_mixed_endpoints_cubic_exact() {
+    // `NotAKnot` on the lower end, the true first derivative (27.) on the upper end:
+    // for a genuine cubic like f(x) = x^3, the unique spline satisfying both conditions
+    // is the true global cubic itself, so this should reproduce it exactly, same as
+    // `not_a_knot_cubic_exact`/`clamped_cubic_exact` do for the symmetric cases.
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 8., 27.], // f(x) = x^3
+        strategy::CubicC2::new(vec![
+            strategy::cubic::CubicC2BoundaryConditions::Endpoints {
+                lower: strategy::cubic::CubicC2Endpoint::NotAKnot,
+                upper: strategy::cubic::CubicC2Endpoint::FirstDerivative(27.),
+            },
+        ]),
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    assert_approx_eq!(interp.interpolate(&[0.5]).unwrap(), 0.125);
+    assert_approx_eq!(interp.interpolate(&[1.5]).unwrap(), 3.375);
+    assert_approx_eq!(interp.interpolate(&[2.5]).unwrap(), 15.625);
+    assert_approx_eq!(interp.interpolate(&[-1.0]).unwrap(), -1.0);
+    assert_approx_eq!(interp.interpolate(&[4.0]).unwrap(), 64.0);
+}
+
+#[test]
+fn test_cubic_c2_mixed_endpoints_uses_given_derivative() {
+    // Differential check for the previous test, same reasoning as
+    // `clamped_uses_given_derivative`: `NotAKnot` alone already reproduces x^3 exactly,
+    // so a bug that dropped the upper endpoint's `FirstDerivative` value (silently
+    // treating it as `NotAKnot` too, or as some other default) would still pass
+    // `mixed_endpoints_cubic_exact`. A deliberately wrong value here, and a result that
+    // moves far from the true value, proves it's actually being read.
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 8., 27.], // f(x) = x^3; true upper derivative is 27
+        strategy::CubicC2::new(vec![
+            strategy::cubic::CubicC2BoundaryConditions::Endpoints {
+                lower: strategy::cubic::CubicC2Endpoint::NotAKnot,
+                upper: strategy::cubic::CubicC2Endpoint::FirstDerivative(999.),
+            },
+        ]),
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    let wrong = interp.interpolate(&[2.5]).unwrap();
+    assert!(
+        (wrong - 15.625_f64).abs() > 1.0,
+        "mixed FirstDerivative(999) gave {wrong}, suspiciously close to the true \
+         f(2.5) = 15.625 as if the supplied derivative were ignored"
+    );
+}
+
+#[test]
 fn test_cubic_c2_clamped_cubic_exact() {
     // Same f(x) = x^3, but with `Clamped` given the true endpoint derivatives
     // (f'(x) = 3x^2, so f'(0) = 0, f'(3) = 27). Exact reproduction here confirms
