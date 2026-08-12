@@ -25,7 +25,7 @@ fn test_cubic_spline() {
 }
 
 #[test]
-fn test_cubic_spline_knot_exactness() {
+fn test_cubic_c2_knot_exactness() {
     // Values at all knots must be reproduced exactly regardless of data shape
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
@@ -41,7 +41,7 @@ fn test_cubic_spline_knot_exactness() {
 }
 
 #[test]
-fn test_cubic_spline_two_points() {
+fn test_cubic_c2_two_points() {
     // Degenerate case: 2 points → degenerates to linear interpolation.
     // Uses Natural BC since NotAKnot requires ≥ 3 points.
     let interp = Interp1D::new(
@@ -53,6 +53,81 @@ fn test_cubic_spline_two_points() {
     .unwrap();
     assert_approx_eq!(interp.interpolate(&[0.5]).unwrap(), 1.0);
     assert_approx_eq!(interp.interpolate(&[2.0]).unwrap(), 4.0); // extrapolation
+}
+
+#[test]
+fn test_cubic_c2_natural() {
+    // Uses example from https://tools.timodenk.com/cubic-spline-interpolation
+    let interp = Interp1D::new(
+        array![-1.5, -0.2, 1., 5., 10., 15., 20.],
+        array![-1.2, 0., 0.5, 1., 1.2, 2., 1.],
+        strategy::CubicC2::natural(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let inputs = &[[-1.4], [6.], [7.], [14.], [19.]];
+    let expected = &[
+        -1.095065419952828,
+        1.015165170952125,
+        1.0218810233458848,
+        1.932091193114578,
+        1.301403522754169,
+    ];
+    let outputs = interp.batch_interpolate(inputs).unwrap();
+    for (out, exp) in outputs.iter().zip(expected.iter()) {
+        assert_approx_eq!(out, exp);
+    }
+}
+
+#[test]
+fn test_cubic_c2_not_a_knot() {
+    let interp = Interp1D::new(
+        array![-1.5, -0.2, 1., 5., 10., 15., 20.],
+        array![-1.2, 0., 0.5, 1., 1.2, 2., 1.],
+        strategy::CubicC2::not_a_knot(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let inputs = &[[-1.4], [6.], [7.], [14.], [19.]];
+    let expected = &[-1.07209658, 1.01588337, 1.02825421, 1.87938333, 1.50092501];
+    let outputs = interp.batch_interpolate(inputs).unwrap();
+    for (out, exp) in outputs.iter().zip(expected.iter()) {
+        assert_approx_eq!(out, exp);
+    }
+}
+
+#[test]
+fn test_cubic_c2_clamped() {
+    let interp = Interp1D::new(
+        array![-1.5, -0.2, 1., 5., 10., 15., 20.],
+        array![-1.2, 0., 0.5, 1., 1.2, 2., 1.],
+        strategy::CubicC2::clamped(-1., 1.),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let inputs = &[[-1.4], [6.], [7.], [14.], [19.]];
+    let expected = &[-1.27364033, 1.03070187, 1.01669998, 2.16516227, 0.41055472];
+    let outputs = interp.batch_interpolate(inputs).unwrap();
+    for (out, exp) in outputs.iter().zip(expected.iter()) {
+        assert_approx_eq!(out, exp);
+    }
+}
+
+#[test]
+fn test_cubic_c2_periodic() {
+    let interp = Interp1D::new(
+        array![-4., -1.5, -0.2, 1., 5., 10., 15., 20.],
+        array![1., -1.2, 0., 0.5, 1., 1.2, 2., 1.],
+        strategy::CubicC2::periodic(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let inputs = &[[-1.4], [6.], [7.], [14.], [19.]];
+    let expected = &[-1.15382906, 1.04798649, 1.07838449, 1.77694949, 1.87460604];
+    let outputs = interp.batch_interpolate(inputs).unwrap();
+    for (out, exp) in outputs.iter().zip(expected.iter()) {
+        assert_approx_eq!(out, exp);
+    }
 }
 
 #[test]
