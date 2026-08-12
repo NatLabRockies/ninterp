@@ -7,7 +7,7 @@ fn test_cubic_spline() {
         array![0., 1., 2.],
         array![0., 1., 2.],
         array![[0., 1., 2.], [2., 3., 4.], [4., 5., 6.]],
-        strategy::CubicC2::natural(),
+        strategy::cubic::CubicC2::natural(),
         Extrapolate::Enable,
     )
     .unwrap();
@@ -33,7 +33,7 @@ fn test_cubic_spline_knot_exactness() {
             [4., 5., 8., 13.],
             [9., 10., 13., 18.],
         ], // f(x, y) = x^2 + y
-        strategy::CubicC2::not_a_knot(),
+        strategy::cubic::CubicC2::not_a_knot(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -67,7 +67,7 @@ fn test_cubic_c2_interior_accuracy() {
             [0., 6., 16., 30.],
             [0., 12., 30., 54.],
         ],
-        strategy::CubicC2::not_a_knot(),
+        strategy::cubic::CubicC2::not_a_knot(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -92,14 +92,14 @@ fn test_cubic_c2_cached_vs_uncached() {
         grid.clone(),
         grid.clone(),
         values.clone(),
-        strategy::CubicC2::not_a_knot(),
+        strategy::cubic::CubicC2::not_a_knot(),
         Extrapolate::Error,
     )
     .unwrap();
     let interp_nd = InterpND::new(
         vec![grid.clone(), grid],
         values.into_dyn(),
-        strategy::CubicC2::not_a_knot(),
+        strategy::cubic::CubicC2::not_a_knot(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -120,12 +120,12 @@ fn test_cubic_c2_clamped_short_axis() {
         array![0., 1.], // only 2 points on the Clamped axis
         array![0., 1., 2., 3.],
         array![[0., 1., 2., 3.], [1., 2., 3., 4.]], // f(x, y) = x + y
-        strategy::CubicC2::new(vec![
-            strategy::CubicBoundaryConditions::Clamped {
+        strategy::cubic::CubicC2::new(vec![
+            strategy::cubic::CubicC2BoundaryConditions::Clamped {
                 left: 1.,
                 right: 1.,
             },
-            strategy::CubicBoundaryConditions::Natural,
+            strategy::cubic::CubicC2BoundaryConditions::Natural,
         ]),
         Extrapolate::Error,
     )
@@ -149,7 +149,7 @@ fn test_cubic_c2_not_a_knot_cubic_exact() {
         array![0., 1., 2., 3.],
         array![0., 1., 2., 3.],
         values,
-        strategy::CubicC2::not_a_knot(),
+        strategy::cubic::CubicC2::not_a_knot(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -166,7 +166,7 @@ fn test_cubic_c2_notaknot_enough_points() {
         array![0., 1., 2., 3.],
         array![0., 1., 2.],
         array![[0., 1., 2.], [1., 2., 3.], [2., 3., 4.], [3., 4., 5.]],
-        strategy::CubicC2::not_a_knot(),
+        strategy::cubic::CubicC2::not_a_knot(),
         Extrapolate::Error,
     );
     assert!(
@@ -182,7 +182,7 @@ fn test_cubic_c2_notaknot_enough_points() {
             [2., 3., 4., 5.],
             [3., 4., 5., 6.],
         ],
-        strategy::CubicC2::not_a_knot(),
+        strategy::cubic::CubicC2::not_a_knot(),
         Extrapolate::Error,
     );
     assert!(
@@ -211,7 +211,7 @@ fn test_cubic_c2_clamped_cubic_exact() {
         array![0., 1., 2., 3.],
         array![0., 1., 2., 3.],
         values,
-        strategy::CubicC2::clamped(0., 27.), // f'(0) = 0, f'(3) = 27, broadcast to both axes
+        strategy::cubic::CubicC2::clamped(0., 27.), // f'(0) = 0, f'(3) = 27, broadcast to both axes
         Extrapolate::Error,
     )
     .unwrap();
@@ -236,7 +236,7 @@ fn test_cubic_c2_clamped_uses_given_derivative() {
         array![0., 1., 2., 3.],
         array![0., 1., 2., 3.],
         values,
-        strategy::CubicC2::clamped(999., 999.), // true derivatives are 0 and 27
+        strategy::cubic::CubicC2::clamped(999., 999.), // true derivatives are 0 and 27
         Extrapolate::Error,
     )
     .unwrap();
@@ -272,7 +272,7 @@ fn test_cubic_c2_2d_periodic() {
             [6., 3., 6.],
             [2., 1., 2.],
         ],
-        strategy::CubicC2::periodic(),
+        strategy::cubic::CubicC2::periodic(),
         Extrapolate::Error,
     )
     .unwrap();

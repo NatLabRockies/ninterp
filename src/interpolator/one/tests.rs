@@ -6,7 +6,7 @@ fn test_cubic_spline() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3.],
         array![1., 3., 5., 7.], // f(x) = 2x + 1
-        strategy::CubicC2::not_a_knot(),
+        strategy::cubic::CubicC2::not_a_knot(),
         Extrapolate::Enable,
     )
     .unwrap();
@@ -30,7 +30,7 @@ fn test_cubic_c2_knot_exactness() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0., 1., 4., 9., 16.], // f(x) = x^2
-        strategy::CubicC2::not_a_knot(),
+        strategy::cubic::CubicC2::not_a_knot(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -47,7 +47,7 @@ fn test_cubic_c2_two_points() {
     let interp = Interp1D::new(
         array![0., 1.],
         array![0., 2.],
-        strategy::CubicC2::natural(),
+        strategy::cubic::CubicC2::natural(),
         Extrapolate::Enable,
     )
     .unwrap();
@@ -61,7 +61,7 @@ fn test_cubic_c2_natural() {
     let interp = Interp1D::new(
         array![-1.5, -0.2, 1., 5., 10., 15., 20.],
         array![-1.2, 0., 0.5, 1., 1.2, 2., 1.],
-        strategy::CubicC2::natural(),
+        strategy::cubic::CubicC2::natural(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -84,7 +84,7 @@ fn test_cubic_c2_not_a_knot() {
     let interp = Interp1D::new(
         array![-1.5, -0.2, 1., 5., 10., 15., 20.],
         array![-1.2, 0., 0.5, 1., 1.2, 2., 1.],
-        strategy::CubicC2::not_a_knot(),
+        strategy::cubic::CubicC2::not_a_knot(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -101,7 +101,7 @@ fn test_cubic_c2_clamped() {
     let interp = Interp1D::new(
         array![-1.5, -0.2, 1., 5., 10., 15., 20.],
         array![-1.2, 0., 0.5, 1., 1.2, 2., 1.],
-        strategy::CubicC2::clamped(-1., 1.),
+        strategy::cubic::CubicC2::clamped(-1., 1.),
         Extrapolate::Error,
     )
     .unwrap();
@@ -118,7 +118,7 @@ fn test_cubic_c2_periodic() {
     let interp = Interp1D::new(
         array![-4., -1.5, -0.2, 1., 5., 10., 15., 20.],
         array![1., -1.2, 0., 0.5, 1., 1.2, 2., 1.],
-        strategy::CubicC2::periodic(),
+        strategy::cubic::CubicC2::periodic(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -140,7 +140,7 @@ fn test_cubic_c2_not_a_knot_cubic_exact() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3.],
         array![0., 1., 8., 27.], // f(x) = x^3
-        strategy::CubicC2::not_a_knot(),
+        strategy::cubic::CubicC2::not_a_knot(),
         Extrapolate::Enable,
     )
     .unwrap();
@@ -160,7 +160,7 @@ fn test_cubic_c2_notaknot_enough_points() {
     let result = Interp1D::new(
         array![0., 1., 2.],
         array![0., 1., 4.],
-        strategy::CubicC2::not_a_knot(),
+        strategy::cubic::CubicC2::not_a_knot(),
         Extrapolate::Error,
     );
     assert!(
@@ -171,7 +171,7 @@ fn test_cubic_c2_notaknot_enough_points() {
     let result = Interp1D::new(
         array![0., 1., 2., 3.],
         array![0., 1., 4., 9.],
-        strategy::CubicC2::not_a_knot(),
+        strategy::cubic::CubicC2::not_a_knot(),
         Extrapolate::Error,
     );
     assert!(
@@ -189,7 +189,7 @@ fn test_cubic_c2_clamped_cubic_exact() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3.],
         array![0., 1., 8., 27.],
-        strategy::CubicC2::clamped(0., 27.),
+        strategy::cubic::CubicC2::clamped(0., 27.),
         Extrapolate::Enable,
     )
     .unwrap();
@@ -212,7 +212,7 @@ fn test_cubic_c2_clamped_uses_given_derivative() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3.],
         array![0., 1., 8., 27.], // f(x) = x^3; true derivatives are 0 and 27
-        strategy::CubicC2::clamped(999., 999.),
+        strategy::cubic::CubicC2::clamped(999., 999.),
         Extrapolate::Enable,
     )
     .unwrap();

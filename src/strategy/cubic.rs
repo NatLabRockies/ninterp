@@ -3,6 +3,147 @@
 use super::*;
 use ndarray::Zip;
 
+/// Cubic spline interpolation (<https://en.wikipedia.org/wiki/Spline_interpolation>).
+///
+/// Constructs a C² piecewise cubic polynomial through all data points.
+/// The boundary condition is set by [`boundary_conditions`](CubicC2::boundary_conditions).
+/// Coefficients are precomputed in [`Strategy1D::init`], called automatically
+/// by [`Interp1D::new`](crate::interpolator::Interp1D::new) and
+/// [`Interp1D::set_strategy`](crate::interpolator::Interp1D::set_strategy).
+///
+/// Supports [`Extrapolate::Enable`](crate::interpolator::Extrapolate::Enable):
+/// evaluation beyond the grid extends the boundary cubic polynomials.
+///
+/// # Example
+/// ```
+/// use ndarray::prelude::*;
+/// use ninterp::prelude::*;
+///
+/// // f(x) = 2x + 1 (linear: reproduced exactly by any spline)
+/// let interp: Interp1D<f64, _> = Interp1D::new(
+///     array![0., 1., 2., 3.],
+///     array![1., 3., 5., 7.],
+///     strategy::cubic::CubicC2::not_a_knot(),
+///     Extrapolate::Enable,
+/// )
+/// .unwrap();
+/// assert_eq!(interp.interpolate(&[1.5]).unwrap(), 4.0);
+/// assert_eq!(interp.interpolate(&[4.0]).unwrap(), 9.0); // extrapolation
+/// ```
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+pub struct CubicC2<T> {
+    /// Boundary conditions, one per dimension or a single entry broadcast to all.
+    pub boundary_conditions: Vec<CubicC2BoundaryConditions<T>>,
+    /// Precomputed derivative data, populated by `Strategy1D`/`2D`/`3D`/`ND::init`. Its
+    /// shape depends on which of those populated it:
+    ///
+    /// - `Strategy1D`/`StrategyND`: cached second derivatives (`M[i] = S''(x_i)`) for
+    ///   every 1-D pencil along the innermost (last) grid axis, one
+    ///   [`compute_m`] result per combination of the other axes' indices. Same shape
+    ///   as the value grid, with the same last-axis length as the innermost grid; for
+    ///   1-D data (no outer axes) this degenerates to a single pencil, i.e. shape
+    ///   `[n + 1]` for `n` intervals. Only the innermost axis's coefficients are
+    ///   query-independent, so this is as far as caching goes; outer axes still solve
+    ///   fresh per call.
+    /// - `Strategy2D`/`Strategy3D`: the full corner-derivative tensor, shaped like the
+    ///   value grid with one extra trailing axis of length `2^N` (`N` = 2 or 3): see
+    ///   [`compute_corner_cache`]. Every query is then an O(1) lookup, no solving.
+    ///
+    /// Not included in the serialized form. Call [`Interpolator::validate`] after
+    /// deserializing to recompute this before use.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub(crate) cache: ArrayD<T>,
+}
+
+/// Boundary conditions for [`CubicC2`].
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
+pub enum CubicC2BoundaryConditions<T> {
+    /// C³ continuity at the second and penultimate knots; no extra input required.
+    /// Generally gives better accuracy than
+    /// [`Natural`](CubicC2BoundaryConditions::Natural) for smooth functions.
+    NotAKnot,
+    /// Zero second derivative at both endpoints.
+    Natural,
+    /// Specified first derivative at both endpoints.
+    Clamped {
+        /// First derivative at the left (lower) endpoint.
+        left: T,
+        /// First derivative at the right (upper) endpoint.
+        right: T,
+    },
+    /// First and second derivatives match at both endpoints. By convention
+    /// `values[n]` (the last point along this axis) should equal `values[0]`, since
+    /// that's what makes the axis periodic, but it isn't read or enforced.
+    Periodic,
+}
+
+/// Placeholder for [`CubicC2::cache`] before [`Strategy1D::init`]/`2D`/`3D`/`ND`
+/// populates it. No `T: Clone + Zero` bound needed (unlike `ArrayD::zeros`), so the
+/// constructors below stay unconstrained.
+fn empty_cache<T>() -> ArrayD<T> {
+    ArrayD::from_shape_vec(IxDyn(&[0]), Vec::new()).expect("empty shape matches empty vec")
+}
+
+impl<T> CubicC2<T> {
+    /// Returns the boundary condition for the given dimension.
+    /// A single-entry vec is broadcast to all dimensions.
+    pub(crate) fn bc_for_dim(&self, dim: usize) -> &CubicC2BoundaryConditions<T> {
+        let bcs = &self.boundary_conditions;
+        &bcs[if bcs.len() == 1 { 0 } else { dim }]
+    }
+
+    /// Create a cubic spline with a distinct boundary condition per grid dimension.
+    /// A single-entry vec is broadcast to all dimensions instead (same rule
+    /// `interpolate` uses internally to pick each axis's condition).
+    ///
+    /// Use [`not_a_knot`](Self::not_a_knot), [`natural`](Self::natural),
+    /// [`clamped`](Self::clamped), or [`periodic`](Self::periodic) instead when every
+    /// dimension shares the same condition.
+    pub fn new(boundary_conditions: Vec<CubicC2BoundaryConditions<T>>) -> Self {
+        Self {
+            boundary_conditions,
+            cache: empty_cache(),
+        }
+    }
+
+    /// Create a cubic spline with not-a-knot boundary conditions.
+    /// Requires at least 4 data points per dimension.
+    pub fn not_a_knot() -> Self {
+        Self {
+            boundary_conditions: vec![CubicC2BoundaryConditions::NotAKnot],
+            cache: empty_cache(),
+        }
+    }
+
+    /// Create a cubic spline with natural (zero second derivative at endpoints) BCs.
+    pub fn natural() -> Self {
+        Self {
+            boundary_conditions: vec![CubicC2BoundaryConditions::Natural],
+            cache: empty_cache(),
+        }
+    }
+
+    /// Create a cubic spline with specified first derivatives at both endpoints.
+    pub fn clamped(left: T, right: T) -> Self {
+        Self {
+            boundary_conditions: vec![CubicC2BoundaryConditions::Clamped { left, right }],
+            cache: empty_cache(),
+        }
+    }
+
+    /// Create a cubic spline with periodic boundary conditions. By convention
+    /// `values[n]` (the last point along each periodic axis) should equal
+    /// `values[0]`, though this isn't enforced.
+    pub fn periodic() -> Self {
+        Self {
+            boundary_conditions: vec![CubicC2BoundaryConditions::Periodic],
+            cache: empty_cache(),
+        }
+    }
+}
+
 /// Thomas algorithm (tridiagonal matrix algorithm). Solves `A * x = rhs`.
 /// `sub.len() == sup.len() == diag.len() - 1`.
 pub(crate) fn thomas<T: Float>(sub: &[T], diag: &[T], sup: &[T], rhs: &[T]) -> Vec<T> {
@@ -64,7 +205,7 @@ pub(crate) fn cyclic_thomas<T: Float>(
 pub(crate) fn compute_m<T: Float>(
     x: ArrayView1<T>,
     y: ArrayView1<T>,
-    bc: &CubicBoundaryConditions<T>,
+    bc: &CubicC2BoundaryConditions<T>,
 ) -> Vec<T> {
     let n = x.len() - 1;
     let two = T::one() + T::one();
@@ -76,7 +217,7 @@ pub(crate) fn compute_m<T: Float>(
         .collect();
 
     match bc {
-        CubicBoundaryConditions::NotAKnot => {
+        CubicC2BoundaryConditions::NotAKnot => {
             // n >= 3 (grid_len >= 4) is validated by `validate_bc_min_points` before
             // this is ever reached through the normal `validate()` -> `init()` path.
             let mut sub: Vec<T> = h[1..n - 2].to_vec();
@@ -99,7 +240,7 @@ pub(crate) fn compute_m<T: Float>(
             m.push(mn);
             m
         }
-        CubicBoundaryConditions::Natural => {
+        CubicC2BoundaryConditions::Natural => {
             let mut sub = h[..n.saturating_sub(1)].to_vec();
             sub.push(T::zero());
             let mut diag = vec![T::one()];
@@ -114,7 +255,7 @@ pub(crate) fn compute_m<T: Float>(
             rhs.push(T::zero());
             thomas(&sub, &diag, &sup, &rhs)
         }
-        CubicBoundaryConditions::Clamped { left, right } => {
+        CubicC2BoundaryConditions::Clamped { left, right } => {
             let (l, r) = (*left, *right);
             let mut diag = vec![two * h[0]];
             for k in 0..n.saturating_sub(1) {
@@ -126,7 +267,7 @@ pub(crate) fn compute_m<T: Float>(
             rhs.push(six * (r - slopes[n - 1]));
             thomas(&h, &diag, &h, &rhs)
         }
-        CubicBoundaryConditions::Periodic => {
+        CubicC2BoundaryConditions::Periodic => {
             // `y[n]` is never read below: the cyclic solve only uses `y[0..n]`, treating
             // the axis as wrapping from index `n-1` back to `0`. By convention `y[n]`
             // should equal `y[0]`, but nothing here depends on or checks that.
@@ -179,23 +320,23 @@ pub(crate) fn spline_eval_1d<T: Float>(
     x: ArrayView1<T>,
     y: ArrayView1<T>,
     point: T,
-    bc: &CubicBoundaryConditions<T>,
+    bc: &CubicC2BoundaryConditions<T>,
 ) -> T {
     let m = compute_m(x, y, bc);
     eval_spline_from_m(x, y, ArrayView1::from(&m), point)
 }
 
 /// Checks `grid_len` against boundary condition `bc`'s minimum point requirement (e.g.
-/// [`CubicBoundaryConditions::NotAKnot`] needs at least 4), ahead of the real work in
+/// [`CubicC2BoundaryConditions::NotAKnot`] needs at least 4), ahead of the real work in
 /// [`compute_m`].
 ///
 /// Pure, no mutation; used by each dimensionality's `Strategy*D::validate`.
 pub(crate) fn validate_bc_min_points<T>(
-    bc: &CubicBoundaryConditions<T>,
+    bc: &CubicC2BoundaryConditions<T>,
     grid_len: usize,
     dim: usize,
 ) -> Result<(), ValidateError> {
-    if matches!(bc, CubicBoundaryConditions::NotAKnot) && grid_len < 4 {
+    if matches!(bc, CubicC2BoundaryConditions::NotAKnot) && grid_len < 4 {
         return Err(ValidateError::Other(format!(
             "CubicC2: dim {dim} has {grid_len} grid points; NotAKnot requires at least 4"
         )));
@@ -210,7 +351,7 @@ pub(crate) fn validate_bc_min_points<T>(
 /// mirrors [`Step::validate_len`](crate::strategy::Step::validate_len)'s check for the
 /// same kind of per-dimension config vec.
 pub(crate) fn validate_bc_count<T>(
-    bcs: &[CubicBoundaryConditions<T>],
+    bcs: &[CubicC2BoundaryConditions<T>],
     ndim: usize,
 ) -> Result<(), ValidateError> {
     let found = bcs.len();
@@ -239,7 +380,7 @@ pub(crate) fn validate_bc_count<T>(
 pub(crate) fn compute_m_inner_cache<T: Float>(
     inner_grid: ArrayView1<T>,
     values: ArrayViewD<T>,
-    bc: &CubicBoundaryConditions<T>,
+    bc: &CubicC2BoundaryConditions<T>,
 ) -> ArrayD<T> {
     let last_axis = Axis(values.ndim() - 1);
     let mut out_shape = values.shape().to_vec();
@@ -266,7 +407,7 @@ pub(crate) fn spline_eval_nd_cached<T: Float>(
     values: ArrayViewD<T>,
     m_cache: ArrayViewD<T>,
     point: &[T],
-    bcs: &[CubicBoundaryConditions<T>],
+    bcs: &[CubicC2BoundaryConditions<T>],
 ) -> Result<T, InterpolateError> {
     debug_assert_eq!(grids.len(), point.len());
     debug_assert!(!bcs.is_empty());
@@ -339,7 +480,7 @@ fn corner_cache_axis_pass<T: Float>(
     grid: ArrayView1<T>,
     field: ArrayViewD<T>,
     axis: usize,
-    bc: &CubicBoundaryConditions<T>,
+    bc: &CubicC2BoundaryConditions<T>,
 ) -> ArrayD<T> {
     let axis = Axis(axis);
     let mut out = ArrayD::<T>::zeros(IxDyn(field.shape()));
@@ -374,7 +515,7 @@ fn corner_cache_axis_pass<T: Float>(
 pub(crate) fn compute_corner_cache<T: Float>(
     grids: &[ArrayView1<T>],
     values: ArrayViewD<T>,
-    bcs: &[CubicBoundaryConditions<T>],
+    bcs: &[CubicC2BoundaryConditions<T>],
 ) -> ArrayD<T> {
     let n_axes = grids.len();
     let n_bits = 1usize << n_axes;
@@ -389,7 +530,7 @@ pub(crate) fn compute_corner_cache<T: Float>(
         let bit = 1usize << axis;
         let bc_axis = &bcs[if bcs.len() == 1 { 0 } else { axis }];
         let cross_bc = match bc_axis {
-            CubicBoundaryConditions::Clamped { .. } => CubicBoundaryConditions::Natural,
+            CubicC2BoundaryConditions::Clamped { .. } => CubicC2BoundaryConditions::Natural,
             other => other.clone(),
         };
         for mask in 0..bit {

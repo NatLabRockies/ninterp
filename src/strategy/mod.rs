@@ -1,8 +1,12 @@
-//! Pre-defined interpolation strategies and traits for custom strategies
+//! Pre-defined interpolation strategies and traits for custom strategies.
+//!
+//! Single-purpose strategies ([`Linear`], [`Nearest`], [`Step`], etc.) live directly in
+//! this module. Cubic interpolation ([`cubic::CubicC2`]) lives in [`cubic`] instead,
+//! since it's a family of related types rather than one flat name.
 
 use super::*;
 
-pub(crate) mod cubic;
+pub mod cubic;
 pub mod enums;
 pub mod traits;
 pub mod utils;
@@ -245,148 +249,6 @@ mod step_marker_serde {
         fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
             let _ = StepUpperDe::deserialize(deserializer)?;
             Ok(StepUpper)
-        }
-    }
-}
-
-/// Cubic spline interpolation (<https://en.wikipedia.org/wiki/Spline_interpolation>).
-///
-/// Constructs a C² piecewise cubic polynomial through all data points.
-/// The boundary condition is set by [`boundary_conditions`](CubicC2::boundary_conditions).
-/// Coefficients are precomputed in [`Strategy1D::init`], called automatically
-/// by [`Interp1D::new`](crate::interpolator::Interp1D::new) and
-/// [`Interp1D::set_strategy`](crate::interpolator::Interp1D::set_strategy).
-///
-/// Supports [`Extrapolate::Enable`](crate::interpolator::Extrapolate::Enable):
-/// evaluation beyond the grid extends the boundary cubic polynomials.
-///
-/// # Example
-/// ```
-/// use ndarray::prelude::*;
-/// use ninterp::prelude::*;
-///
-/// // f(x) = 2x + 1 (linear: reproduced exactly by any spline)
-/// let interp: Interp1D<f64, _> = Interp1D::new(
-///     array![0., 1., 2., 3.],
-///     array![1., 3., 5., 7.],
-///     strategy::CubicC2::not_a_knot(),
-///     Extrapolate::Enable,
-/// )
-/// .unwrap();
-/// assert_eq!(interp.interpolate(&[1.5]).unwrap(), 4.0);
-/// assert_eq!(interp.interpolate(&[4.0]).unwrap(), 9.0); // extrapolation
-/// ```
-#[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
-pub struct CubicC2<T> {
-    /// Boundary conditions, one per dimension or a single entry broadcast to all.
-    pub boundary_conditions: Vec<CubicBoundaryConditions<T>>,
-    /// Precomputed derivative data, populated by `Strategy1D`/`2D`/`3D`/`ND::init`. Its
-    /// shape depends on which of those populated it:
-    ///
-    /// - `Strategy1D`/`StrategyND`: cached second derivatives (`M[i] = S''(x_i)`) for
-    ///   every 1-D pencil along the innermost (last) grid axis, one
-    ///   [`compute_m`](crate::strategy::cubic::compute_m) result per combination of the
-    ///   other axes' indices. Same shape as the value grid, with the same last-axis
-    ///   length as the innermost grid; for 1-D data (no outer axes) this degenerates to
-    ///   a single pencil, i.e. shape `[n + 1]` for `n` intervals. Only the innermost
-    ///   axis's coefficients are query-independent, so this is as far as caching goes;
-    ///   outer axes still solve fresh per call.
-    /// - `Strategy2D`/`Strategy3D`: the full corner-derivative tensor, shaped like the
-    ///   value grid with one extra trailing axis of length `2^N` (`N` = 2 or 3): see
-    ///   [`compute_corner_cache`](crate::strategy::cubic::compute_corner_cache). Every
-    ///   query is then an O(1) lookup, no solving.
-    ///
-    /// Not included in the serialized form. Call [`Interpolator::validate`] after
-    /// deserializing to recompute this before use.
-    #[cfg_attr(feature = "serde", serde(skip))]
-    pub(crate) cache: ArrayD<T>,
-}
-
-/// Boundary conditions for [`CubicC2`].
-#[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
-pub enum CubicBoundaryConditions<T> {
-    /// C³ continuity at the second and penultimate knots; no extra input required.
-    /// Generally gives better accuracy than
-    /// [`Natural`](CubicBoundaryConditions::Natural) for smooth functions.
-    NotAKnot,
-    /// Zero second derivative at both endpoints.
-    Natural,
-    /// Specified first derivative at both endpoints.
-    Clamped {
-        /// First derivative at the left (lower) endpoint.
-        left: T,
-        /// First derivative at the right (upper) endpoint.
-        right: T,
-    },
-    /// First and second derivatives match at both endpoints. By convention
-    /// `values[n]` (the last point along this axis) should equal `values[0]`, since
-    /// that's what makes the axis periodic, but it isn't read or enforced.
-    Periodic,
-}
-
-/// Placeholder for [`CubicC2::cache`] before [`Strategy1D::init`]/`2D`/`3D`/`ND`
-/// populates it. No `T: Clone + Zero` bound needed (unlike `ArrayD::zeros`), so the
-/// constructors below stay unconstrained.
-fn empty_cache<T>() -> ArrayD<T> {
-    ArrayD::from_shape_vec(IxDyn(&[0]), Vec::new()).expect("empty shape matches empty vec")
-}
-
-impl<T> CubicC2<T> {
-    /// Returns the boundary condition for the given dimension.
-    /// A single-entry vec is broadcast to all dimensions.
-    pub(crate) fn bc_for_dim(&self, dim: usize) -> &CubicBoundaryConditions<T> {
-        let bcs = &self.boundary_conditions;
-        &bcs[if bcs.len() == 1 { 0 } else { dim }]
-    }
-
-    /// Create a cubic spline with a distinct boundary condition per grid dimension.
-    /// A single-entry vec is broadcast to all dimensions instead (same rule
-    /// `interpolate` uses internally to pick each axis's condition).
-    ///
-    /// Use [`not_a_knot`](Self::not_a_knot), [`natural`](Self::natural),
-    /// [`clamped`](Self::clamped), or [`periodic`](Self::periodic) instead when every
-    /// dimension shares the same condition.
-    pub fn new(boundary_conditions: Vec<CubicBoundaryConditions<T>>) -> Self {
-        Self {
-            boundary_conditions,
-            cache: empty_cache(),
-        }
-    }
-
-    /// Create a cubic spline with not-a-knot boundary conditions.
-    /// Requires at least 4 data points per dimension.
-    pub fn not_a_knot() -> Self {
-        Self {
-            boundary_conditions: vec![CubicBoundaryConditions::NotAKnot],
-            cache: empty_cache(),
-        }
-    }
-
-    /// Create a cubic spline with natural (zero second derivative at endpoints) BCs.
-    pub fn natural() -> Self {
-        Self {
-            boundary_conditions: vec![CubicBoundaryConditions::Natural],
-            cache: empty_cache(),
-        }
-    }
-
-    /// Create a cubic spline with specified first derivatives at both endpoints.
-    pub fn clamped(left: T, right: T) -> Self {
-        Self {
-            boundary_conditions: vec![CubicBoundaryConditions::Clamped { left, right }],
-            cache: empty_cache(),
-        }
-    }
-
-    /// Create a cubic spline with periodic boundary conditions. By convention
-    /// `values[n]` (the last point along each periodic axis) should equal
-    /// `values[0]`, though this isn't enforced.
-    pub fn periodic() -> Self {
-        Self {
-            boundary_conditions: vec![CubicBoundaryConditions::Periodic],
-            cache: empty_cache(),
         }
     }
 }
