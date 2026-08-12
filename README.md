@@ -119,8 +119,9 @@ It's implemented for owned `Interp1D`/`2D`/`3D`/`ND` only, since downcasting req
 Grid and values shapes must match by axis order:
 for every dimension `n`, `grid[n].len() == values.shape()[n]`.
 
-Grid coordinates in each dimension must be monotonically increasing, with at least 2 points per
-dimension (`ValidateError::InsufficientGridPoints` otherwise).
+Grid coordinates in each dimension must be strictly increasing (no repeated adjacent
+coordinates), with at least 2 points per dimension (`ValidateError::InsufficientGridPoints`
+otherwise).
 
 ### Strategies
 An interpolation strategy must be specified. Provided strategies:
@@ -131,7 +132,7 @@ An interpolation strategy must be specified. Provided strategies:
 | [`Step`](https://docs.rs/ninterp/latest/ninterp/strategy/step/struct.Step.html) | Step interpolation to the previous/next grid value, broadcast or per-dimension |
 | [`Linear`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Linear.html) | Linear interpolation |
 | [`LinearUniform`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.LinearUniform.html) | Linear interpolation for uniformly spaced grids |
-| [`CubicC2`](https://docs.rs/ninterp/latest/ninterp/strategy/cubic/struct.CubicC2.html) | C² cubic spline, with configurable boundary condition ([`CubicC2BoundaryConditions`](https://docs.rs/ninterp/latest/ninterp/strategy/cubic/enum.CubicC2BoundaryConditions.html): not-a-knot, natural, clamped, or periodic) |
+| [`CubicC2`](https://docs.rs/ninterp/latest/ninterp/strategy/cubic/struct.CubicC2.html) | C² cubic spline, with a boundary condition set independently per endpoint ([`CubicC2BoundaryConditions`](https://docs.rs/ninterp/latest/ninterp/strategy/cubic/enum.CubicC2BoundaryConditions.html): not-a-knot, first derivative ("clamped"), second derivative (zero is "natural"), or periodic, with mixed types across an axis's two endpoints allowed) |
 
 More strategies will be added in the future.
 
@@ -208,14 +209,15 @@ panic-instead-of-`Result` convention.
 After editing interpolator data, call
 [`Interpolator::validate`](https://docs.rs/ninterp/latest/ninterp/interpolator/trait.Interpolator.html#tymethod.validate)
 to rerun data, extrapolate, and strategy validation checks together, or `interp.data.validate()`
-directly for just the narrower shape/monotonicity check on the grid and values.
+directly for just the narrower check that grid/value shapes match and grid coordinates are
+strictly increasing.
 
-`validate` checks the data (shape, monotonicity), the extrapolate setting, and runs the
-strategy's own `validate`, a pure check for invariants that don't need precomputed state
-(for example `LinearUniform`'s uniform-grid requirement, or `Step`'s per-dimension
-direction count). It does not re-run the strategy's `init`, the mutating counterpart that
-only strategies caching derived state (such as precomputed spline coefficients) need to
-override.
+`validate` checks the data (shapes, strictly increasing grid coordinates), the extrapolate
+setting, and runs the strategy's own `validate`, a pure check for invariants that don't
+need precomputed state (for example `LinearUniform`'s uniform-grid requirement, or
+`Step`'s per-dimension direction count). It does not re-run the strategy's `init`, the
+mutating counterpart that only strategies caching derived state (such as precomputed
+spline coefficients) need to override.
 
 `new` and `set_strategy` call both `validate` and `init` on the strategy. If you mutate
 the public `data`/`strategy` fields directly instead, call `validate_strategy`/
@@ -235,7 +237,7 @@ Validation-time (`new` / `validate`):
 | Error | Meaning |
 | --- | --- |
 | `ValidateError::InsufficientGridPoints` | Fewer than 2 grid coordinates in a dimension |
-| `ValidateError::NonMonotonic` | Non-monotonic coordinates |
+| `ValidateError::NotStrictlyIncreasing` | Grid coordinates in a dimension aren't strictly increasing (a repeat or a decrease) |
 | `ValidateError::NonUniform` | Non-uniformly-spaced grid, required by `LinearUniform` and any strategy calling `validate_uniform_grid` |
 | `ValidateError::IncompatibleShapes` | Grid/value shape mismatch |
 | `ValidateError::GridAxisCount` | `InterpDataND` grid axis count doesn't match the dimensionality of `values` |

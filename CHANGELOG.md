@@ -131,10 +131,14 @@ Everything below is merged to `main` but not yet tagged/released.
 - New `ValidateError::GridAxisCount { expected: usize, found: usize }`, for an
   `InterpDataND` whose grid axis count doesn't match its values' dimensionality
   (previously fell through to `ValidateError::Other(String)`).
-- **Breaking:** `ValidateError::Monotonicity` -> `NonMonotonic`;
+- **Breaking:** `ValidateError::Monotonicity` -> `NotStrictlyIncreasing`;
   `InterpolateError::ExtrapolateError` -> `OutOfBounds` (message rewritten to
   ``point out of bounds with `Extrapolate::Error` set``). `ValidateError::EmptyGrid` is
   removed; a grid dimension with 0 or 1 points is now `InsufficientGridPoints`.
+- **Breaking:** grid coordinates must now be strictly increasing; a repeated adjacent
+  coordinate previously passed validation and gave a zero-width interval, dividing by
+  zero (silent NaN/Inf) in any strategy that computes a fractional position or slope
+  across it, instead of the `NotStrictlyIncreasing` error it now raises.
 - **Breaking:** the `serde_ndim` Cargo feature is removed. It switched the nested-array
   write format on for every array field crate-wide, and because Cargo features are
   additive, enabling it anywhere in a binary silently flipped the wire format for every

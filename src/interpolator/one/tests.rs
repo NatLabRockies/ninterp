@@ -382,6 +382,35 @@ fn test_insufficient_grid_points() {
 }
 
 #[test]
+fn test_grid_not_strictly_increasing() {
+    // A repeated adjacent coordinate gives a zero-width interval: strategies that
+    // compute a fractional position or slope across it (`Linear`'s `frac`, `CubicC2`'s
+    // `compute_m`) would divide by zero, silently producing NaN/Inf, if this weren't
+    // caught at validation.
+    assert!(matches!(
+        Interp1D::new(
+            array![0., 1., 1., 2.],
+            array![0., 1., 2., 3.],
+            strategy::Linear,
+            Extrapolate::Error
+        )
+        .unwrap_err(),
+        ValidateError::NotStrictlyIncreasing(0)
+    ));
+    // A genuine decrease is caught the same way.
+    assert!(matches!(
+        Interp1D::new(
+            array![0., 2., 1., 3.],
+            array![0., 1., 2., 3.],
+            strategy::Linear,
+            Extrapolate::Error
+        )
+        .unwrap_err(),
+        ValidateError::NotStrictlyIncreasing(0)
+    ));
+}
+
+#[test]
 fn test_linear() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],

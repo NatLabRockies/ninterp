@@ -12,8 +12,8 @@ pub enum ValidateError {
     ExtrapolateUnsupported,
     #[error("at least 2 grid points are required per dimension: dim {0}")]
     InsufficientGridPoints(usize),
-    #[error("supplied coordinates must be monotonically increasing: dim {0}")]
-    NonMonotonic(usize),
+    #[error("supplied coordinates must be strictly increasing: dim {0}")]
+    NotStrictlyIncreasing(usize),
     /// Raised by [`crate::strategy::utils::validate_uniform_grid`], so any strategy
     /// requiring uniform spacing reports it the same way, not just `LinearUniform`.
     ///
