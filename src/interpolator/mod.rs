@@ -206,8 +206,16 @@ pub enum Extrapolate<T> {
     Fill(T),
     /// Restrict interpolant point to the grid limits using [`num_traits::clamp`].
     Clamp,
-    /// Wrap around to other end of (periodic) data.
-    /// Does NOT check that first and last values are equal.
+    /// Wrap around to other end of (periodic) data: a point past `grid[last]` is
+    /// remapped to the equivalent position past `grid[0]`, and vice versa, then
+    /// interpolated normally by whatever strategy is in use.
+    ///
+    /// Does not check that `values[0]` and `values[last]` (along each axis) are equal,
+    /// for the same reason
+    /// [`CubicC2BoundaryConditions::Periodic`]
+    /// doesn't: `values` is often real measured data, where the two ends of a period
+    /// can legitimately differ for reasons that have nothing to do with a mistake, and
+    /// no tolerance can distinguish that from a genuine error.
     Wrap,
     /// Return an error.
     #[default]

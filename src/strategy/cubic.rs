@@ -98,6 +98,22 @@ pub enum CubicC2BoundaryConditions<T> {
     /// that's what makes the axis periodic. This isn't enforced: `values[n]` is read and
     /// used like any other data point (both to build the periodic system and to
     /// evaluate the last interval), just never compared against `values[0]`.
+    ///
+    /// Deliberately not validated, even approximately: unlike grid coordinates (usually
+    /// synthetic, so float rounding is the only source of nonuniformity), `values` is
+    /// often real measured data, where the two ends of a period can legitimately differ
+    /// by far more than rounding error for reasons that have nothing to do with a
+    /// mistake (sensor noise, distinct samples at each end of the period, etc.). A
+    /// tolerance tight enough to catch a genuine mismatch would also reject that valid
+    /// data.
+    ///
+    /// If `values[n] != values[0]`, the spline within `[x[0], x[n]]` itself is still
+    /// perfectly smooth (both derivatives matched at the endpoints, same as if the axis
+    /// really were periodic) and passes through every supplied value exactly, `values[n]`
+    /// included. The mismatch only shows up if the axis is then treated as periodic
+    /// beyond its own bounds, e.g. via [`Extrapolate::Wrap`](crate::interpolator::Extrapolate::Wrap):
+    /// crossing the seam is a jump in *value* of exactly `values[n] - values[0]`, with
+    /// slope and curvature matching continuously on both sides of it.
     Periodic,
 }
 
