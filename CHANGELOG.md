@@ -13,9 +13,13 @@ Everything below is merged to `main` but not yet tagged/released.
 ### Added
 - `strategy::LinearUniform`: an O(1)-index alternative to `Linear` for uniformly-spaced
   grids (1D/2D/3D/ND), validated at construction/`init` time.
+- `strategy::per_axis::PerAxis<T>`: `Broadcast(T)` applies one value to every grid
+  dimension, `Axes(Vec<T>)` gives one value per dimension. Shared by `Step` and `CubicC2`
+  for their per-axis configuration.
 - `strategy::Step`: a parameterized step (piecewise-constant) strategy across all
-  dimensionalities, replacing `LeftNearest`/`RightNearest`. A single `StepDirection`
-  broadcasts to every axis, or a `Vec` gives per-axis control.
+  dimensionalities, replacing `LeftNearest`/`RightNearest`. Wraps a
+  `PerAxis<StepDirection>`: `Broadcast` applies one direction to every axis, `Axes` gives
+  per-axis control.
 - `strategy::StepLower` / `strategy::StepUpper`: zero-sized, allocation-free markers for
   the fixed-direction case; `Step` remains the choice for mixed or runtime-selected
   direction.
@@ -23,9 +27,11 @@ Everything below is merged to `main` but not yet tagged/released.
   dimensionality and included in the `Strategy*Enum` types.
 - `strategy::CubicC2`: a C² piecewise cubic spline strategy (1D/2D/3D/ND) with
   configurable boundary conditions (`CubicC2BoundaryConditions::{NotAKnot, Natural,
-  Clamped, Periodic}`), a single tridiagonal solve per axis. `Strategy1D`/`ND` cache the
-  innermost axis's coefficients; `Strategy2D`/`3D` additionally cache the full
-  corner-derivative tensor for O(1) queries. Included in the `Strategy*Enum` types.
+  Clamped, Periodic}`) given via `boundary_conditions: PerAxis<CubicC2BoundaryConditions<T>>`
+  (`Broadcast` for one condition on every axis, `Axes` for one per axis), a single
+  tridiagonal solve per axis. `Strategy1D`/`ND` cache the innermost axis's coefficients;
+  `Strategy2D`/`3D` additionally cache the full corner-derivative tensor for O(1) queries.
+  Included in the `Strategy*Enum` types.
 - `Nested` wrapper / `serialize_nested` helper / `SerializeNested` trait (`prelude`,
   `serde` feature): opt into the nested-array serialization format at a specific call
   site, e.g. `serde_json::to_string(&Nested(&interp))` or
@@ -153,7 +159,8 @@ Everything below is merged to `main` but not yet tagged/released.
   multilinear paths (see PR #13).
 - Serde: `StepLower`/`StepUpper` accept the legacy `"LeftNearest"`/`"RightNearest"` names
   on deserialization for backward compatibility; `Step`'s own wire format
-  (`{"Step": [...]}`) is unchanged and does not accept those aliases.
+  (`{"Step": "Lower"}` for `Broadcast`, `{"Step": ["Lower", "Upper"]}` for `Axes`) does not
+  accept those aliases.
 - Various documentation and README improvements; CI workflow polish.
 
 ### Fixed

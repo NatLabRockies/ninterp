@@ -6,6 +6,9 @@
 
 use super::*;
 
+pub mod per_axis;
+use per_axis::PerAxis;
+
 pub mod cubic;
 pub use cubic::CubicC2;
 

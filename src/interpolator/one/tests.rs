@@ -494,10 +494,10 @@ fn test_step_invalid_direction_count() {
     assert!(Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0.2, 0.4, 0.6, 0.8, 1.0],
-        strategy::Step(vec![
+        strategy::Step(strategy::per_axis::PerAxis::Axes(vec![
             strategy::step::StepDirection::Lower,
             strategy::step::StepDirection::Upper,
-        ]),
+        ])),
         Extrapolate::Error,
     )
     .is_err());

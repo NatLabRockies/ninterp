@@ -488,10 +488,10 @@ fn test_step() {
         grid_x.view(),
         grid_y.view(),
         values.view(),
-        strategy::Step(vec![
+        strategy::Step(strategy::per_axis::PerAxis::Axes(vec![
             strategy::step::StepDirection::Lower,
             strategy::step::StepDirection::Upper,
-        ]),
+        ])),
         Extrapolate::Error,
     )
     .unwrap();
@@ -503,11 +503,11 @@ fn test_step() {
         grid_x.view(),
         grid_y.view(),
         values.view(),
-        strategy::Step(vec![
+        strategy::Step(strategy::per_axis::PerAxis::Axes(vec![
             strategy::step::StepDirection::Lower,
             strategy::step::StepDirection::Lower,
             strategy::step::StepDirection::Lower,
-        ]),
+        ])),
         Extrapolate::Error,
     )
     .is_err());
@@ -610,7 +610,10 @@ fn test_set_strategy_runs_init() {
         Extrapolate::Error,
     )
     .unwrap();
-    let bad_step = strategy::Step(vec![strategy::step::StepDirection::Lower; 3]);
+    let bad_step = strategy::Step(strategy::per_axis::PerAxis::Axes(vec![
+        strategy::step::StepDirection::Lower;
+        3
+    ]));
     assert!(matches!(
         interp.set_strategy(bad_step).unwrap_err(),
         ValidateError::Other(_)

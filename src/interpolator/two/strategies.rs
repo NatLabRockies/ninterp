@@ -192,7 +192,7 @@ where
         self.cache = compute_corner_cache(
             &grids,
             data.values.view().into_dyn(),
-            &self.boundary_conditions,
+            self.boundary_conditions.as_slice(),
         );
         Ok(())
     }

@@ -66,22 +66,22 @@ pub enum StepDirection {
 ///     array![0., 1., 2.],
 ///     array![0., 1., 2.],
 ///     array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
-///     strategy::Step(vec![
+///     strategy::Step(strategy::per_axis::PerAxis::Axes(vec![
 ///         strategy::step::StepDirection::Lower,
 ///         strategy::step::StepDirection::Upper,
-///     ]),
+///     ])),
 ///     Extrapolate::Error,
 /// )
 /// .unwrap();
 /// assert_eq!(interp.interpolate(&[0.7, 1.4]).unwrap(), 2.); // floor x→0, ceil y→2
 /// ```
 #[derive(Debug, Clone, PartialEq)]
-pub struct Step(pub Vec<StepDirection>);
+pub struct Step(pub PerAxis<StepDirection>);
 
 impl From<StepDirection> for Step {
     /// Broadcasts `dir` to all dimensions.
     fn from(dir: StepDirection) -> Self {
-        Step(vec![dir])
+        Step(PerAxis::Broadcast(dir))
     }
 }
 
@@ -90,32 +90,14 @@ impl Step {
     /// direction broadcasts to every dimension, otherwise there must be exactly one per
     /// dimension. Shared by the `Strategy1D`/`2D`/`3D`/`ND` impls so all four report it
     /// identically.
-    ///
-    /// Stays a [`ValidateError::Other`] rather than earning a variant: it describes how
-    /// this strategy was configured, not anything about the data.
     pub(crate) fn validate_len(&self, ndim: usize) -> Result<(), ValidateError> {
-        let found = self.0.len();
-        if found == 1 || found == ndim {
-            return Ok(());
-        }
-        let expected = if ndim == 1 {
-            "1".to_string()
-        } else {
-            format!("1 or {ndim}")
-        };
-        Err(ValidateError::Other(format!(
-            "Step strategy has {found} directions but interpolator is {ndim}-D (expected {expected})"
-        )))
+        self.0.validate_len(ndim, "Step strategy", "directions")
     }
 
     /// Returns the direction for dimension `dim`.
-    /// A single stored direction broadcasts to all dimensions.
+    /// A broadcast direction applies to every dimension.
     pub(crate) fn dir(&self, dim: usize) -> StepDirection {
-        if self.0.len() == 1 {
-            self.0[0]
-        } else {
-            self.0[dim]
-        }
+        *self.0.get(dim)
     }
 }
 
@@ -140,13 +122,13 @@ mod step_serde {
     use super::*;
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-    /// Helper that serializes/deserializes `Step` as `{"Step": [...directions...]}`.
-    /// This makes the strategy type explicit in the output, consistent with how
-    /// `Linear`, `Nearest`, etc. serialize to their type name.
+    /// Helper that serializes/deserializes `Step` as `{"Step": <directions>}`. This makes
+    /// the strategy type explicit in the output, consistent with how `Linear`, `Nearest`,
+    /// etc. serialize to their type name.
     #[derive(Serialize, Deserialize)]
     struct StepHelper {
         #[serde(rename = "Step")]
-        directions: Vec<StepDirection>,
+        directions: PerAxis<StepDirection>,
     }
 
     impl Serialize for Step {
@@ -216,14 +198,18 @@ mod tests {
         );
         assert_eq!(
             serde_json::to_string(&Step::from(StepDirection::Lower)).unwrap(),
-            r#"{"Step":["Lower"]}"#
+            r#"{"Step":"Lower"}"#
         );
         assert_eq!(
             serde_json::to_string(&Step::from(StepDirection::Upper)).unwrap(),
-            r#"{"Step":["Upper"]}"#
+            r#"{"Step":"Upper"}"#
         );
         assert_eq!(
-            serde_json::to_string(&Step(vec![StepDirection::Lower, StepDirection::Upper])).unwrap(),
+            serde_json::to_string(&Step(PerAxis::Axes(vec![
+                StepDirection::Lower,
+                StepDirection::Upper
+            ])))
+            .unwrap(),
             r#"{"Step":["Lower","Upper"]}"#
         );
 
@@ -241,6 +227,6 @@ mod tests {
             StepUpper
         );
         // Aliases are intentionally scoped to StepLower/StepUpper, not StepDirection.
-        assert!(serde_json::from_str::<Step>(r#"{"Step":["LeftNearest"]}"#).is_err());
+        assert!(serde_json::from_str::<Step>(r#"{"Step":"LeftNearest"}"#).is_err());
     }
 }

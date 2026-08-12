@@ -577,11 +577,11 @@ fn test_step() {
     let interp_mixed = InterpND::new(
         vec![array![0., 1.], array![0., 1.], array![0., 1.]],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
-        strategy::Step(vec![
+        strategy::Step(strategy::per_axis::PerAxis::Axes(vec![
             strategy::step::StepDirection::Lower,
             strategy::step::StepDirection::Upper,
             strategy::step::StepDirection::Lower,
-        ]),
+        ])),
         Extrapolate::Error,
     )
     .unwrap();
@@ -591,10 +591,10 @@ fn test_step() {
     assert!(InterpND::new(
         vec![array![0., 1.], array![0., 1.], array![0., 1.]],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
-        strategy::Step(vec![
+        strategy::Step(strategy::per_axis::PerAxis::Axes(vec![
             strategy::step::StepDirection::Lower,
             strategy::step::StepDirection::Lower,
-        ]),
+        ])),
         Extrapolate::Error,
     )
     .is_err());

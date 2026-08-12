@@ -595,11 +595,11 @@ fn test_step() {
         array![0., 1.],
         array![0., 1.],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]],
-        strategy::Step(vec![
+        strategy::Step(strategy::per_axis::PerAxis::Axes(vec![
             strategy::step::StepDirection::Lower,
             strategy::step::StepDirection::Upper,
             strategy::step::StepDirection::Lower,
-        ]),
+        ])),
         Extrapolate::Error,
     )
     .unwrap();

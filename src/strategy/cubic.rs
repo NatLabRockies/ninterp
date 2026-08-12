@@ -34,7 +34,7 @@ use ndarray::Zip;
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub struct CubicC2<T> {
     /// Boundary conditions, one per dimension or a single entry broadcast to all.
-    pub boundary_conditions: Vec<CubicC2BoundaryConditions<T>>,
+    pub boundary_conditions: PerAxis<CubicC2BoundaryConditions<T>>,
     /// Precomputed derivative data, populated by `Strategy1D`/`2D`/`3D`/`ND::init`. Its
     /// shape depends on which of those populated it:
     ///
@@ -92,22 +92,19 @@ fn empty_cache<T>() -> ArrayD<T> {
 
 impl<T> CubicC2<T> {
     /// Returns the boundary condition for the given dimension.
-    /// A single-entry vec is broadcast to all dimensions.
+    /// A broadcast entry applies to all dimensions.
     pub(crate) fn bc_for_dim(&self, dim: usize) -> &CubicC2BoundaryConditions<T> {
-        let bcs = &self.boundary_conditions;
-        &bcs[if bcs.len() == 1 { 0 } else { dim }]
+        self.boundary_conditions.get(dim)
     }
 
     /// Create a cubic spline with a distinct boundary condition per grid dimension.
-    /// A single-entry vec is broadcast to all dimensions instead (same rule
-    /// `interpolate` uses internally to pick each axis's condition).
     ///
     /// Use [`not_a_knot`](Self::not_a_knot), [`natural`](Self::natural),
     /// [`clamped`](Self::clamped), or [`periodic`](Self::periodic) instead when every
     /// dimension shares the same condition.
     pub fn new(boundary_conditions: Vec<CubicC2BoundaryConditions<T>>) -> Self {
         Self {
-            boundary_conditions,
+            boundary_conditions: PerAxis::Axes(boundary_conditions),
             cache: empty_cache(),
         }
     }
@@ -116,7 +113,7 @@ impl<T> CubicC2<T> {
     /// Requires at least 4 data points per dimension.
     pub fn not_a_knot() -> Self {
         Self {
-            boundary_conditions: vec![CubicC2BoundaryConditions::NotAKnot],
+            boundary_conditions: PerAxis::Broadcast(CubicC2BoundaryConditions::NotAKnot),
             cache: empty_cache(),
         }
     }
@@ -124,7 +121,7 @@ impl<T> CubicC2<T> {
     /// Create a cubic spline with natural (zero second derivative at endpoints) BCs.
     pub fn natural() -> Self {
         Self {
-            boundary_conditions: vec![CubicC2BoundaryConditions::Natural],
+            boundary_conditions: PerAxis::Broadcast(CubicC2BoundaryConditions::Natural),
             cache: empty_cache(),
         }
     }
@@ -132,7 +129,10 @@ impl<T> CubicC2<T> {
     /// Create a cubic spline with specified first derivatives at both endpoints.
     pub fn clamped(left: T, right: T) -> Self {
         Self {
-            boundary_conditions: vec![CubicC2BoundaryConditions::Clamped { left, right }],
+            boundary_conditions: PerAxis::Broadcast(CubicC2BoundaryConditions::Clamped {
+                left,
+                right,
+            }),
             cache: empty_cache(),
         }
     }
@@ -142,7 +142,7 @@ impl<T> CubicC2<T> {
     /// `values[0]`, though this isn't enforced.
     pub fn periodic() -> Self {
         Self {
-            boundary_conditions: vec![CubicC2BoundaryConditions::Periodic],
+            boundary_conditions: PerAxis::Broadcast(CubicC2BoundaryConditions::Periodic),
             cache: empty_cache(),
         }
     }
@@ -349,28 +349,17 @@ pub(crate) fn validate_bc_min_points<T>(
     Ok(())
 }
 
-/// Checks `boundary_conditions.len()` against `ndim`: must be either 1 (broadcast to
-/// every axis, [`CubicC2::bc_for_dim`]'s other case) or exactly `ndim` (one per axis).
-/// `bc_for_dim` indexes unchecked assuming this already holds, so every
+/// Checks `boundary_conditions`'s count against `ndim`: `Broadcast` always applies to
+/// every axis ([`CubicC2::bc_for_dim`]'s other case), `Axes` must have exactly `ndim`
+/// entries. `bc_for_dim` indexes unchecked assuming this already holds, so every
 /// `Strategy1D`/`2D`/`3D`/`ND::validate` must call this before any `bc_for_dim` call --
 /// mirrors [`Step::validate_len`](crate::strategy::Step::validate_len)'s check for the
-/// same kind of per-dimension config vec.
+/// same kind of per-dimension config.
 pub(crate) fn validate_bc_count<T>(
-    bcs: &[CubicC2BoundaryConditions<T>],
+    bcs: &PerAxis<CubicC2BoundaryConditions<T>>,
     ndim: usize,
 ) -> Result<(), ValidateError> {
-    let found = bcs.len();
-    if found == 1 || found == ndim {
-        return Ok(());
-    }
-    let expected = if ndim == 1 {
-        "1".to_string()
-    } else {
-        format!("1 or {ndim}")
-    };
-    Err(ValidateError::Other(format!(
-        "CubicC2 has {found} boundary conditions but interpolator is {ndim}-D (expected {expected})"
-    )))
+    bcs.validate_len(ndim, "CubicC2", "boundary conditions")
 }
 
 /// Precomputes second-derivative coefficients for every 1-D pencil along the innermost
