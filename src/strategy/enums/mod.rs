@@ -12,7 +12,7 @@
 //! use ndarray::prelude::*;
 //! use ninterp::prelude::*;
 //!
-//! let mut interp: Interp1D<_, strategy::enums::Strategy1DEnum> = Interp1D::new(
+//! let mut interp: Interp1D<_, strategy::enums::Strategy1DEnum<f64>> = Interp1D::new(
 //!     // x
 //!     array![0., 1., 2., 3., 4.],
 //!     // f(x)
@@ -67,12 +67,12 @@ macro_rules! strategy_enum_impl {
         #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
         #[cfg_attr(feature = "serde", serde(untagged))]
         #[non_exhaustive]
-        pub enum $EnumName {
+        pub enum $EnumName<T> {
             $($Variant($StrategyType),)*
         }
 
         $(
-            impl From<$StrategyType> for $EnumName {
+            impl<T> From<$StrategyType> for $EnumName<T> {
                 #[inline]
                 fn from(strategy: $StrategyType) -> Self {
                     Self::$Variant(strategy)
@@ -80,7 +80,7 @@ macro_rules! strategy_enum_impl {
             }
         )*
 
-        impl<D> $TraitName<D> for $EnumName
+        impl<D> $TraitName<D> for $EnumName<D::Elem>
         where
             D: Data + RawDataClone + Clone,
             D::Elem: Float + Debug,
@@ -140,7 +140,7 @@ mod tests {
 
     #[test]
     fn test_1d() {
-        let mut interp: Interp1D<_, strategy::enums::Strategy1DEnum> = Interp1D::new(
+        let mut interp: Interp1D<_, strategy::enums::Strategy1DEnum<f64>> = Interp1D::new(
             array![0., 1., 2., 3., 4.],
             array![0.2, 0.4, 0.6, 0.8, 1.0],
             strategy::Linear.into(),
@@ -166,7 +166,7 @@ mod tests {
 
     #[test]
     fn test_2d() {
-        let mut interp: Interp2D<_, strategy::enums::Strategy2DEnum> = Interp2D::new(
+        let mut interp: Interp2D<_, strategy::enums::Strategy2DEnum<f64>> = Interp2D::new(
             array![0.05, 0.10, 0.15],
             array![0.10, 0.20, 0.30],
             array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
@@ -198,7 +198,7 @@ mod tests {
 
     #[test]
     fn test_3d() {
-        let mut interp: Interp3D<_, strategy::enums::Strategy3DEnum> = Interp3D::new(
+        let mut interp: Interp3D<_, strategy::enums::Strategy3DEnum<f64>> = Interp3D::new(
             array![0.05, 0.10, 0.15],
             array![0.10, 0.20, 0.30],
             array![0.20, 0.40, 0.60],
@@ -235,7 +235,7 @@ mod tests {
 
     #[test]
     fn test_nd() {
-        let mut interp: InterpND<_, strategy::enums::StrategyNDEnum> = InterpND::new(
+        let mut interp: InterpND<_, strategy::enums::StrategyNDEnum<f64>> = InterpND::new(
             vec![
                 array![0.05, 0.10, 0.15],
                 array![0.10, 0.20, 0.30],

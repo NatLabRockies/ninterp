@@ -13,7 +13,7 @@ fn main() {
 /// - **NOT** compatible with custom strategies
 fn using_enum() {
     // Create mutable interpolator
-    let mut interp: Interp1D<_, strategy::enums::Strategy1DEnum> = Interp1D::new(
+    let mut interp: Interp1D<_, strategy::enums::Strategy1DEnum<f64>> = Interp1D::new(
         array![0., 1., 2.],
         array![0., 3., 6.],
         // Provide the strategy as an enum

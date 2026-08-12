@@ -139,5 +139,6 @@ interp_trait_impls!(
     InterpData2DBase,
     Strategy2D,
     strategy::enums::Strategy2DEnum,
+    strategy::enums::Strategy2DEnum<D::Elem>,
     N
 );

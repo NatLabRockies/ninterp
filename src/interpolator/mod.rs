@@ -587,8 +587,8 @@ pub(crate) use set_strategy_box_impl;
 /// Generates the `$StrategyEnum`-backed inherent `set_strategy`, shared by
 /// `Interp1D`/`2D`/`3D`/`ND`.
 macro_rules! set_strategy_enum_impl {
-    ($InterpType:ident, $StrategyEnum:path) => {
-        impl<D> $InterpType<D, $StrategyEnum>
+    ($InterpType:ident, $StrategyEnum:path, $StrategyEnumT:ty) => {
+        impl<D> $InterpType<D, $StrategyEnumT>
         where
             D: Data + RawDataClone + Clone,
             D::Elem: Float + Debug,
@@ -602,7 +602,7 @@ macro_rules! set_strategy_enum_impl {
             )]
             pub fn set_strategy(
                 &mut self,
-                strategy: impl Into<$StrategyEnum>,
+                strategy: impl Into<$StrategyEnumT>,
             ) -> Result<(), ValidateError> {
                 self.strategy = strategy.into();
                 self.validate_extrapolate(&self.extrapolate)?;
@@ -808,12 +808,12 @@ pub(crate) use view_into_owned_impl;
 /// `extrapolate_impl`, `Interpolator`, `set_strategy` for `Box<dyn Strategy>`,
 /// `set_strategy` for the strategy enum, and `AnyInterpolator`.
 macro_rules! interp_trait_impls {
-    ($InterpType:ident, $InterpTypeOwned:ident, $InterpData:ident, $Strategy:ident, $StrategyEnum:path, $N:expr) => {
+    ($InterpType:ident, $InterpTypeOwned:ident, $InterpData:ident, $Strategy:ident, $StrategyEnum:path, $StrategyEnumT:ty, $N:expr) => {
         partialeq_impl!($InterpType, $InterpData, $Strategy);
         extrapolate_impl!($InterpType, $Strategy);
         interpolator_trait_impl!($InterpType, $Strategy, $N);
         set_strategy_box_impl!($InterpType, $Strategy);
-        set_strategy_enum_impl!($InterpType, $StrategyEnum);
+        set_strategy_enum_impl!($InterpType, $StrategyEnum, $StrategyEnumT);
         any_interpolator_impl!($InterpTypeOwned, $Strategy);
         #[cfg(feature = "serde")]
         serialize_nested_impl!($InterpType, $InterpData, $Strategy);

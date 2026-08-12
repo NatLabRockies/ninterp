@@ -1,0 +1,67 @@
+//! Serde round-trip coverage for every built-in strategy, both bare and wrapped in each
+//! dimensionality's `Strategy*Enum`. The enums are `#[serde(untagged)]`, so a new strategy
+//! (or a new `CubicC2` boundary condition) can silently fail to round-trip through the wrong
+//! variant if its JSON shape collides with another's; round-tripping every variant here is
+//! what would catch that.
+#![cfg(feature = "serde")]
+
+use ninterp::strategy::enums::*;
+use ninterp::strategy::step::StepDirection;
+use ninterp::strategy::*;
+
+fn round_trip<T>(value: &T)
+where
+    T: serde::Serialize + serde::de::DeserializeOwned + PartialEq + std::fmt::Debug,
+{
+    let json = serde_json::to_string(value).unwrap();
+    let de: T = serde_json::from_str(&json).unwrap();
+    assert_eq!(&de, value, "failed to round-trip: {json}");
+}
+
+fn cubic_c2_variants() -> Vec<CubicC2<f64>> {
+    vec![
+        CubicC2::not_a_knot(),
+        CubicC2::natural(),
+        CubicC2::clamped(0.5, -0.5),
+        CubicC2::periodic(),
+    ]
+}
+
+#[test]
+fn bare_strategies_round_trip() {
+    round_trip(&Nearest);
+    round_trip(&Linear);
+    round_trip(&LinearUniform);
+    round_trip(&StepLower);
+    round_trip(&StepUpper);
+    round_trip(&Step(vec![StepDirection::Lower, StepDirection::Upper]));
+    for bc in cubic_c2_variants() {
+        round_trip(&bc);
+    }
+}
+
+/// Generates a round-trip test for `$Enum` over every strategy variant, `CubicC2` included.
+macro_rules! enum_round_trip_test {
+    ($test_name:ident, $Enum:ident) => {
+        #[test]
+        fn $test_name() {
+            round_trip(&$Enum::<f64>::from(Nearest));
+            round_trip(&$Enum::<f64>::from(Linear));
+            round_trip(&$Enum::<f64>::from(LinearUniform));
+            round_trip(&$Enum::<f64>::from(StepLower));
+            round_trip(&$Enum::<f64>::from(StepUpper));
+            round_trip(&$Enum::<f64>::from(Step(vec![
+                StepDirection::Lower,
+                StepDirection::Upper,
+            ])));
+            for bc in cubic_c2_variants() {
+                round_trip(&$Enum::from(bc));
+            }
+        }
+    };
+}
+
+enum_round_trip_test!(strategy_1d_enum_round_trips_every_variant, Strategy1DEnum);
+enum_round_trip_test!(strategy_2d_enum_round_trips_every_variant, Strategy2DEnum);
+enum_round_trip_test!(strategy_3d_enum_round_trips_every_variant, Strategy3DEnum);
+enum_round_trip_test!(strategy_nd_enum_round_trips_every_variant, StrategyNDEnum);

@@ -378,13 +378,13 @@ macro_rules! slice_to_array_forward {
 pub enum InterpolatorEnumBase<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: PartialEq + Debug,
+    D::Elem: PartialEq + Debug + Clone,
 {
     Interp0D(Interp0D<D::Elem>),
-    Interp1D(Interp1DBase<D, Strategy1DEnum>),
-    Interp2D(Interp2DBase<D, Strategy2DEnum>),
-    Interp3D(Interp3DBase<D, Strategy3DEnum>),
-    InterpND(InterpNDBase<D, StrategyNDEnum>),
+    Interp1D(Interp1DBase<D, Strategy1DEnum<D::Elem>>),
+    Interp2D(Interp2DBase<D, Strategy2DEnum<D::Elem>>),
+    Interp3D(Interp3DBase<D, Strategy3DEnum<D::Elem>>),
+    InterpND(InterpNDBase<D, StrategyNDEnum<D::Elem>>),
 }
 /// Owned interpolator enum (see [`InterpolatorEnumBase`] for the generic form).
 pub type InterpolatorEnum<T> = InterpolatorEnumBase<OwnedRepr<T>>;
@@ -395,7 +395,7 @@ pub type InterpolatorEnumView<T> = InterpolatorEnumBase<ViewRepr<T>>;
 impl<D> SerializeNested for InterpolatorEnumBase<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: PartialEq + Debug + Serialize,
+    D::Elem: PartialEq + Debug + Clone + Serialize,
 {
     /// `#[serde(untagged)]`, so each variant serializes as its inner value.
     fn serialize_nested<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -415,7 +415,7 @@ where
 impl<D> PartialEq for InterpolatorEnumBase<D>
 where
     D: Data + RawDataClone + Clone,
-    D::Elem: PartialEq + Debug,
+    D::Elem: PartialEq + Debug + Clone,
     ArrayBase<D, Ix1>: PartialEq,
 {
     fn eq(&self, other: &Self) -> bool {
@@ -441,46 +441,46 @@ where
     }
 }
 
-impl<D> From<Interp1DBase<D, Strategy1DEnum>> for InterpolatorEnumBase<D>
+impl<D> From<Interp1DBase<D, Strategy1DEnum<D::Elem>>> for InterpolatorEnumBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
 {
     #[inline]
-    fn from(interpolator: Interp1DBase<D, Strategy1DEnum>) -> Self {
+    fn from(interpolator: Interp1DBase<D, Strategy1DEnum<D::Elem>>) -> Self {
         InterpolatorEnumBase::Interp1D(interpolator)
     }
 }
 
-impl<D> From<Interp2DBase<D, Strategy2DEnum>> for InterpolatorEnumBase<D>
+impl<D> From<Interp2DBase<D, Strategy2DEnum<D::Elem>>> for InterpolatorEnumBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
 {
     #[inline]
-    fn from(interpolator: Interp2DBase<D, Strategy2DEnum>) -> Self {
+    fn from(interpolator: Interp2DBase<D, Strategy2DEnum<D::Elem>>) -> Self {
         InterpolatorEnumBase::Interp2D(interpolator)
     }
 }
 
-impl<D> From<Interp3DBase<D, Strategy3DEnum>> for InterpolatorEnumBase<D>
+impl<D> From<Interp3DBase<D, Strategy3DEnum<D::Elem>>> for InterpolatorEnumBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
 {
     #[inline]
-    fn from(interpolator: Interp3DBase<D, Strategy3DEnum>) -> Self {
+    fn from(interpolator: Interp3DBase<D, Strategy3DEnum<D::Elem>>) -> Self {
         InterpolatorEnumBase::Interp3D(interpolator)
     }
 }
 
-impl<D> From<InterpNDBase<D, StrategyNDEnum>> for InterpolatorEnumBase<D>
+impl<D> From<InterpNDBase<D, StrategyNDEnum<D::Elem>>> for InterpolatorEnumBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
 {
     #[inline]
-    fn from(interpolator: InterpNDBase<D, StrategyNDEnum>) -> Self {
+    fn from(interpolator: InterpNDBase<D, StrategyNDEnum<D::Elem>>) -> Self {
         InterpolatorEnumBase::InterpND(interpolator)
     }
 }
@@ -501,7 +501,7 @@ where
     pub fn new_1d(
         x: ArrayBase<D, Ix1>,
         f_x: ArrayBase<D, Ix1>,
-        strategy: impl Into<Strategy1DEnum>,
+        strategy: impl Into<Strategy1DEnum<D::Elem>>,
         extrapolate: Extrapolate<D::Elem>,
     ) -> Result<Self, ValidateError> {
         Ok(Self::Interp1D(Interp1DBase::new(
@@ -518,7 +518,7 @@ where
         x: ArrayBase<D, Ix1>,
         y: ArrayBase<D, Ix1>,
         f_xy: ArrayBase<D, Ix2>,
-        strategy: impl Into<Strategy2DEnum>,
+        strategy: impl Into<Strategy2DEnum<D::Elem>>,
         extrapolate: Extrapolate<D::Elem>,
     ) -> Result<Self, ValidateError> {
         Ok(Self::Interp2D(Interp2DBase::new(
@@ -537,7 +537,7 @@ where
         y: ArrayBase<D, Ix1>,
         z: ArrayBase<D, Ix1>,
         f_xyz: ArrayBase<D, Ix3>,
-        strategy: impl Into<Strategy3DEnum>,
+        strategy: impl Into<Strategy3DEnum<D::Elem>>,
         extrapolate: Extrapolate<D::Elem>,
     ) -> Result<Self, ValidateError> {
         Ok(Self::Interp3D(Interp3DBase::new(
@@ -555,7 +555,7 @@ where
     pub fn new_nd(
         grid: Vec<ArrayBase<D, Ix1>>,
         values: ArrayBase<D, IxDyn>,
-        strategy: impl Into<StrategyNDEnum>,
+        strategy: impl Into<StrategyNDEnum<D::Elem>>,
         extrapolate: Extrapolate<D::Elem>,
     ) -> Result<Self, ValidateError> {
         Ok(Self::InterpND(InterpNDBase::new(
@@ -725,7 +725,7 @@ mod tests {
         let f_xy = array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]];
         let f_xy_dyn = f_xy.clone().into_dyn();
 
-        let interp0: Interp2DBase<_, strategy::enums::Strategy2DEnum> = Interp2DBase::new(
+        let interp0: Interp2DBase<_, strategy::enums::Strategy2DEnum<f64>> = Interp2DBase::new(
             x.view(),
             y.view(),
             f_xy.view(),
@@ -735,7 +735,7 @@ mod tests {
         .unwrap();
         let interp1 = InterpolatorEnumBase::from(interp0.clone());
 
-        let interp2: InterpNDBase<_, strategy::enums::StrategyNDEnum> = InterpNDBase::new(
+        let interp2: InterpNDBase<_, strategy::enums::StrategyNDEnum<f64>> = InterpNDBase::new(
             vec![x.view(), y.view()],
             f_xy_dyn.view(),
             strategy::Nearest.into(),

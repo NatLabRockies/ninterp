@@ -571,5 +571,9 @@ where
 
 extrapolate_impl!(InterpNDBase, StrategyND);
 set_strategy_box_impl!(InterpNDBase, StrategyND);
-set_strategy_enum_impl!(InterpNDBase, strategy::enums::StrategyNDEnum);
+set_strategy_enum_impl!(
+    InterpNDBase,
+    strategy::enums::StrategyNDEnum,
+    strategy::enums::StrategyNDEnum<D::Elem>
+);
 any_interpolator_impl!(InterpND, StrategyND);

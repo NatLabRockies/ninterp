@@ -21,6 +21,11 @@ Everything below is merged to `main` but not yet tagged/released.
   direction.
 - `LinearUniform`, `Step`, `StepLower`, and `StepUpper` are available for every
   dimensionality and included in the `Strategy*Enum` types.
+- `strategy::CubicC2`: a C² piecewise cubic spline strategy (1D/2D/3D/ND) with
+  configurable boundary conditions (`CubicC2BoundaryConditions::{NotAKnot, Natural,
+  Clamped, Periodic}`), a single tridiagonal solve per axis. `Strategy1D`/`ND` cache the
+  innermost axis's coefficients; `Strategy2D`/`3D` additionally cache the full
+  corner-derivative tensor for O(1) queries. Included in the `Strategy*Enum` types.
 - `Nested` wrapper / `serialize_nested` helper / `SerializeNested` trait (`prelude`,
   `serde` feature): opt into the nested-array serialization format at a specific call
   site, e.g. `serde_json::to_string(&Nested(&interp))` or
@@ -81,6 +86,10 @@ Everything below is merged to `main` but not yet tagged/released.
   `Strategy1DEnum`/`2DEnum`/`3DEnum`/`NDEnum` are now `#[non_exhaustive]`. An existing
   exhaustive downstream `match` over any of these needs a `_` arm; construction is
   unaffected.
+- **Breaking:** `Strategy1DEnum`/`2DEnum`/`3DEnum`/`NDEnum` are now generic over the
+  element type (`Strategy1DEnum<T>` etc.), needed to hold `CubicC2<T>` as a variant.
+  Bare usages (e.g. `Interp1D<_, Strategy1DEnum>`) need a type argument:
+  `Interp1D<_, Strategy1DEnum<f64>>`.
 - **Breaking:** `Strategy1D`/`2D`/`3D`/`ND::init` is split into a pure
   `validate(&self, data)` and a mutating `init(&mut self, data)`, both default no-op
   (existing custom strategies keep compiling unchanged). `LinearUniform`'s uniform-grid

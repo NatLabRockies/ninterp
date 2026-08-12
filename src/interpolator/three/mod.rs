@@ -151,5 +151,6 @@ interp_trait_impls!(
     InterpData3DBase,
     Strategy3D,
     strategy::enums::Strategy3DEnum,
+    strategy::enums::Strategy3DEnum<D::Elem>,
     N
 );

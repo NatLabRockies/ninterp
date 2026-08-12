@@ -52,7 +52,7 @@ pub struct CubicC2<T> {
     ///
     /// Not included in the serialized form. Call [`Interpolator::validate`] after
     /// deserializing to recompute this before use.
-    #[cfg_attr(feature = "serde", serde(skip))]
+    #[cfg_attr(feature = "serde", serde(skip, default = "empty_cache"))]
     pub(crate) cache: ArrayD<T>,
 }
 

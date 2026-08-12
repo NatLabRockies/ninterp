@@ -12,6 +12,7 @@ strategy_enum_impl!(
         (StepUpper, strategy::StepUpper),
         (Linear, strategy::Linear),
         (LinearUniform, strategy::LinearUniform),
+        (CubicC2, strategy::CubicC2<T>),
     ]
 );
 
@@ -24,20 +25,24 @@ mod tests {
     #[cfg(feature = "serde")]
     fn test_serde() {
         assert_eq!(
-            serde_json::to_string(&Strategy3DEnum::from(Linear)).unwrap(),
+            serde_json::to_string(&Strategy3DEnum::<f64>::from(Linear)).unwrap(),
             serde_json::to_string(&Linear).unwrap(),
         );
         assert_eq!(
-            serde_json::to_string(&Strategy3DEnum::from(Nearest)).unwrap(),
+            serde_json::to_string(&Strategy3DEnum::<f64>::from(Nearest)).unwrap(),
             serde_json::to_string(&Nearest).unwrap(),
         );
         assert_eq!(
-            serde_json::to_string(&Strategy3DEnum::from(StepLower)).unwrap(),
+            serde_json::to_string(&Strategy3DEnum::<f64>::from(StepLower)).unwrap(),
             serde_json::to_string(&StepLower).unwrap(),
         );
         assert_eq!(
-            serde_json::to_string(&Strategy3DEnum::from(StepUpper)).unwrap(),
+            serde_json::to_string(&Strategy3DEnum::<f64>::from(StepUpper)).unwrap(),
             serde_json::to_string(&StepUpper).unwrap(),
+        );
+        assert_eq!(
+            serde_json::to_string(&Strategy3DEnum::from(CubicC2::<f64>::not_a_knot())).unwrap(),
+            serde_json::to_string(&CubicC2::<f64>::not_a_knot()).unwrap(),
         );
     }
 }
