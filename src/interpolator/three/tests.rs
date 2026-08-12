@@ -12,7 +12,7 @@ fn test_cubic_spline() {
             [[1., 4., 7.], [3., 6., 9.], [5., 8., 11.]],
             [[2., 5., 8.], [4., 7., 10.], [6., 9., 12.]],
         ],
-        strategy::cubic::CubicC2::natural(),
+        strategy::CubicC2::natural(),
         Extrapolate::Enable,
     )
     .unwrap();
@@ -36,7 +36,7 @@ fn test_cubic_spline_knot_exactness() {
             [[9., 10., 11.], [12., 13., 14.], [15., 16., 17.]],
             [[18., 19., 20.], [21., 22., 23.], [24., 25., 26.]],
         ],
-        strategy::cubic::CubicC2::natural(),
+        strategy::CubicC2::natural(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -70,7 +70,7 @@ fn test_cubic_c2_interior_accuracy() {
         array![0., 1., 2., 3.],
         array![0., 1., 2., 3.],
         values,
-        strategy::cubic::CubicC2::not_a_knot(),
+        strategy::CubicC2::not_a_knot(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -93,7 +93,7 @@ fn test_cubic_c2_cached_vs_uncached() {
         array![0., 1., 2., 3.],
         array![0., 1., 2., 3.],
         values.clone(),
-        strategy::cubic::CubicC2::not_a_knot(),
+        strategy::CubicC2::not_a_knot(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -104,7 +104,7 @@ fn test_cubic_c2_cached_vs_uncached() {
             array![0., 1., 2., 3.],
         ],
         values.into_dyn(),
-        strategy::cubic::CubicC2::not_a_knot(),
+        strategy::CubicC2::not_a_knot(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -128,7 +128,7 @@ fn test_cubic_c2_clamped_short_axis() {
             [[0., 1., 2.], [1., 2., 3.], [2., 3., 4.]],
             [[1., 2., 3.], [2., 3., 4.], [3., 4., 5.]],
         ], // f(x, y, z) = x + y + z
-        strategy::cubic::CubicC2::new(vec![
+        strategy::CubicC2::new(vec![
             strategy::cubic::CubicC2BoundaryConditions::Clamped {
                 left: 1.,
                 right: 1.,
@@ -159,7 +159,7 @@ fn test_cubic_c2_not_a_knot_cubic_exact() {
         array![0., 1., 2., 3.],
         array![0., 1., 2., 3.],
         values,
-        strategy::cubic::CubicC2::not_a_knot(),
+        strategy::CubicC2::not_a_knot(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -177,7 +177,7 @@ fn test_cubic_c2_notaknot_enough_points() {
         array![0., 1., 2., 3.],
         array![0., 1., 2.],
         Array3::from_shape_fn((4, 4, 3), |(i, j, k)| (i + j + k) as f64),
-        strategy::cubic::CubicC2::not_a_knot(),
+        strategy::CubicC2::not_a_knot(),
         Extrapolate::Error,
     );
     assert!(
@@ -189,7 +189,7 @@ fn test_cubic_c2_notaknot_enough_points() {
         array![0., 1., 2., 3.],
         array![0., 1., 2., 3.],
         Array3::from_shape_fn((4, 4, 4), |(i, j, k)| (i + j + k) as f64),
-        strategy::cubic::CubicC2::not_a_knot(),
+        strategy::CubicC2::not_a_knot(),
         Extrapolate::Error,
     );
     assert!(
@@ -227,7 +227,7 @@ fn test_cubic_c2_3d_periodic() {
             [[6., 18., 6., 6.], [3., 9., 3., 3.], [6., 18., 6., 6.]],
             [[2., 6., 2., 2.], [1., 3., 1., 1.], [2., 6., 2., 2.]],
         ],
-        strategy::cubic::CubicC2::periodic(),
+        strategy::CubicC2::periodic(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -263,7 +263,7 @@ fn test_cubic_c2_clamped_cubic_exact() {
         array![0., 1., 2., 3.],
         array![0., 1., 2., 3.],
         values,
-        strategy::cubic::CubicC2::clamped(0., 27.), // f'(0) = 0, f'(3) = 27, broadcast to every axis
+        strategy::CubicC2::clamped(0., 27.), // f'(0) = 0, f'(3) = 27, broadcast to every axis
         Extrapolate::Error,
     )
     .unwrap();
@@ -289,7 +289,7 @@ fn test_cubic_c2_clamped_uses_given_derivative() {
         array![0., 1., 2., 3.],
         array![0., 1., 2., 3.],
         values,
-        strategy::cubic::CubicC2::clamped(999., 999.), // true derivatives are 0 and 27
+        strategy::CubicC2::clamped(999., 999.), // true derivatives are 0 and 27
         Extrapolate::Error,
     )
     .unwrap();
@@ -494,7 +494,7 @@ fn test_step() {
         array![0., 1.],
         array![0., 1.],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]],
-        strategy::Step::from(strategy::StepDirection::Lower),
+        strategy::Step::from(strategy::step::StepDirection::Lower),
         Extrapolate::Error,
     )
     .unwrap();
@@ -533,7 +533,7 @@ fn test_step() {
         array![0., 1.],
         array![0., 1.],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]],
-        strategy::Step::from(strategy::StepDirection::Upper),
+        strategy::Step::from(strategy::step::StepDirection::Upper),
         Extrapolate::Error,
     )
     .unwrap();
@@ -560,9 +560,9 @@ fn test_step() {
         array![0., 1.],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]],
         strategy::Step(vec![
-            strategy::StepDirection::Lower,
-            strategy::StepDirection::Upper,
-            strategy::StepDirection::Lower,
+            strategy::step::StepDirection::Lower,
+            strategy::step::StepDirection::Upper,
+            strategy::step::StepDirection::Lower,
         ]),
         Extrapolate::Error,
     )
@@ -786,7 +786,7 @@ fn test_cubic_c2_bc_count_mismatch() {
         array![0., 1., 2., 3.],
         array![0., 1., 2., 3.],
         Array3::from_shape_fn((4, 4, 4), |(i, j, k)| (i + j + k) as f64),
-        strategy::cubic::CubicC2::new(vec![
+        strategy::CubicC2::new(vec![
             strategy::cubic::CubicC2BoundaryConditions::Natural,
             strategy::cubic::CubicC2BoundaryConditions::Natural,
         ]),

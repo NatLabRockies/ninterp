@@ -6,7 +6,7 @@ fn test_cubic_spline() {
     let interp = InterpND::new(
         vec![array![0., 1., 2.], array![0., 1., 2.]],
         array![[0., 1., 2.], [2., 3., 4.], [4., 5., 6.]].into_dyn(),
-        strategy::cubic::CubicC2::natural(),
+        strategy::CubicC2::natural(),
         Extrapolate::Enable,
     )
     .unwrap();
@@ -26,7 +26,7 @@ fn test_cubic_spline_knot_exactness() {
             [9., 10., 13., 18.],
         ]
         .into_dyn(),
-        strategy::cubic::CubicC2::natural(),
+        strategy::CubicC2::natural(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -59,7 +59,7 @@ fn test_cubic_spline_0d() {
     let interp = InterpND::new(
         vec![array![]],
         array![0.5].into_dyn(),
-        strategy::cubic::CubicC2::natural(),
+        strategy::CubicC2::natural(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -84,7 +84,7 @@ fn test_cubic_c2_periodic_outer_axis() {
             [0., 1., 2.], // matches the x=0 row, by Periodic's convention
         ]
         .into_dyn(),
-        strategy::cubic::CubicC2::new(vec![
+        strategy::CubicC2::new(vec![
             strategy::cubic::CubicC2BoundaryConditions::Periodic,
             strategy::cubic::CubicC2BoundaryConditions::Natural,
         ]),
@@ -114,7 +114,7 @@ fn test_cubic_c2_not_a_knot_cubic_exact() {
     let interp = InterpND::new(
         vec![array![0., 1., 2., 3.], array![0., 1., 2., 3.]],
         Array2::from_shape_fn((4, 4), |(i, j)| f(grid[i], grid[j])).into_dyn(),
-        strategy::cubic::CubicC2::not_a_knot(),
+        strategy::CubicC2::not_a_knot(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -140,7 +140,7 @@ fn test_cubic_c2_clamped_uses_given_derivative() {
     let interp = InterpND::new(
         vec![array![0., 1., 2., 3.], array![0., 1., 2., 3.]],
         Array2::from_shape_fn((4, 4), |(i, j)| f(grid[i], grid[j])).into_dyn(),
-        strategy::cubic::CubicC2::clamped(999., 999.), // true derivatives are 0 and 27
+        strategy::CubicC2::clamped(999., 999.), // true derivatives are 0 and 27
         Extrapolate::Error,
     )
     .unwrap();
@@ -173,7 +173,7 @@ fn test_cubic_c2_periodic_scipy_oracle() {
             [2., 1., 2.],
         ]
         .into_dyn(),
-        strategy::cubic::CubicC2::periodic(),
+        strategy::CubicC2::periodic(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -198,7 +198,7 @@ fn test_cubic_c2_notaknot_enough_points() {
     let result = InterpND::new(
         vec![array![0., 1., 2., 3.], array![0., 1., 2.]],
         Array2::from_shape_fn((4, 3), |(i, j)| (i + j) as f64).into_dyn(),
-        strategy::cubic::CubicC2::not_a_knot(),
+        strategy::CubicC2::not_a_knot(),
         Extrapolate::Error,
     );
     assert!(
@@ -208,7 +208,7 @@ fn test_cubic_c2_notaknot_enough_points() {
     let result = InterpND::new(
         vec![array![0., 1., 2., 3.], array![0., 1., 2., 3.]],
         Array2::from_shape_fn((4, 4), |(i, j)| (i + j) as f64).into_dyn(),
-        strategy::cubic::CubicC2::not_a_knot(),
+        strategy::CubicC2::not_a_knot(),
         Extrapolate::Error,
     );
     assert!(
@@ -520,7 +520,7 @@ fn test_step() {
     let interp = InterpND::new(
         vec![array![0., 1.], array![0., 1.], array![0., 1.]],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
-        strategy::Step::from(strategy::StepDirection::Lower),
+        strategy::Step::from(strategy::step::StepDirection::Lower),
         Extrapolate::Error,
     )
     .unwrap();
@@ -555,7 +555,7 @@ fn test_step() {
     let interp_upper = InterpND::new(
         vec![array![0., 1.], array![0., 1.], array![0., 1.]],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
-        strategy::Step::from(strategy::StepDirection::Upper),
+        strategy::Step::from(strategy::step::StepDirection::Upper),
         Extrapolate::Error,
     )
     .unwrap();
@@ -578,9 +578,9 @@ fn test_step() {
         vec![array![0., 1.], array![0., 1.], array![0., 1.]],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
         strategy::Step(vec![
-            strategy::StepDirection::Lower,
-            strategy::StepDirection::Upper,
-            strategy::StepDirection::Lower,
+            strategy::step::StepDirection::Lower,
+            strategy::step::StepDirection::Upper,
+            strategy::step::StepDirection::Lower,
         ]),
         Extrapolate::Error,
     )
@@ -592,8 +592,8 @@ fn test_step() {
         vec![array![0., 1.], array![0., 1.], array![0., 1.]],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
         strategy::Step(vec![
-            strategy::StepDirection::Lower,
-            strategy::StepDirection::Lower,
+            strategy::step::StepDirection::Lower,
+            strategy::step::StepDirection::Lower,
         ]),
         Extrapolate::Error,
     )

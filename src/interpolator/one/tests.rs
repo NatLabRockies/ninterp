@@ -6,7 +6,7 @@ fn test_cubic_spline() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3.],
         array![1., 3., 5., 7.], // f(x) = 2x + 1
-        strategy::cubic::CubicC2::not_a_knot(),
+        strategy::CubicC2::not_a_knot(),
         Extrapolate::Enable,
     )
     .unwrap();
@@ -30,7 +30,7 @@ fn test_cubic_c2_knot_exactness() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0., 1., 4., 9., 16.], // f(x) = x^2
-        strategy::cubic::CubicC2::not_a_knot(),
+        strategy::CubicC2::not_a_knot(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -47,7 +47,7 @@ fn test_cubic_c2_two_points() {
     let interp = Interp1D::new(
         array![0., 1.],
         array![0., 2.],
-        strategy::cubic::CubicC2::natural(),
+        strategy::CubicC2::natural(),
         Extrapolate::Enable,
     )
     .unwrap();
@@ -61,7 +61,7 @@ fn test_cubic_c2_natural() {
     let interp = Interp1D::new(
         array![-1.5, -0.2, 1., 5., 10., 15., 20.],
         array![-1.2, 0., 0.5, 1., 1.2, 2., 1.],
-        strategy::cubic::CubicC2::natural(),
+        strategy::CubicC2::natural(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -84,7 +84,7 @@ fn test_cubic_c2_not_a_knot() {
     let interp = Interp1D::new(
         array![-1.5, -0.2, 1., 5., 10., 15., 20.],
         array![-1.2, 0., 0.5, 1., 1.2, 2., 1.],
-        strategy::cubic::CubicC2::not_a_knot(),
+        strategy::CubicC2::not_a_knot(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -101,7 +101,7 @@ fn test_cubic_c2_clamped() {
     let interp = Interp1D::new(
         array![-1.5, -0.2, 1., 5., 10., 15., 20.],
         array![-1.2, 0., 0.5, 1., 1.2, 2., 1.],
-        strategy::cubic::CubicC2::clamped(-1., 1.),
+        strategy::CubicC2::clamped(-1., 1.),
         Extrapolate::Error,
     )
     .unwrap();
@@ -118,7 +118,7 @@ fn test_cubic_c2_periodic() {
     let interp = Interp1D::new(
         array![-4., -1.5, -0.2, 1., 5., 10., 15., 20.],
         array![1., -1.2, 0., 0.5, 1., 1.2, 2., 1.],
-        strategy::cubic::CubicC2::periodic(),
+        strategy::CubicC2::periodic(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -140,7 +140,7 @@ fn test_cubic_c2_not_a_knot_cubic_exact() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3.],
         array![0., 1., 8., 27.], // f(x) = x^3
-        strategy::cubic::CubicC2::not_a_knot(),
+        strategy::CubicC2::not_a_knot(),
         Extrapolate::Enable,
     )
     .unwrap();
@@ -160,7 +160,7 @@ fn test_cubic_c2_notaknot_enough_points() {
     let result = Interp1D::new(
         array![0., 1., 2.],
         array![0., 1., 4.],
-        strategy::cubic::CubicC2::not_a_knot(),
+        strategy::CubicC2::not_a_knot(),
         Extrapolate::Error,
     );
     assert!(
@@ -171,7 +171,7 @@ fn test_cubic_c2_notaknot_enough_points() {
     let result = Interp1D::new(
         array![0., 1., 2., 3.],
         array![0., 1., 4., 9.],
-        strategy::cubic::CubicC2::not_a_knot(),
+        strategy::CubicC2::not_a_knot(),
         Extrapolate::Error,
     );
     assert!(
@@ -189,7 +189,7 @@ fn test_cubic_c2_clamped_cubic_exact() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3.],
         array![0., 1., 8., 27.],
-        strategy::cubic::CubicC2::clamped(0., 27.),
+        strategy::CubicC2::clamped(0., 27.),
         Extrapolate::Enable,
     )
     .unwrap();
@@ -212,7 +212,7 @@ fn test_cubic_c2_clamped_uses_given_derivative() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3.],
         array![0., 1., 8., 27.], // f(x) = x^3; true derivatives are 0 and 27
-        strategy::cubic::CubicC2::clamped(999., 999.),
+        strategy::CubicC2::clamped(999., 999.),
         Extrapolate::Enable,
     )
     .unwrap();
@@ -330,7 +330,7 @@ fn test_left_nearest() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0.2, 0.4, 0.6, 0.8, 1.0],
-        strategy::Step::from(strategy::StepDirection::Lower),
+        strategy::Step::from(strategy::step::StepDirection::Lower),
         Extrapolate::Error,
     )
     .unwrap();
@@ -350,7 +350,7 @@ fn test_right_nearest() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0.2, 0.4, 0.6, 0.8, 1.0],
-        strategy::Step::from(strategy::StepDirection::Upper),
+        strategy::Step::from(strategy::step::StepDirection::Upper),
         Extrapolate::Error,
     )
     .unwrap();
@@ -426,7 +426,7 @@ fn test_integer_nearest_and_wrap_step() {
     let step_wrap = Interp1D::new(
         array![0, 10, 20],
         array![100, 200, 300],
-        strategy::Step::from(strategy::StepDirection::Lower),
+        strategy::Step::from(strategy::step::StepDirection::Lower),
         Extrapolate::Wrap,
     )
     .unwrap();
@@ -495,8 +495,8 @@ fn test_step_invalid_direction_count() {
         array![0., 1., 2., 3., 4.],
         array![0.2, 0.4, 0.6, 0.8, 1.0],
         strategy::Step(vec![
-            strategy::StepDirection::Lower,
-            strategy::StepDirection::Upper,
+            strategy::step::StepDirection::Lower,
+            strategy::step::StepDirection::Upper,
         ]),
         Extrapolate::Error,
     )
@@ -710,7 +710,7 @@ fn test_serde() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0.2, 0.4, 0.6, 0.8, 1.0],
-        strategy::Step::from(strategy::StepDirection::Lower),
+        strategy::Step::from(strategy::step::StepDirection::Lower),
         Extrapolate::Error,
     )
     .unwrap();

@@ -17,6 +17,7 @@
 ///   - [`strategy::Nearest`]
 ///   - [`strategy::Step`] (per-dimension and/or runtime-selected step directions)
 ///   - [`strategy::StepLower`] / [`strategy::StepUpper`]
+///   - [`strategy::CubicC2`] (C² cubic spline)
 ///   - `serde`-compatible strategy enums: [`strategy::enums::Strategy1DEnum`]/etc.
 /// - The extrapolation setting enum: [`Extrapolate`](`interpolator::Extrapolate`)
 /// - With the `serde` feature: `Nested`, `serialize_nested`, and `SerializeNested`, for opting
@@ -49,6 +50,7 @@ pub(crate) use interpolator::data::*;
 
 pub(crate) use error::*;
 pub(crate) use strategy::cubic::*;
+pub(crate) use strategy::step::*;
 pub(crate) use strategy::traits::*;
 pub(crate) use strategy::utils::*;
 

@@ -23,7 +23,7 @@ use ndarray::Zip;
 /// let interp: Interp1D<f64, _> = Interp1D::new(
 ///     array![0., 1., 2., 3.],
 ///     array![1., 3., 5., 7.],
-///     strategy::cubic::CubicC2::not_a_knot(),
+///     strategy::CubicC2::not_a_knot(),
 ///     Extrapolate::Enable,
 /// )
 /// .unwrap();

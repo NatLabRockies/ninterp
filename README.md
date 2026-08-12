@@ -130,9 +130,10 @@ An interpolation strategy must be specified. Provided strategies:
 | [`Linear`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Linear.html) | Linear interpolation |
 | [`LinearUniform`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.LinearUniform.html) | Linear interpolation for uniformly spaced grids |
 | [`Nearest`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Nearest.html) | Nearest-neighbor interpolation |
-| [`Step`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Step.html) | Step interpolation with per-dimension directions or a direction chosen at runtime |
-| [`StepLower`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.StepLower.html) | Step interpolation to the previous grid value in each dimension |
-| [`StepUpper`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.StepUpper.html) | Step interpolation to the next grid value in each dimension |
+| [`Step`](https://docs.rs/ninterp/latest/ninterp/strategy/step/struct.Step.html) | Step interpolation with per-dimension directions or a direction chosen at runtime |
+| [`StepLower`](https://docs.rs/ninterp/latest/ninterp/strategy/step/struct.StepLower.html) | Step interpolation to the previous grid value in each dimension |
+| [`StepUpper`](https://docs.rs/ninterp/latest/ninterp/strategy/step/struct.StepUpper.html) | Step interpolation to the next grid value in each dimension |
+| [`CubicC2`](https://docs.rs/ninterp/latest/ninterp/strategy/cubic/struct.CubicC2.html) | C² cubic spline, with configurable boundary condition ([`CubicC2BoundaryConditions`](https://docs.rs/ninterp/latest/ninterp/strategy/cubic/enum.CubicC2BoundaryConditions.html): not-a-knot, natural, clamped, or periodic) |
 
 More strategies will be added in the future.
 
