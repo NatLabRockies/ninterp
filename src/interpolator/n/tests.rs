@@ -71,7 +71,7 @@ fn test_cubic_c2_periodic_outer_axis() {
     // Regression coverage: `Periodic` on the outer axis (axis 0, re-solved on every
     // `interpolate()` call via `spline_eval_1d`) used to run an exact `y[0] != y[n]`
     // equality check against *derived* intermediate values from the inner-axis spline
-    // evaluation, not raw grid data -- values that can differ from their
+    // evaluation, not raw grid data. Those values can differ from their
     // mathematically-equal counterpart by a few ULPs, causing spurious failures. That
     // check is gone now; this just confirms Periodic on an outer axis still
     // interpolates successfully.
@@ -91,7 +91,7 @@ fn test_cubic_c2_periodic_outer_axis() {
         Extrapolate::Error,
     )
     .unwrap();
-    // No exact-value oracle needed here -- this is regression coverage for the removed
+    // No exact-value oracle needed here: this is regression coverage for the removed
     // check, not a numerical-accuracy test.
     for &(x, y) in &[(0.5, 0.5), (2.5, 1.5), (3.0, 1.0), (0.0, 1.0)] {
         assert!(interp.interpolate(&[x, y]).unwrap().is_finite());
@@ -105,8 +105,8 @@ fn test_cubic_c2_not_a_knot_cubic_exact() {
     // proves `InterpND` agrees with `Interp2D` on a zero-mixed-partial function
     // (f(x,y)=x^2+y); it doesn't independently confirm `InterpND`'s own outer-axis
     // recursive-collapse path (`spline_eval_1d`, not `Interp2D`'s corner-derivative
-    // cache) reproduces a genuine bicubic -- one with a nonzero, non-constant mixed
-    // partial d^2f/dxdy = 2x + 2y -- exactly rather than approximately.
+    // cache) reproduces a genuine bicubic, one with a nonzero, non-constant mixed
+    // partial d^2f/dxdy = 2x + 2y, exactly rather than approximately.
     fn f(x: f64, y: f64) -> f64 {
         x.powi(3) + x.powi(2) * y + x * y.powi(2) + y.powi(3)
     }
@@ -131,7 +131,7 @@ fn test_cubic_c2_clamped_uses_given_derivative() {
     // exactly with no derivative info at all. Unlike the 1D/2D versions, this exercises
     // `InterpND`'s own `Clamped` handling on an outer axis (plain `compute_m` via
     // `spline_eval_1d`, not the 2D/3D corner cache's Clamped-to-Natural substitution for
-    // the mixed-partial second pass) -- a code path `Clamped` had never been run through
+    // the mixed-partial second pass): a code path `Clamped` had never been run through
     // at all before this test, let alone verified to actually use its supplied value.
     fn f(x: f64, y: f64) -> f64 {
         x.powi(3) + y.powi(3)
@@ -520,7 +520,7 @@ fn test_step() {
     let interp = InterpND::new(
         vec![array![0., 1.], array![0., 1.], array![0., 1.]],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
-        strategy::Step::from(strategy::step::StepDirection::Lower),
+        strategy::Step::lower(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -542,46 +542,25 @@ fn test_step() {
     assert_eq!(interp.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 0.); // floor→[0,0,0]
     assert_eq!(interp.interpolate(&[0.9, 0.9, 0.9]).unwrap(), 0.); // floor→[0,0,0]
 
-    let interp_lower = InterpND::new(
-        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
-        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
-        strategy::StepLower,
-        Extrapolate::Error,
-    )
-    .unwrap();
-    assert_eq!(interp_lower.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 0.);
-
     // Uniform Upper (ceiling)
     let interp_upper = InterpND::new(
         vec![array![0., 1.], array![0., 1.], array![0., 1.]],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
-        strategy::Step::from(strategy::step::StepDirection::Upper),
+        strategy::Step::upper(),
         Extrapolate::Error,
     )
     .unwrap();
     assert_eq!(interp_upper.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 7.); // ceil→[1,1,1]
 
-    let interp_marker_upper = InterpND::new(
-        vec![array![0., 1.], array![0., 1.], array![0., 1.]],
-        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
-        strategy::StepUpper,
-        Extrapolate::Error,
-    )
-    .unwrap();
-    assert_eq!(
-        interp_marker_upper.interpolate(&[0.3, 0.7, 0.6]).unwrap(),
-        7.
-    );
-
     // Per-dimension: Lower in x, Upper in y, Lower in z
     let interp_mixed = InterpND::new(
         vec![array![0., 1.], array![0., 1.], array![0., 1.]],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
-        strategy::Step(strategy::per_axis::PerAxis::Axes(vec![
+        strategy::Step::new(vec![
             strategy::step::StepDirection::Lower,
             strategy::step::StepDirection::Upper,
             strategy::step::StepDirection::Lower,
-        ])),
+        ]),
         Extrapolate::Error,
     )
     .unwrap();
@@ -591,10 +570,10 @@ fn test_step() {
     assert!(InterpND::new(
         vec![array![0., 1.], array![0., 1.], array![0., 1.]],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]],].into_dyn(),
-        strategy::Step(strategy::per_axis::PerAxis::Axes(vec![
+        strategy::Step::new(vec![
             strategy::step::StepDirection::Lower,
             strategy::step::StepDirection::Lower,
-        ])),
+        ]),
         Extrapolate::Error,
     )
     .is_err());

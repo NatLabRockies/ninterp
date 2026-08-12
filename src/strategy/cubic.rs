@@ -90,13 +90,22 @@ fn empty_cache<T>() -> ArrayD<T> {
     ArrayD::from_shape_vec(IxDyn(&[0]), Vec::new()).expect("empty shape matches empty vec")
 }
 
-impl<T> CubicC2<T> {
-    /// Returns the boundary condition for the given dimension.
-    /// A broadcast entry applies to all dimensions.
-    pub(crate) fn bc_for_dim(&self, dim: usize) -> &CubicC2BoundaryConditions<T> {
-        self.boundary_conditions.get(dim)
+impl<T> From<CubicC2BoundaryConditions<T>> for CubicC2<T> {
+    /// Broadcasts `bc` to all dimensions.
+    ///
+    /// Use [`CubicC2::not_a_knot`], [`natural`](CubicC2::natural),
+    /// [`clamped`](CubicC2::clamped), or [`periodic`](CubicC2::periodic) instead when the
+    /// desired condition is known at the call site; this is for a `CubicC2BoundaryConditions`
+    /// value obtained generically (e.g. from runtime config), without matching on it first.
+    fn from(bc: CubicC2BoundaryConditions<T>) -> Self {
+        Self {
+            boundary_conditions: PerAxis::Broadcast(bc),
+            cache: empty_cache(),
+        }
     }
+}
 
+impl<T> CubicC2<T> {
     /// Create a cubic spline with a distinct boundary condition per grid dimension.
     ///
     /// Use [`not_a_knot`](Self::not_a_knot), [`natural`](Self::natural),
@@ -350,11 +359,11 @@ pub(crate) fn validate_bc_min_points<T>(
 }
 
 /// Checks `boundary_conditions`'s count against `ndim`: `Broadcast` always applies to
-/// every axis ([`CubicC2::bc_for_dim`]'s other case), `Axes` must have exactly `ndim`
-/// entries. `bc_for_dim` indexes unchecked assuming this already holds, so every
-/// `Strategy1D`/`2D`/`3D`/`ND::validate` must call this before any `bc_for_dim` call --
-/// mirrors [`Step::validate_len`](crate::strategy::Step::validate_len)'s check for the
-/// same kind of per-dimension config.
+/// every axis, `Axes` must have exactly `ndim` entries. Indexing `boundary_conditions`
+/// directly (e.g. `&self.boundary_conditions[dim]`) is unchecked, so every
+/// `Strategy1D`/`2D`/`3D`/`ND::validate` must call this before any such indexing. Mirrors
+/// [`Step::validate_len`](crate::strategy::Step::validate_len)'s check for the same kind
+/// of per-dimension config.
 pub(crate) fn validate_bc_count<T>(
     bcs: &PerAxis<CubicC2BoundaryConditions<T>>,
     ndim: usize,
@@ -397,8 +406,7 @@ pub(crate) fn compute_m_inner_cache<T: Float>(
 ///
 /// `dim` is this call's axis index into `bcs` (0 at the top-level call, incrementing by
 /// one per recursive step, since `grids`/`values`/`m_cache`/`point` are all peeled down to
-/// the remaining axes but `bcs` is looked up by absolute axis index via
-/// [`PerAxis::get`]).
+/// the remaining axes but `bcs` is indexed by absolute axis index (`&bcs[dim]`).
 pub(crate) fn spline_eval_nd_cached<T: Float>(
     grids: &[ArrayView1<T>],
     values: ArrayViewD<T>,
@@ -441,12 +449,12 @@ pub(crate) fn spline_eval_nd_cached<T: Float>(
         grids[0],
         ArrayView1::from(&g),
         point[0],
-        bcs.get(dim),
+        &bcs[dim],
     ))
 }
 
 /// Closed-form first derivative `S'(x_i)` at every knot, from an already-solved moment
-/// vector `m` (no extra solve) -- the companion to [`compute_m`], used to build
+/// vector `m` (no extra solve). The companion to [`compute_m`], used to build
 /// [`compute_corner_cache`]'s derivative fields.
 pub(crate) fn knot_derivatives_from_m<T: Float>(
     x: ArrayView1<T>,
@@ -500,7 +508,7 @@ fn corner_cache_axis_pass<T: Float>(
 /// Built by processing axes `0..N` in order: for every mask not yet including axis `i`'s
 /// bit, splines the corresponding field along axis `i` ([`corner_cache_axis_pass`]) to
 /// populate the entry with that bit added. Boundary condition per axis is
-/// [`CubicC2::bc_for_dim`] when splining the raw values (`mask == 0`, this axis's own
+/// `bcs[axis]` when splining the raw values (`mask == 0`, this axis's own
 /// first-derivative pass). For every other `mask` (a cross-derivative pass over an
 /// already-differentiated field, not the original data), `Clamped` falls back to
 /// `Clamped { left: 0, right: 0 }`: a clamped axis fixes the same scalar derivative at
@@ -526,7 +534,7 @@ pub(crate) fn compute_corner_cache<T: Float>(
 
     for (axis, grid) in grids.iter().enumerate() {
         let bit = 1usize << axis;
-        let bc_axis = bcs.get(axis);
+        let bc_axis = &bcs[axis];
         let cross_bc = match bc_axis {
             CubicC2BoundaryConditions::Clamped { .. } => CubicC2BoundaryConditions::Clamped {
                 left: T::zero(),
@@ -653,4 +661,32 @@ fn spline_eval_corner_cached_local<T: Float>(cache: ArrayViewD<T>, hts: &[(T, T)
     }
 
     spline_eval_corner_cached_local(new_field.view(), &hts[1..])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_bc_matches_named_constructors() {
+        assert_eq!(
+            CubicC2::from(CubicC2BoundaryConditions::<f64>::NotAKnot),
+            CubicC2::not_a_knot()
+        );
+        assert_eq!(
+            CubicC2::from(CubicC2BoundaryConditions::<f64>::Natural),
+            CubicC2::natural()
+        );
+        assert_eq!(
+            CubicC2::from(CubicC2BoundaryConditions::Clamped {
+                left: 1.0,
+                right: 2.0
+            }),
+            CubicC2::clamped(1.0, 2.0)
+        );
+        assert_eq!(
+            CubicC2::from(CubicC2BoundaryConditions::<f64>::Periodic),
+            CubicC2::periodic()
+        );
+    }
 }

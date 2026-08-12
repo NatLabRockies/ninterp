@@ -36,8 +36,8 @@
 //! assert_eq!(interp.interpolate(&[3.75]).unwrap(), 0.95);
 //! assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);
 //!
-//! // Piecewise-constant: fixed lower direction (zero-allocation marker strategy)
-//! interp.set_strategy(strategy::StepLower).unwrap();
+//! // Piecewise-constant: fixed lower direction
+//! interp.set_strategy(strategy::Step::lower()).unwrap();
 //! assert_eq!(interp.interpolate(&[3.75]).unwrap(), 0.8);
 //! assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);
 //! ```
@@ -158,7 +158,7 @@ mod tests {
         assert_eq!(interp.interpolate(&[3.75]).unwrap(), 1.0);
         assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);
 
-        interp.set_strategy(strategy::StepLower).unwrap();
+        interp.set_strategy(strategy::Step::lower()).unwrap();
         assert_eq!(interp.interpolate(&[3.00]).unwrap(), 0.8);
         assert_eq!(interp.interpolate(&[3.75]).unwrap(), 0.8);
         assert_eq!(interp.interpolate(&[4.00]).unwrap(), 1.0);

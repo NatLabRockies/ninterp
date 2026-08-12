@@ -192,7 +192,7 @@ where
         let n = data.values.ndim();
         let mut idx = vec![0usize; n];
         for dim in 0..n {
-            idx[dim] = locate_step_index(self.dir(dim), data.grid[dim].view(), &point[dim]);
+            idx[dim] = locate_step_index(self.directions[dim], data.grid[dim].view(), &point[dim]);
         }
         Ok(data.values.view()[idx.as_slice()])
     }
@@ -211,7 +211,7 @@ where
     fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
         validate_bc_count(&self.boundary_conditions, data.ndim())?;
         for dim in 0..data.ndim() {
-            validate_bc_min_points(self.bc_for_dim(dim), data.grid[dim].len(), dim)?;
+            validate_bc_min_points(&self.boundary_conditions[dim], data.grid[dim].len(), dim)?;
         }
         Ok(())
     }
@@ -224,7 +224,7 @@ where
         self.cache = compute_m_inner_cache(
             data.grid[inner_dim].view(),
             data.values.view(),
-            self.bc_for_dim(inner_dim),
+            &self.boundary_conditions[inner_dim],
         );
         Ok(())
     }
@@ -253,51 +253,5 @@ where
     /// Returns `true`: the boundary cubic polynomials extend naturally.
     fn allow_extrapolate(&self) -> bool {
         true
-    }
-}
-
-impl<D> StrategyND<D> for StepLower
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialOrd + Copy + Debug,
-{
-    fn interpolate(
-        &self,
-        data: &InterpDataNDBase<D>,
-        point: &[D::Elem],
-    ) -> Result<D::Elem, InterpolateError> {
-        let n = data.values.ndim();
-        let mut idx = vec![0usize; n];
-        for dim in 0..n {
-            idx[dim] = locate_step_index(StepDirection::Lower, data.grid[dim].view(), &point[dim]);
-        }
-        Ok(data.values.view()[idx.as_slice()])
-    }
-
-    fn allow_extrapolate(&self) -> bool {
-        false
-    }
-}
-
-impl<D> StrategyND<D> for StepUpper
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialOrd + Copy + Debug,
-{
-    fn interpolate(
-        &self,
-        data: &InterpDataNDBase<D>,
-        point: &[D::Elem],
-    ) -> Result<D::Elem, InterpolateError> {
-        let n = data.values.ndim();
-        let mut idx = vec![0usize; n];
-        for dim in 0..n {
-            idx[dim] = locate_step_index(StepDirection::Upper, data.grid[dim].view(), &point[dim]);
-        }
-        Ok(data.values.view()[idx.as_slice()])
-    }
-
-    fn allow_extrapolate(&self) -> bool {
-        false
     }
 }

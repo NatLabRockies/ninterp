@@ -13,7 +13,7 @@ pub mod cubic;
 pub use cubic::CubicC2;
 
 pub mod step;
-pub use step::{Step, StepLower, StepUpper};
+pub use step::Step;
 
 pub mod enums;
 pub mod traits;

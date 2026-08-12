@@ -6,7 +6,6 @@
 #![cfg(feature = "serde")]
 
 use ninterp::strategy::enums::*;
-use ninterp::strategy::per_axis::PerAxis;
 use ninterp::strategy::step::StepDirection;
 use ninterp::strategy::*;
 
@@ -33,12 +32,9 @@ fn bare_strategies_round_trip() {
     round_trip(&Nearest);
     round_trip(&Linear);
     round_trip(&LinearUniform);
-    round_trip(&StepLower);
-    round_trip(&StepUpper);
-    round_trip(&Step(PerAxis::Axes(vec![
-        StepDirection::Lower,
-        StepDirection::Upper,
-    ])));
+    round_trip(&Step::lower());
+    round_trip(&Step::upper());
+    round_trip(&Step::new(vec![StepDirection::Lower, StepDirection::Upper]));
     for bc in cubic_c2_variants() {
         round_trip(&bc);
     }
@@ -52,12 +48,12 @@ macro_rules! enum_round_trip_test {
             round_trip(&$Enum::<f64>::from(Nearest));
             round_trip(&$Enum::<f64>::from(Linear));
             round_trip(&$Enum::<f64>::from(LinearUniform));
-            round_trip(&$Enum::<f64>::from(StepLower));
-            round_trip(&$Enum::<f64>::from(StepUpper));
-            round_trip(&$Enum::<f64>::from(Step(PerAxis::Axes(vec![
+            round_trip(&$Enum::<f64>::from(Step::lower()));
+            round_trip(&$Enum::<f64>::from(Step::upper()));
+            round_trip(&$Enum::<f64>::from(Step::new(vec![
                 StepDirection::Lower,
                 StepDirection::Upper,
-            ]))));
+            ])));
             for bc in cubic_c2_variants() {
                 round_trip(&$Enum::from(bc));
             }

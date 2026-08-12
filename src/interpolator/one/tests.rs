@@ -135,7 +135,7 @@ fn test_cubic_c2_not_a_knot_cubic_exact() {
     // f(x) = x^3: a genuine cubic (nonzero third derivative), unlike the quadratic data
     // in `knot_exactness` above. `NotAKnot`'s defining property is exact reproduction of
     // any degree-<=3 polynomial, at interior points and via boundary extrapolation, not
-    // just at grid points -- quadratics satisfy that trivially since their third
+    // just at grid points. Quadratics satisfy that trivially since their third
     // derivative is already zero everywhere, so this is a stronger test.
     let interp = Interp1D::new(
         array![0., 1., 2., 3.],
@@ -204,7 +204,7 @@ fn test_cubic_c2_clamped_cubic_exact() {
 fn test_cubic_c2_clamped_uses_given_derivative() {
     // Differential check for the previous test: `clamped_cubic_exact` alone can't tell
     // "Clamped correctly used the supplied derivative" apart from "Clamped silently
-    // behaved like NotAKnot" -- for a genuine cubic like f(x) = x^3, NotAKnot *also*
+    // behaved like NotAKnot": for a genuine cubic like f(x) = x^3, NotAKnot *also*
     // reproduces it exactly with no derivative info at all, so a bug that dropped
     // `left`/`right` entirely would still pass that test. Supplying deliberately wrong
     // derivatives here and confirming the result moves far from the true value proves
@@ -366,11 +366,11 @@ fn test_right_nearest() {
 }
 
 #[test]
-fn test_step_markers() {
+fn test_step_broadcast() {
     let lower = Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0.2, 0.4, 0.6, 0.8, 1.0],
-        strategy::StepLower,
+        strategy::Step::lower(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -380,7 +380,7 @@ fn test_step_markers() {
     let upper = Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0.2, 0.4, 0.6, 0.8, 1.0],
-        strategy::StepUpper,
+        strategy::Step::upper(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -494,10 +494,10 @@ fn test_step_invalid_direction_count() {
     assert!(Interp1D::new(
         array![0., 1., 2., 3., 4.],
         array![0.2, 0.4, 0.6, 0.8, 1.0],
-        strategy::Step(strategy::per_axis::PerAxis::Axes(vec![
+        strategy::Step::new(vec![
             strategy::step::StepDirection::Lower,
             strategy::step::StepDirection::Upper,
-        ])),
+        ]),
         Extrapolate::Error,
     )
     .is_err());

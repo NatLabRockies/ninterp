@@ -8,8 +8,6 @@ strategy_enum_impl!(
     [
         (Nearest, strategy::Nearest),
         (Step, strategy::Step),
-        (StepLower, strategy::StepLower),
-        (StepUpper, strategy::StepUpper),
         (Linear, strategy::Linear),
         (LinearUniform, strategy::LinearUniform),
         (CubicC2, strategy::CubicC2<T>),
@@ -33,26 +31,26 @@ mod tests {
             serde_json::to_string(&Nearest).unwrap(),
         );
         assert_eq!(
-            serde_json::to_string(&Strategy1DEnum::<f64>::from(StepLower)).unwrap(),
-            serde_json::to_string(&StepLower).unwrap(),
-        );
-        assert_eq!(
-            serde_json::to_string(&Strategy1DEnum::<f64>::from(StepUpper)).unwrap(),
-            serde_json::to_string(&StepUpper).unwrap(),
+            serde_json::to_string(&Strategy1DEnum::<f64>::from(Step::from(
+                strategy::step::StepDirection::Lower
+            )))
+            .unwrap(),
+            serde_json::to_string(&Step::from(strategy::step::StepDirection::Lower)).unwrap(),
         );
         assert_eq!(
             serde_json::to_string(&Strategy1DEnum::from(CubicC2::<f64>::not_a_knot())).unwrap(),
             serde_json::to_string(&CubicC2::<f64>::not_a_knot()).unwrap(),
         );
 
-        // Legacy aliases deserialize through StepLower/StepUpper only.
-        assert!(matches!(
+        // Legacy aliases (from the removed `LeftNearest`/`RightNearest` unit structs)
+        // deserialize through `Step`'s broadcast form.
+        assert_eq!(
             serde_json::from_str::<Strategy1DEnum<f64>>("\"LeftNearest\"").unwrap(),
-            Strategy1DEnum::StepLower(_)
-        ));
-        assert!(matches!(
+            Strategy1DEnum::Step(Step::lower())
+        );
+        assert_eq!(
             serde_json::from_str::<Strategy1DEnum<f64>>("\"RightNearest\"").unwrap(),
-            Strategy1DEnum::StepUpper(_)
-        ));
+            Strategy1DEnum::Step(Step::upper())
+        );
     }
 }

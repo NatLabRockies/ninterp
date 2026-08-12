@@ -98,7 +98,7 @@ where
         data: &InterpData1DBase<D>,
         point: &[D::Elem; 1],
     ) -> Result<D::Elem, InterpolateError> {
-        Ok(data.values[locate_step_index(self.dir(0), data.grid[0].view(), &point[0])])
+        Ok(data.values[locate_step_index(self.directions[0], data.grid[0].view(), &point[0])])
     }
 
     fn allow_extrapolate(&self) -> bool {
@@ -117,7 +117,7 @@ where
     /// attempts the real computation.
     fn validate(&self, data: &InterpData1DBase<D>) -> Result<(), ValidateError> {
         validate_bc_count(&self.boundary_conditions, 1)?;
-        validate_bc_min_points(self.bc_for_dim(0), data.grid[0].len(), 0)
+        validate_bc_min_points(&self.boundary_conditions[0], data.grid[0].len(), 0)
     }
 
     /// Computes and caches `M[0..=n]` for the configured BC via `compute_m_inner_cache`
@@ -126,7 +126,7 @@ where
         self.cache = compute_m_inner_cache(
             data.grid[0].view(),
             data.values.view().into_dyn(),
-            self.bc_for_dim(0),
+            &self.boundary_conditions[0],
         );
         Ok(())
     }
@@ -149,43 +149,5 @@ where
     /// Returns `true`: the boundary cubic polynomials extend naturally.
     fn allow_extrapolate(&self) -> bool {
         true
-    }
-}
-
-impl<D> Strategy1D<D> for StepLower
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialOrd + Copy + Debug,
-{
-    fn interpolate(
-        &self,
-        data: &InterpData1DBase<D>,
-        point: &[D::Elem; 1],
-    ) -> Result<D::Elem, InterpolateError> {
-        Ok(data.values[locate_step_index(StepDirection::Lower, data.grid[0].view(), &point[0])])
-    }
-
-    /// Returns `false`.
-    fn allow_extrapolate(&self) -> bool {
-        false
-    }
-}
-
-impl<D> Strategy1D<D> for StepUpper
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialOrd + Copy + Debug,
-{
-    fn interpolate(
-        &self,
-        data: &InterpData1DBase<D>,
-        point: &[D::Elem; 1],
-    ) -> Result<D::Elem, InterpolateError> {
-        Ok(data.values[locate_step_index(StepDirection::Upper, data.grid[0].view(), &point[0])])
-    }
-
-    /// Returns `false`.
-    fn allow_extrapolate(&self) -> bool {
-        false
     }
 }

@@ -53,7 +53,7 @@ fn test_cubic_spline_knot_exactness() {
 fn test_cubic_c2_interior_accuracy() {
     // f(x, y) = x^2*y + x*y^2: quadratic in each axis (well within cubic-spline
     // capacity), so a `NotAKnot` spline reproduces it exactly everywhere, not just at
-    // grid points -- unlike knot-exactness, this exercises the corner cache's
+    // grid points. Unlike knot-exactness, this exercises the corner cache's
     // mixed-partial term (d^2f/dxdy = 2x + 2y, non-constant) at interior points.
     fn f(x: f64, y: f64) -> f64 {
         x * x * y + x * y * y
@@ -230,7 +230,7 @@ fn test_cubic_c2_notaknot_enough_points() {
 fn test_cubic_c2_clamped_cubic_exact() {
     // f(x, y) = x^3 + y^3 (separable, no cross term). `Clamped`'s endpoint derivative is
     // a single scalar per axis, applied to every pencil along it regardless of the other
-    // axis's position -- so it can only be exact if the true partial derivative at each
+    // axis's position, so it can only be exact if the true partial derivative at each
     // boundary doesn't vary with the other axis. A cross-term function (like the
     // `NotAKnot` test above) can't satisfy that in general; this separable one
     // (fx = 3x^2, fy = 3y^2, each independent of the other axis) can. Cross-term
@@ -256,7 +256,7 @@ fn test_cubic_c2_clamped_cubic_exact() {
 
 #[test]
 fn test_cubic_c2_clamped_uses_given_derivative() {
-    // Differential check for the previous test -- see the 1D version of this test for
+    // Differential check for the previous test. See the 1D version of this test for
     // the full reasoning: exact reproduction alone can't tell "Clamped used the
     // supplied derivative" apart from "Clamped silently behaved like NotAKnot", since
     // NotAKnot reproduces this same separable-cubic data exactly with no derivative
@@ -288,7 +288,7 @@ fn test_cubic_c2_2d_periodic() {
     // Ground truth: a *product* of two independent periodic 1D cubic splines,
     // S_A(x) * S_B(y), rather than a sum. Cubic spline construction is a linear
     // operator on its data values, so within any single grid cell S_A(x)*S_B(y)
-    // is exactly a bicubic polynomial in that cell -- reproduced exactly by the
+    // is exactly a bicubic polynomial in that cell, reproduced exactly by the
     // Hermite patch given exact corner derivatives (product rule):
     //   value = S_A(x)*S_B(y),  dx = S_A'(x)*S_B(y),
     //   dy = S_A(x)*S_B'(y),    dxy = S_A'(x)*S_B'(y)
@@ -448,7 +448,7 @@ fn test_step() {
         grid_x.view(),
         grid_y.view(),
         values.view(),
-        strategy::Step::from(strategy::step::StepDirection::Lower),
+        strategy::Step::lower(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -463,21 +463,11 @@ fn test_step() {
     assert_eq!(interp.interpolate(&[0.7, 1.4]).unwrap(), f[[0, 1]]); // floor x→0, floor y→1
     assert_eq!(interp.interpolate(&[1.9, 0.1]).unwrap(), f[[1, 0]]); // floor x→1, floor y→0
 
-    let interp_lower = Interp2DView::new(
-        grid_x.view(),
-        grid_y.view(),
-        values.view(),
-        strategy::StepLower,
-        Extrapolate::Error,
-    )
-    .unwrap();
-    assert_eq!(interp_lower.interpolate(&[0.7, 1.4]).unwrap(), f[[0, 1]]);
-
     let interp_upper = Interp2DView::new(
         grid_x.view(),
         grid_y.view(),
         values.view(),
-        strategy::StepUpper,
+        strategy::Step::upper(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -488,10 +478,10 @@ fn test_step() {
         grid_x.view(),
         grid_y.view(),
         values.view(),
-        strategy::Step(strategy::per_axis::PerAxis::Axes(vec![
+        strategy::Step::new(vec![
             strategy::step::StepDirection::Lower,
             strategy::step::StepDirection::Upper,
-        ])),
+        ]),
         Extrapolate::Error,
     )
     .unwrap();
@@ -503,11 +493,11 @@ fn test_step() {
         grid_x.view(),
         grid_y.view(),
         values.view(),
-        strategy::Step(strategy::per_axis::PerAxis::Axes(vec![
+        strategy::Step::new(vec![
             strategy::step::StepDirection::Lower,
             strategy::step::StepDirection::Lower,
             strategy::step::StepDirection::Lower,
-        ])),
+        ]),
         Extrapolate::Error,
     )
     .is_err());
@@ -610,10 +600,7 @@ fn test_set_strategy_runs_init() {
         Extrapolate::Error,
     )
     .unwrap();
-    let bad_step = strategy::Step(strategy::per_axis::PerAxis::Axes(vec![
-        strategy::step::StepDirection::Lower;
-        3
-    ]));
+    let bad_step = strategy::Step::new(vec![strategy::step::StepDirection::Lower; 3]);
     assert!(matches!(
         interp.set_strategy(bad_step).unwrap_err(),
         ValidateError::Other(_)

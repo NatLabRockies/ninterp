@@ -240,7 +240,7 @@ fn test_cubic_c2_3d_periodic() {
     // Ground truth: a *triple product* of three independent periodic 1D cubic
     // splines, S_A(x) * S_B(y) * S_C(z). As with the 2D case, cubic spline
     // construction is a linear operator on its data values, so within any
-    // single grid cell the product is exactly a tricubic polynomial -- exactly
+    // single grid cell the product is exactly a tricubic polynomial, exactly
     // reproduced by the Hermite patch given exact corner derivatives (product
     // rule for all combinations):
     //   value = S_A*S_B*S_C
@@ -249,8 +249,8 @@ fn test_cubic_c2_3d_periodic() {
     //   dxyz = S_A'*S_B'*S_C'
     // All four query points below have a genuinely nonzero triple product
     // S_A'*S_B'*S_C' (verified numerically against scipy), so every case
-    // exercises the full corner-derivative cache -- including dxyz, the
-    // hardest cross term to get subtly wrong -- rather than trivially
+    // exercises the full corner-derivative cache, including dxyz (the
+    // hardest cross term to get subtly wrong), rather than trivially
     // validating against zero regardless of correctness.
     let interp = Interp3D::new(
         array![0., 1., 2., 3., 4.],
@@ -283,7 +283,7 @@ fn test_cubic_c2_3d_periodic() {
 
 #[test]
 fn test_cubic_c2_clamped_cubic_exact() {
-    // f(x, y, z) = x^3 + y^3 + z^3 (separable, no cross terms) -- `Clamped`'s endpoint
+    // f(x, y, z) = x^3 + y^3 + z^3 (separable, no cross terms). `Clamped`'s endpoint
     // derivative is one scalar per axis shared by every pencil along it, so it's only
     // exact when the true boundary partial doesn't vary with the other axes; a
     // cross-term function can't satisfy that in general (see the 2D version of this
@@ -310,7 +310,7 @@ fn test_cubic_c2_clamped_cubic_exact() {
 
 #[test]
 fn test_cubic_c2_clamped_uses_given_derivative() {
-    // Differential check for the previous test -- see the 1D version of this test for
+    // Differential check for the previous test. See the 1D version of this test for
     // the full reasoning: exact reproduction alone can't tell "Clamped used the
     // supplied derivative" apart from "Clamped silently behaved like NotAKnot", since
     // NotAKnot reproduces this same separable-cubic data exactly with no derivative
@@ -530,7 +530,7 @@ fn test_step() {
         array![0., 1.],
         array![0., 1.],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]],
-        strategy::Step::from(strategy::step::StepDirection::Lower),
+        strategy::Step::lower(),
         Extrapolate::Error,
     )
     .unwrap();
@@ -552,42 +552,17 @@ fn test_step() {
     assert_eq!(interp.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 0.); // floor→[0,0,0]
     assert_eq!(interp.interpolate(&[0.9, 0.4, 0.1]).unwrap(), 0.); // floor→[0,0,0]
 
-    let interp_lower = Interp3D::new(
-        array![0., 1.],
-        array![0., 1.],
-        array![0., 1.],
-        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]],
-        strategy::StepLower,
-        Extrapolate::Error,
-    )
-    .unwrap();
-    assert_eq!(interp_lower.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 0.);
-
     // Uniform Upper (ceiling)
     let interp_upper = Interp3D::new(
         array![0., 1.],
         array![0., 1.],
         array![0., 1.],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]],
-        strategy::Step::from(strategy::step::StepDirection::Upper),
+        strategy::Step::upper(),
         Extrapolate::Error,
     )
     .unwrap();
     assert_eq!(interp_upper.interpolate(&[0.3, 0.7, 0.6]).unwrap(), 7.); // ceil→[1,1,1]
-
-    let interp_marker_upper = Interp3D::new(
-        array![0., 1.],
-        array![0., 1.],
-        array![0., 1.],
-        array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]],
-        strategy::StepUpper,
-        Extrapolate::Error,
-    )
-    .unwrap();
-    assert_eq!(
-        interp_marker_upper.interpolate(&[0.3, 0.7, 0.6]).unwrap(),
-        7.
-    );
 
     // Per-dimension: Lower in x, Upper in y, Lower in z
     let interp_mixed = Interp3D::new(
@@ -595,11 +570,11 @@ fn test_step() {
         array![0., 1.],
         array![0., 1.],
         array![[[0., 1.], [2., 3.]], [[4., 5.], [6., 7.]]],
-        strategy::Step(strategy::per_axis::PerAxis::Axes(vec![
+        strategy::Step::new(vec![
             strategy::step::StepDirection::Lower,
             strategy::step::StepDirection::Upper,
             strategy::step::StepDirection::Lower,
-        ])),
+        ]),
         Extrapolate::Error,
     )
     .unwrap();
@@ -811,9 +786,9 @@ fn test_serde() {
 
 #[test]
 fn test_cubic_c2_bc_count_mismatch() {
-    // `CubicC2::bc_for_dim` indexes `boundary_conditions` unchecked, assuming its length
-    // is 1 (broadcast) or exactly `ndim`. Before `validate_bc_count`, a mismatched length
-    // (here 2 entries for a 3-D grid) reached that indexing via the per-dim
+    // Indexing `boundary_conditions` directly is unchecked, assuming it's `Broadcast` or
+    // has exactly `ndim` entries for `Axes`. Before `validate_bc_count`, a mismatched
+    // length (here 2 entries for a 3-D grid) reached that indexing via the per-dim
     // `validate_bc_min_points` loop and panicked instead of returning a `ValidateError`,
     // even though `Interpolator::new` is documented as a fallible `Result`-returning
     // constructor. Regression test for that panic.

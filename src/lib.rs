@@ -13,8 +13,8 @@
 /// - Their common trait: [`Interpolator`](`interpolator::Interpolator`)
 /// - The [`strategy`] mod, containing pre-defined interpolation strategies:
 ///   - [`strategy::Nearest`]
-///   - [`strategy::Step`] (per-dimension and/or runtime-selected step directions)
-///   - [`strategy::StepLower`] / [`strategy::StepUpper`]
+///   - [`strategy::Step`] (broadcast, per-dimension, and/or runtime-selected step
+///     directions)
 ///   - [`strategy::Linear`]
 ///   - [`strategy::LinearUniform`]
 ///   - [`strategy::CubicC2`] (C² cubic spline)

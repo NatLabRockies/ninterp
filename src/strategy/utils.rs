@@ -2,9 +2,9 @@
 //! Strategies compose these per axis to get 1D/2D/3D/ND behavior; none of them
 //! iterate over dimensions themselves.
 //!
-//! These are the same building blocks [`super::Linear`], [`super::LinearUniform`],
-//! [`super::Step`], [`super::StepLower`], and [`super::StepUpper`] are
-//! implemented with, and are public for reuse in custom strategies (see [`crate::strategy::traits`]).
+//! These are the same building blocks [`super::Linear`], [`super::LinearUniform`], and
+//! [`super::Step`] are implemented with, and are public for reuse in custom strategies
+//! (see [`crate::strategy::traits`]).
 
 use super::*;
 

@@ -15,23 +15,26 @@ Everything below is merged to `main` but not yet tagged/released.
   grids (1D/2D/3D/ND), validated at construction/`init` time.
 - `strategy::per_axis::PerAxis<T>`: `Broadcast(T)` applies one value to every grid
   dimension, `Axes(Vec<T>)` gives one value per dimension. Shared by `Step` and `CubicC2`
-  for their per-axis configuration.
+  for their per-axis configuration; indexes via `Index<usize>` (panics like a slice if
+  `dim` is out of range) and validates via the public `validate_len`, both usable by
+  custom strategies built on `PerAxis`.
 - `strategy::Step`: a parameterized step (piecewise-constant) strategy across all
-  dimensionalities, replacing `LeftNearest`/`RightNearest`. Wraps a
+  dimensionalities, replacing `LeftNearest`/`RightNearest`. Its `directions` field is a
   `PerAxis<StepDirection>`: `Broadcast` applies one direction to every axis, `Axes` gives
-  per-axis control.
-- `strategy::StepLower` / `strategy::StepUpper`: zero-sized, allocation-free markers for
-  the fixed-direction case; `Step` remains the choice for mixed or runtime-selected
-  direction.
-- `LinearUniform`, `Step`, `StepLower`, and `StepUpper` are available for every
-  dimensionality and included in the `Strategy*Enum` types.
+  per-axis control. `Step::lower()`/`Step::upper()` construct the common broadcast cases;
+  `Step::new(Vec<StepDirection>)` constructs the per-axis case.
+- `LinearUniform` and `Step` are available for every dimensionality and included in the
+  `Strategy*Enum` types.
 - `strategy::CubicC2`: a C² piecewise cubic spline strategy (1D/2D/3D/ND) with
   configurable boundary conditions (`CubicC2BoundaryConditions::{NotAKnot, Natural,
   Clamped, Periodic}`) given via `boundary_conditions: PerAxis<CubicC2BoundaryConditions<T>>`
   (`Broadcast` for one condition on every axis, `Axes` for one per axis), a single
   tridiagonal solve per axis. `Strategy1D`/`ND` cache the innermost axis's coefficients;
   `Strategy2D`/`3D` additionally cache the full corner-derivative tensor for O(1) queries.
-  Included in the `Strategy*Enum` types.
+  `From<CubicC2BoundaryConditions<T>>` broadcasts a condition obtained generically (e.g.
+  from runtime config) without matching on it first; `not_a_knot()`/`natural()`/
+  `clamped()`/`periodic()` remain the direct way to construct each variant. Included in the
+  `Strategy*Enum` types.
 - `Nested` wrapper / `serialize_nested` helper / `SerializeNested` trait (`prelude`,
   `serde` feature): opt into the nested-array serialization format at a specific call
   site, e.g. `serde_json::to_string(&Nested(&interp))` or
@@ -106,9 +109,8 @@ Everything below is merged to `main` but not yet tagged/released.
   (`step_index` -> `locate_step_index`, `uniform_lower_index` ->
   `locate_lower_index_uniform`, `exact_index`, `validate_uniform_grid`) move from
   `strategy::traits` to a new `strategy::utils` module.
-- **Breaking:** `LeftNearest`/`RightNearest` removed. Migrate to
-  `Step::from(StepDirection::Lower)`/`Step::from(StepDirection::Upper)`, or the leaner
-  `StepLower`/`StepUpper`.
+- **Breaking:** `LeftNearest`/`RightNearest` removed. Migrate to `Step::lower()`/
+  `Step::upper()`.
 - **Breaking:** `Linear`/`LinearUniform` now require `D::Elem: Float` (previously
   `Num + PartialOrd`); other strategies keep looser numeric bounds.
 - **Breaking:** interpolation-time failures carry structured positions instead of prose,
@@ -157,10 +159,9 @@ Everything below is merged to `main` but not yet tagged/released.
   no longer linear-scan for exact grid-point matches; 2D/3D `Linear` short-circuits
   per-dimension on an exact match. Roughly 50-65% faster on 1D/2D hardcoded and
   multilinear paths (see PR #13).
-- Serde: `StepLower`/`StepUpper` accept the legacy `"LeftNearest"`/`"RightNearest"` names
-  on deserialization for backward compatibility; `Step`'s own wire format
-  (`{"Step": "Lower"}` for `Broadcast`, `{"Step": ["Lower", "Upper"]}` for `Axes`) does not
-  accept those aliases.
+- Serde: `Step` accepts the legacy bare `"LeftNearest"`/`"RightNearest"` strings (from the
+  removed unit structs of the same name) on deserialization, in addition to its own wire
+  format (`{"Step": "Lower"}` for `Broadcast`, `{"Step": ["Lower", "Upper"]}` for `Axes`).
 - Various documentation and README improvements; CI workflow polish.
 
 ### Fixed

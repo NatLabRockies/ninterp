@@ -8,9 +8,9 @@ use super::*;
 ///
 /// [`Step`] and [`CubicC2`] both wrap this instead of a bare `Vec`, so "one setting for
 /// the whole interpolator" and "one setting per axis" are distinguished by the type itself
-/// instead of by a `Vec`'s length (a `len() == 1` vec used to mean "broadcast" even when a
-/// genuinely 1-D interpolator wanted a single per-axis entry -- those two cases are now
-/// different variants).
+/// instead of by a `Vec`'s length. A `len() == 1` vec used to mean "broadcast" even when a
+/// genuinely 1-D interpolator wanted a single per-axis entry; those two cases are now
+/// different variants.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
@@ -30,26 +30,13 @@ impl<T> From<T> for PerAxis<T> {
 }
 
 impl<T> PerAxis<T> {
-    /// Returns the value for dimension `dim`. `Broadcast` returns the same value for every
-    /// `dim`; `Axes` indexes unchecked, assuming [`validate_len`](Self::validate_len) has
-    /// already confirmed the count matches the interpolator's dimensionality.
-    pub(crate) fn get(&self, dim: usize) -> &T {
-        match self {
-            PerAxis::Broadcast(value) => value,
-            PerAxis::Axes(values) => &values[dim],
-        }
-    }
-
     /// Checks the stored count against an interpolator's dimensionality: `Broadcast` is
     /// always valid, `Axes` must have exactly `ndim` entries. `label` names the strategy
-    /// (e.g. `"Step strategy"`) and `noun` names what's being counted (e.g.
-    /// `"directions"`).
-    pub(crate) fn validate_len(
-        &self,
-        ndim: usize,
-        label: &str,
-        noun: &str,
-    ) -> Result<(), ValidateError> {
+    /// (e.g. `"Step"`) and `noun` names what's being counted (e.g. `"directions"`).
+    ///
+    /// Custom strategies built on `PerAxis` should call this from `validate`, before
+    /// indexing via [`Index`](core::ops::Index), the same way [`Step`] and [`CubicC2`] do.
+    pub fn validate_len(&self, ndim: usize, label: &str, noun: &str) -> Result<(), ValidateError> {
         let PerAxis::Axes(values) = self else {
             return Ok(());
         };
@@ -65,5 +52,20 @@ impl<T> PerAxis<T> {
         Err(ValidateError::Other(format!(
             "{label} has {found} {noun} but interpolator is {ndim}-D (expected {expected})"
         )))
+    }
+}
+
+impl<T> core::ops::Index<usize> for PerAxis<T> {
+    type Output = T;
+
+    /// Returns the value for dimension `dim`. `Broadcast` returns the same value for every
+    /// `dim`; `Axes` indexes normally (panics if `dim` is out of range). Call
+    /// [`validate_len`](Self::validate_len) first to confirm the count matches the
+    /// interpolator's dimensionality.
+    fn index(&self, dim: usize) -> &T {
+        match self {
+            PerAxis::Broadcast(value) => value,
+            PerAxis::Axes(values) => &values[dim],
+        }
     }
 }

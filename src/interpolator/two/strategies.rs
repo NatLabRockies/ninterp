@@ -160,8 +160,8 @@ where
         data: &InterpData2DBase<D>,
         point: &[D::Elem; 2],
     ) -> Result<D::Elem, InterpolateError> {
-        let i = locate_step_index(self.dir(0), data.grid[0].view(), &point[0]);
-        let j = locate_step_index(self.dir(1), data.grid[1].view(), &point[1]);
+        let i = locate_step_index(self.directions[0], data.grid[0].view(), &point[0]);
+        let j = locate_step_index(self.directions[1], data.grid[1].view(), &point[1]);
         Ok(data.values[[i, j]])
     }
 
@@ -179,7 +179,7 @@ where
     fn validate(&self, data: &InterpData2DBase<D>) -> Result<(), ValidateError> {
         validate_bc_count(&self.boundary_conditions, data.grid.len())?;
         for (dim, grid) in data.grid.iter().enumerate() {
-            validate_bc_min_points(self.bc_for_dim(dim), grid.len(), dim)?;
+            validate_bc_min_points(&self.boundary_conditions[dim], grid.len(), dim)?;
         }
         Ok(())
     }
@@ -209,45 +209,5 @@ where
     /// Returns `true`: the boundary cubic polynomials extend naturally.
     fn allow_extrapolate(&self) -> bool {
         true
-    }
-}
-
-impl<D> Strategy2D<D> for StepLower
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialOrd + Copy + Debug,
-{
-    fn interpolate(
-        &self,
-        data: &InterpData2DBase<D>,
-        point: &[D::Elem; 2],
-    ) -> Result<D::Elem, InterpolateError> {
-        let i = locate_step_index(StepDirection::Lower, data.grid[0].view(), &point[0]);
-        let j = locate_step_index(StepDirection::Lower, data.grid[1].view(), &point[1]);
-        Ok(data.values[[i, j]])
-    }
-
-    fn allow_extrapolate(&self) -> bool {
-        false
-    }
-}
-
-impl<D> Strategy2D<D> for StepUpper
-where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialOrd + Copy + Debug,
-{
-    fn interpolate(
-        &self,
-        data: &InterpData2DBase<D>,
-        point: &[D::Elem; 2],
-    ) -> Result<D::Elem, InterpolateError> {
-        let i = locate_step_index(StepDirection::Upper, data.grid[0].view(), &point[0]);
-        let j = locate_step_index(StepDirection::Upper, data.grid[1].view(), &point[1]);
-        Ok(data.values[[i, j]])
-    }
-
-    fn allow_extrapolate(&self) -> bool {
-        false
     }
 }

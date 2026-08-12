@@ -16,12 +16,8 @@ pub enum StepDirection {
 ///
 /// Returns the value at the nearest lower or upper grid point in each dimension.
 ///
-/// Use [`Step`] when mixed per-dimension behavior is needed, or when direction is chosen at
-/// runtime (for example from config). Use [`StepLower`] or [`StepUpper`] when a single direction
-/// is known at compile time, especially in hot loops.
-///
-/// Construct [`Step`] from a single [`StepDirection`] to broadcast the same direction across
-/// all dimensions, or supply one direction per dimension for mixed behavior.
+/// Use [`Step::lower`]/[`Step::upper`] to broadcast the same direction across all
+/// dimensions, or [`Step::new`] to supply one direction per dimension for mixed behavior.
 ///
 /// # Examples
 /// ```
@@ -32,7 +28,7 @@ pub enum StepDirection {
 /// let interp = Interp1D::new(
 ///     array![0., 1., 2., 3., 4.],
 ///     array![0.2, 0.4, 0.6, 0.8, 1.0],
-///     strategy::StepLower,
+///     strategy::Step::lower(),
 ///     Extrapolate::Error,
 /// )
 /// .unwrap();
@@ -43,18 +39,7 @@ pub enum StepDirection {
 /// let interp = Interp1D::new(
 ///     array![0., 1., 2., 3., 4.],
 ///     array![0.2, 0.4, 0.6, 0.8, 1.0],
-///     strategy::StepUpper,
-///     Extrapolate::Error,
-/// )
-/// .unwrap();
-/// assert_eq!(interp.interpolate(&[3.25]).unwrap(), 1.0); // ceil → value at 4.0
-/// assert_eq!(interp.interpolate(&[3.00]).unwrap(), 0.8); // exact grid point
-///
-/// // Behaves exactly like `StepUpper`, but allows the direction to be chosen at runtime
-/// let interp = Interp1D::new(
-///     array![0., 1., 2., 3., 4.],
-///     array![0.2, 0.4, 0.6, 0.8, 1.0],
-///     strategy::Step::from(strategy::step::StepDirection::Upper),
+///     strategy::Step::upper(),
 ///     Extrapolate::Error,
 /// )
 /// .unwrap();
@@ -66,116 +51,109 @@ pub enum StepDirection {
 ///     array![0., 1., 2.],
 ///     array![0., 1., 2.],
 ///     array![[0., 1., 2.], [3., 4., 5.], [6., 7., 8.]],
-///     strategy::Step(strategy::per_axis::PerAxis::Axes(vec![
+///     strategy::Step::new(vec![
 ///         strategy::step::StepDirection::Lower,
 ///         strategy::step::StepDirection::Upper,
-///     ])),
+///     ]),
 ///     Extrapolate::Error,
 /// )
 /// .unwrap();
 /// assert_eq!(interp.interpolate(&[0.7, 1.4]).unwrap(), 2.); // floor x→0, ceil y→2
 /// ```
 #[derive(Debug, Clone, PartialEq)]
-pub struct Step(pub PerAxis<StepDirection>);
+#[cfg_attr(feature = "serde", derive(Serialize))]
+pub struct Step {
+    /// Broadcast to every dimension, or one per dimension.
+    // Serializes under the key "Step" rather than "directions", making the strategy type
+    // explicit in the output, consistent with how Linear, Nearest, etc. serialize to
+    // their type name.
+    #[cfg_attr(feature = "serde", serde(rename = "Step"))]
+    pub directions: PerAxis<StepDirection>,
+}
 
 impl From<StepDirection> for Step {
     /// Broadcasts `dir` to all dimensions.
     fn from(dir: StepDirection) -> Self {
-        Step(PerAxis::Broadcast(dir))
+        Step {
+            directions: PerAxis::Broadcast(dir),
+        }
     }
 }
 
 impl Step {
+    /// Create a `Step` with a distinct direction per grid dimension.
+    ///
+    /// Use [`lower`](Self::lower)/[`upper`](Self::upper) instead when every dimension
+    /// shares the same direction.
+    pub fn new(directions: Vec<StepDirection>) -> Self {
+        Step {
+            directions: PerAxis::Axes(directions),
+        }
+    }
+
+    /// Broadcasts [`StepDirection::Lower`] to every dimension.
+    pub fn lower() -> Self {
+        StepDirection::Lower.into()
+    }
+
+    /// Broadcasts [`StepDirection::Upper`] to every dimension.
+    pub fn upper() -> Self {
+        StepDirection::Upper.into()
+    }
+
     /// Checks the stored direction count against an interpolator's dimensionality: one
     /// direction broadcasts to every dimension, otherwise there must be exactly one per
     /// dimension. Shared by the `Strategy1D`/`2D`/`3D`/`ND` impls so all four report it
     /// identically.
     pub(crate) fn validate_len(&self, ndim: usize) -> Result<(), ValidateError> {
-        self.0.validate_len(ndim, "Step strategy", "directions")
-    }
-
-    /// Returns the direction for dimension `dim`.
-    /// A broadcast direction applies to every dimension.
-    pub(crate) fn dir(&self, dim: usize) -> StepDirection {
-        *self.0.get(dim)
+        self.directions.validate_len(ndim, "Step", "directions")
     }
 }
-
-/// Piecewise-constant interpolation that always selects the nearest **lower** grid point.
-///
-/// This is the zero-allocation, fixed-direction variant of [`Step`]. Prefer this when the
-/// direction is known at compile time.
-#[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize_unit_struct))]
-pub struct StepLower;
-
-/// Piecewise-constant interpolation that always selects the nearest **upper** grid point.
-///
-/// This is the zero-allocation, fixed-direction variant of [`Step`]. Prefer this when the
-/// direction is known at compile time.
-#[derive(Debug, Clone, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize_unit_struct))]
-pub struct StepUpper;
 
 #[cfg(feature = "serde")]
 mod step_serde {
     use super::*;
-    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use serde::{Deserialize, Deserializer};
 
-    /// Helper that serializes/deserializes `Step` as `{"Step": <directions>}`. This makes
-    /// the strategy type explicit in the output, consistent with how `Linear`, `Nearest`,
-    /// etc. serialize to their type name.
-    #[derive(Serialize, Deserialize)]
-    struct StepHelper {
+    /// `Step`'s own shape (`{"Step": <directions>}`), for `Deserialize` only: `Serialize`
+    /// is derived directly on [`Step`], but reading also needs the legacy fallback below,
+    /// which a derived `Deserialize` on `Step` itself can't express.
+    #[derive(Deserialize)]
+    struct StepShape {
         #[serde(rename = "Step")]
         directions: PerAxis<StepDirection>,
     }
 
-    impl Serialize for Step {
-        fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-            StepHelper {
-                directions: self.0.clone(),
-            }
-            .serialize(serializer)
-        }
+    /// Pre-`Step` serialized names for a fixed-direction strategy (from the removed
+    /// `LeftNearest`/`RightNearest` unit structs), accepted on deserialize only. Bare
+    /// strings, not wrapped like [`StepShape`], since that's how they were originally
+    /// serialized.
+    #[derive(Deserialize)]
+    enum LegacyDirection {
+        LeftNearest,
+        RightNearest,
+    }
+
+    /// Tries the current `{"Step": ..}` form first (the common case, so it succeeds without
+    /// a wasted attempt), falling back to the legacy bare-string form; the two are
+    /// structurally distinct (object vs. bare string), so there's no ambiguity between them
+    /// regardless of order.
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StepWire {
+        Current(StepShape),
+        Legacy(LegacyDirection),
     }
 
     impl<'de> Deserialize<'de> for Step {
         fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-            let helper = StepHelper::deserialize(deserializer)?;
-            Ok(Step(helper.directions))
-        }
-    }
-}
-
-#[cfg(feature = "serde")]
-mod step_marker_serde {
-    use super::*;
-    use serde::{Deserialize, Deserializer};
-
-    #[derive(Deserialize)]
-    enum StepLowerDe {
-        #[serde(alias = "LeftNearest")]
-        StepLower,
-    }
-
-    #[derive(Deserialize)]
-    enum StepUpperDe {
-        #[serde(alias = "RightNearest")]
-        StepUpper,
-    }
-
-    impl<'de> Deserialize<'de> for StepLower {
-        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-            let _ = StepLowerDe::deserialize(deserializer)?;
-            Ok(StepLower)
-        }
-    }
-
-    impl<'de> Deserialize<'de> for StepUpper {
-        fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-            let _ = StepUpperDe::deserialize(deserializer)?;
-            Ok(StepUpper)
+            Ok(match StepWire::deserialize(deserializer)? {
+                StepWire::Current(shape) => Step {
+                    directions: shape.directions,
+                },
+                StepWire::Legacy(LegacyDirection::LeftNearest) => Step::lower(),
+                StepWire::Legacy(LegacyDirection::RightNearest) => Step::upper(),
+            })
         }
     }
 }
@@ -189,44 +167,30 @@ mod tests {
     #[cfg(feature = "serde")]
     fn test_serde() {
         assert_eq!(
-            serde_json::to_string(&StepLower).unwrap(),
-            format!("\"{}\"", stringify!(StepLower))
-        );
-        assert_eq!(
-            serde_json::to_string(&StepUpper).unwrap(),
-            format!("\"{}\"", stringify!(StepUpper))
-        );
-        assert_eq!(
-            serde_json::to_string(&Step::from(StepDirection::Lower)).unwrap(),
+            serde_json::to_string(&Step::lower()).unwrap(),
             r#"{"Step":"Lower"}"#
         );
         assert_eq!(
-            serde_json::to_string(&Step::from(StepDirection::Upper)).unwrap(),
+            serde_json::to_string(&Step::upper()).unwrap(),
             r#"{"Step":"Upper"}"#
         );
         assert_eq!(
-            serde_json::to_string(&Step(PerAxis::Axes(vec![
-                StepDirection::Lower,
-                StepDirection::Upper
-            ])))
-            .unwrap(),
+            serde_json::to_string(&Step::new(vec![StepDirection::Lower, StepDirection::Upper]))
+                .unwrap(),
             r#"{"Step":["Lower","Upper"]}"#
         );
 
-        let step_lower: StepLower = serde_json::from_str("\"StepLower\"").unwrap();
-        assert_eq!(step_lower, StepLower);
-        let step_upper: StepUpper = serde_json::from_str("\"StepUpper\"").unwrap();
-        assert_eq!(step_upper, StepUpper);
-        // Backward-compatibility aliases for pre-Step serialized names.
+        // Backward-compatibility aliases for pre-Step serialized names
+        // (the removed `LeftNearest`/`RightNearest` unit structs).
         assert_eq!(
-            serde_json::from_str::<StepLower>("\"LeftNearest\"").unwrap(),
-            StepLower
+            serde_json::from_str::<Step>("\"LeftNearest\"").unwrap(),
+            Step::lower()
         );
         assert_eq!(
-            serde_json::from_str::<StepUpper>("\"RightNearest\"").unwrap(),
-            StepUpper
+            serde_json::from_str::<Step>("\"RightNearest\"").unwrap(),
+            Step::upper()
         );
-        // Aliases are intentionally scoped to StepLower/StepUpper, not StepDirection.
+        // The aliases are bare strings, not wrapped like the current `{"Step": ..}` form.
         assert!(serde_json::from_str::<Step>(r#"{"Step":"LeftNearest"}"#).is_err());
     }
 }
