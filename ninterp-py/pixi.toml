@@ -1,0 +1,19 @@
+[workspace]
+authors = ["Kyle Carow <kylecarow@gmail.com>"]
+channels = ["conda-forge"]
+name = "ninterp"
+platforms = ["osx-arm64"]
+version = "0.1.0"
+
+[tasks]
+dev = "maturin develop --generate-stubs"
+
+[pypi-dependencies]
+ninterp = { path = ".", editable = true }
+marimo = { version = ">=0.23.16,<0.24", extras = ["lsp"] }
+plotly = ">=5"
+
+[dependencies]
+python = ">=3.8"
+maturin = ">=1.14.1,<2"
+numpy = ">=2.5.2,<3"

@@ -16,6 +16,8 @@ Cargo.lock
 CLAUDE.md
 .claude/
 
+.vscode
+
 # Added by cargo
 
 /target

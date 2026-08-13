@@ -1,3 +1,9 @@
+[workspace]
+members = ["ninterp-py"]
+
+[workspace.dependencies]
+ninterp = { path = "." }
+
 [package]
 name = "ninterp"
 version = "0.9.1"
