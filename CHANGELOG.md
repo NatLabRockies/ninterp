@@ -52,10 +52,13 @@ Everything below is merged to `main` but not yet tagged/released.
   `#[serde(serialize_with = "serialize_nested")]` on a field. Falls back to the `ndarray`
   format for non-human-readable (binary) serializers.
 - `strategy::utils` per-axis primitives (`exact_index`, `locate_step_index`,
-  `locate_lower_index_uniform`, `validate_uniform_grid`, `AxisLocation`/`locate_axis`)
-  are now `pub`, for reuse by custom strategies. `validate_uniform_grid` takes a
-  `tolerance: Option<T>` (`None` keeps the default of 1024 × ε) and raises the dedicated
-  `ValidateError::NonUniform { dim, index }` on failure.
+  `locate_lower_index_uniform`, `validate_uniform_grid`/`validate_uniform_grid_epsilon`,
+  `AxisLocation`/`locate_axis`) are now `pub`, for reuse by custom strategies.
+  `validate_uniform_grid_epsilon` is `Float`-bound and takes a `tolerance: Option<T>`
+  (`None` keeps the default of 1024 × ε); `validate_uniform_grid` is its generic core,
+  taking an explicit `tolerance: T` under just `Copy + PartialOrd + Sub`, for grids over
+  non-`Float` types. Both raise the dedicated `ValidateError::NonUniform { dim, index }`
+  on failure.
 - `interpolate_fast` on `Strategy1D`/`2D`/`3D`/`ND` and `Interpolator<T>`: a `Result`-free
   interpolation path (panics instead of erroring) for hot loops where the point is
   already known to be in-bounds. `Interp1D`/`2D`/`3D` also get an inherent

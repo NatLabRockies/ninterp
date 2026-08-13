@@ -121,7 +121,8 @@ pub fn exact_index<T: PartialOrd>(grid: ArrayView1<T>, lower: usize, point: &T) 
 /// Computes the lower bracket index for a uniformly-spaced grid in O(1).
 ///
 /// Equivalent to [`locate_lower_index`] but replaces binary search with direct arithmetic.
-/// Only valid when the grid spacing is uniform; validate with [`validate_uniform_grid`] first.
+/// Only valid when the grid spacing is uniform; validate with [`validate_uniform_grid_epsilon`]
+/// (or [`validate_uniform_grid`] for a non-`Float` `T`) first.
 pub fn locate_lower_index_uniform<T: Float>(grid0: T, step: T, n: usize, point: T) -> usize {
     let t = (point - grid0) / step;
     if t < T::zero() {
@@ -129,6 +130,41 @@ pub fn locate_lower_index_uniform<T: Float>(grid0: T, step: T, n: usize, point: 
     } else {
         t.floor().to_usize().unwrap_or(0).min(n - 2)
     }
+}
+
+/// Validates that `grid` is uniformly spaced within `tolerance`.
+///
+/// `tolerance` is an absolute bound, in the same units as `grid`, on how far an interval
+/// may drift from the grid's first interval (either wider or narrower). Works for any
+/// orderable numeric type, not just [`Float`]: an integer or date-like grid, whose
+/// spacing differences are exact, can reasonably pass `T::zero()`.
+///
+/// Pair with [`locate_lower_index_uniform`] for the matching O(1) lookup.
+///
+/// # Errors
+/// Returns [`ValidateError::NonUniform`] if any interval's spacing differs from the
+/// grid's first interval by more than `tolerance`.
+pub fn validate_uniform_grid<T: Copy + PartialOrd + Sub<Output = T>>(
+    grid: ArrayView1<T>,
+    dim: usize,
+    tolerance: T,
+) -> Result<(), ValidateError> {
+    let step = grid[1] - grid[0];
+    for i in 1..grid.len() - 1 {
+        // Wider or narrower than the first interval both count as non-uniform.
+        let spacing = grid[i + 1] - grid[i];
+        // Overflow-safe magnitude diff: (spacing - step).abs() would panic on an
+        // unsigned T whenever spacing < step, which is a legal, merely-narrower interval.
+        let diff = if spacing > step {
+            spacing - step
+        } else {
+            step - spacing
+        };
+        if diff > tolerance {
+            return Err(ValidateError::NonUniform { dim, index: i });
+        }
+    }
+    Ok(())
 }
 
 /// Validates that `grid` is uniformly spaced within `tolerance`.
@@ -142,7 +178,7 @@ pub fn locate_lower_index_uniform<T: Float>(grid0: T, step: T, n: usize, point: 
 /// from that default.
 ///
 /// Pair with [`locate_lower_index_uniform`] for the matching O(1) lookup.
-pub fn validate_uniform_grid<T: Float>(
+pub fn validate_uniform_grid_epsilon<T: Float>(
     grid: ArrayView1<T>,
     dim: usize,
     tolerance: Option<T>,
@@ -156,12 +192,5 @@ pub fn validate_uniform_grid<T: Float>(
         }
         step.abs() * tol
     });
-    for i in 1..grid.len() - 1 {
-        // Wider or narrower than the first interval both count as non-uniform.
-        let spacing = grid[i + 1] - grid[i];
-        if (spacing - step).abs() > tolerance {
-            return Err(ValidateError::NonUniform { dim, index: i });
-        }
-    }
-    Ok(())
+    validate_uniform_grid(grid, dim, tolerance)
 }

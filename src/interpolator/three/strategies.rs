@@ -165,9 +165,9 @@ where
 {
     /// Ensures all grid dimensions are uniformly spaced.
     fn validate(&self, data: &InterpData3DBase<D>) -> Result<(), ValidateError> {
-        validate_uniform_grid(data.grid[0].view(), 0, None)?;
-        validate_uniform_grid(data.grid[1].view(), 1, None)?;
-        validate_uniform_grid(data.grid[2].view(), 2, None)
+        validate_uniform_grid_epsilon(data.grid[0].view(), 0, None)?;
+        validate_uniform_grid_epsilon(data.grid[1].view(), 1, None)?;
+        validate_uniform_grid_epsilon(data.grid[2].view(), 2, None)
     }
 
     fn interpolate(

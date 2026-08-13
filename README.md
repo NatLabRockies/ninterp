@@ -238,7 +238,7 @@ Validation-time (`new` / `validate`):
 | --- | --- |
 | `ValidateError::InsufficientGridPoints` | Fewer than 2 grid coordinates in a dimension |
 | `ValidateError::NotStrictlyIncreasing` | Grid coordinates in a dimension aren't strictly increasing (a repeat or a decrease) |
-| `ValidateError::NonUniform` | Non-uniformly-spaced grid, required by `LinearUniform` and any strategy calling `validate_uniform_grid` |
+| `ValidateError::NonUniform` | Non-uniformly-spaced grid, required by `LinearUniform` and any strategy calling `validate_uniform_grid`/`validate_uniform_grid_epsilon` |
 | `ValidateError::IncompatibleShapes` | Grid/value shape mismatch |
 | `ValidateError::GridAxisCount` | `InterpDataND` grid axis count doesn't match the dimensionality of `values` |
 | `ValidateError::ExtrapolateUnsupported` | `Extrapolate::Enable` on a strategy that can't extrapolate |

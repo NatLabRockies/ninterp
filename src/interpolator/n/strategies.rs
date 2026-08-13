@@ -94,7 +94,7 @@ where
     /// Ensures grid uniformity in all dimensions
     fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
         for (dim, grid) in data.grid.iter().enumerate() {
-            validate_uniform_grid(grid.view(), dim, None)?;
+            validate_uniform_grid_epsilon(grid.view(), dim, None)?;
         }
         Ok(())
     }

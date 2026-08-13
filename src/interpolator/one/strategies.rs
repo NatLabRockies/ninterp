@@ -35,7 +35,7 @@ where
 {
     /// Ensures the grid is uniformly spaced.
     fn validate(&self, data: &InterpData1DBase<D>) -> Result<(), ValidateError> {
-        validate_uniform_grid(data.grid[0].view(), 0, None)
+        validate_uniform_grid_epsilon(data.grid[0].view(), 0, None)
     }
 
     fn interpolate(

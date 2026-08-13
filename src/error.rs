@@ -14,7 +14,8 @@ pub enum ValidateError {
     InsufficientGridPoints(usize),
     #[error("supplied coordinates must be strictly increasing: dim {0}")]
     NotStrictlyIncreasing(usize),
-    /// Raised by [`crate::strategy::utils::validate_uniform_grid`], so any strategy
+    /// Raised by [`crate::strategy::utils::validate_uniform_grid`] and
+    /// [`crate::strategy::utils::validate_uniform_grid_epsilon`], so any strategy
     /// requiring uniform spacing reports it the same way, not just `LinearUniform`.
     ///
     /// `index` is the first coordinate whose following interval, `grid[index + 1] -

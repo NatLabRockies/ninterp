@@ -60,8 +60,8 @@ where
         // Dummy invariant: reject non-uniformly-spaced grids. `strategy::utils` has a
         // ready-made helper for exactly this, used by the built-in `LinearUniform`
         // strategy. Swap in whatever check your own strategy actually needs.
-        ninterp::strategy::utils::validate_uniform_grid(data.grid[0].view(), 0, None)?;
-        ninterp::strategy::utils::validate_uniform_grid(data.grid[1].view(), 1, None)?;
+        ninterp::strategy::utils::validate_uniform_grid_epsilon(data.grid[0].view(), 0, None)?;
+        ninterp::strategy::utils::validate_uniform_grid_epsilon(data.grid[1].view(), 1, None)?;
         println!("validated!");
         Ok(())
     }
