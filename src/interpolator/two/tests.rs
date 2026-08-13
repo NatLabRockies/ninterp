@@ -77,10 +77,10 @@ fn test_cubic_c2_interior_accuracy() {
 }
 
 #[test]
-fn test_cubic_c2_cached_vs_uncached() {
-    // `Strategy2D`'s corner-cache path (`compute_corner_cache` +
-    // `spline_eval_corner_cached`) must agree with `StrategyND`'s unchanged
-    // recursive-collapse path (`spline_eval_nd_cached`) on the same grid/values/BC.
+fn test_cubic_c2_2d_matches_nd() {
+    // `Interp2D` and `InterpND` both build their corner-derivative tensor via
+    // `compute_corner_cache` and evaluate via `spline_eval_corner_cached`; this confirms
+    // the two wrappers agree on the same grid/values/BC.
     let grid = array![0., 1., 2., 3.];
     let values = array![
         [0., 1., 4., 9.],
@@ -112,8 +112,8 @@ fn test_cubic_c2_cached_vs_uncached() {
 }
 
 #[test]
-fn test_cubic_c2_clamped_cached_vs_uncached() {
-    // Same equivalence check as `cached_vs_uncached` above, but with `Clamped` on
+fn test_cubic_c2_clamped_2d_matches_nd() {
+    // Same equivalence check as `2d_matches_nd` above, but with `Clamped` on
     // non-separable data. `Clamped`'s two BCs are separable
     // (`clamped_cubic_exact`/`clamped_uses_given_derivative` below), so they can't
     // exercise the corner cache's cross-derivative pass, which uses a different BC
@@ -147,10 +147,10 @@ fn test_cubic_c2_clamped_cached_vs_uncached() {
 }
 
 #[test]
-fn test_cubic_c2_mixed_endpoints_cached_vs_uncached() {
+fn test_cubic_c2_mixed_endpoints_2d_matches_nd() {
     // Same equivalence check again, but each axis now mixes endpoint *types*
     // (`NotAKnot`/`FirstDerivative`/`SecondDerivative` on opposite ends of the same
-    // axis), not just different values of the same type like `clamped_cached_vs_uncached`
+    // axis), not just different values of the same type like `clamped_2d_matches_nd`
     // above. This is what would break if `compute_corner_cache`'s per-endpoint
     // cross-derivative fallback treated `lower`/`upper` inconsistently. Axis 1's nonzero
     // `SecondDerivative` also exercises that fallback's own homogenization: axis 1 is the
@@ -373,7 +373,7 @@ fn test_cubic_c2_2d_periodic() {
 
 #[test]
 fn test_cubic_c2_mixed_endpoints_scipy_oracle() {
-    // Unlike `test_cubic_c2_mixed_endpoints_cached_vs_uncached` above (which only proves
+    // Unlike `test_cubic_c2_mixed_endpoints_2d_matches_nd` above (which only proves
     // `Interp2D` and `InterpND` agree on data both reproduce *exactly*, since it's a
     // genuine bicubic polynomial that any consistent scheme reproduces trivially), this
     // uses arbitrary, non-polynomial grid data and an independent numerical ground
@@ -382,9 +382,8 @@ fn test_cubic_c2_mixed_endpoints_scipy_oracle() {
     //
     // Ground truth: scipy's own tensor-product method, i.e. spline every inner-axis (y)
     // row independently, then spline the resulting points along the outer axis (x) --
-    // exactly what `InterpND`'s recursive collapse (`spline_eval_nd_cached`) does, and
-    // (per `compute_corner_cache`'s doc comment) what `Interp2D`'s corner-cache Hermite
-    // blend is also claimed to reproduce to float precision. Each axis mixes BC types
+    // what `compute_corner_cache`'s doc comment claims its corner-cache Hermite blend
+    // reproduces to float precision. Each axis mixes BC types
     // across its own endpoints (`NotAKnot`/`FirstDerivative` on x, `SecondDerivative`/
     // `FirstDerivative` on y), matching scipy's `CubicSpline(bc_type=(bc_start, bc_end))`
     // 2-tuple form confirmed against the installed scipy (1.13.1) to support an

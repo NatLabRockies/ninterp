@@ -80,9 +80,10 @@ fn test_cubic_c2_interior_accuracy() {
 }
 
 #[test]
-fn test_cubic_c2_cached_vs_uncached() {
-    // `Strategy3D`'s corner-cache path must agree with `StrategyND`'s unchanged
-    // recursive-collapse path on the same grid/values/BC.
+fn test_cubic_c2_3d_matches_nd() {
+    // `Interp3D` and `InterpND` both build their corner-derivative tensor via
+    // `compute_corner_cache`; this confirms the two wrappers agree on the same
+    // grid/values/BC.
     fn f(x: f64, y: f64, z: f64) -> f64 {
         x * x * y + y * y * z + z * z * x
     }
@@ -117,8 +118,8 @@ fn test_cubic_c2_cached_vs_uncached() {
 }
 
 #[test]
-fn test_cubic_c2_clamped_cached_vs_uncached() {
-    // Same equivalence check as `cached_vs_uncached` above, but with `Clamped` on
+fn test_cubic_c2_clamped_3d_matches_nd() {
+    // Same equivalence check as `3d_matches_nd` above, but with `Clamped` on
     // non-separable data. `Clamped`'s two BCs are separable
     // (`clamped_cubic_exact`/`clamped_uses_given_derivative` below), so they can't
     // exercise the corner cache's cross-derivative pass, which uses a different BC
@@ -290,10 +291,10 @@ fn test_cubic_c2_mixed_endpoints_scipy_oracle() {
     //
     // Ground truth: scipy's own tensor-product method generalized to three axes -- spline
     // every innermost-axis (z) pencil, then every middle-axis (y) pencil of those results,
-    // then the outer axis (x) -- exactly what `InterpND`'s recursive collapse
-    // (`spline_eval_nd_cached`) does. Each axis mixes BC types across its own endpoints,
-    // confirmed against the installed scipy (1.13.1) via its `bc_type=(bc_start, bc_end)`
-    // 2-tuple form:
+    // then the outer axis (x) -- what `compute_corner_cache`'s doc comment claims its
+    // corner-cache Hermite blend reproduces to float precision. Each axis mixes BC types
+    // across its own endpoints, confirmed against the installed scipy (1.13.1) via its
+    // `bc_type=(bc_start, bc_end)` 2-tuple form:
     //   bc_x = ('not-a-knot', (1, 2.0))
     //   bc_y = ((2, 0.0), (1, -1.0))
     //   bc_z = ((1, 1.5), 'not-a-knot')

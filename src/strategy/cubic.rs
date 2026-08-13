@@ -49,17 +49,12 @@ pub struct CubicC2<T> {
     /// Precomputed derivative data, populated by `Strategy1D`/`2D`/`3D`/`ND::init`. Its
     /// shape depends on which of those populated it:
     ///
-    /// - `Strategy1D`/`StrategyND`: cached second derivatives (`M[i] = S''(x_i)`) for
-    ///   every 1-D pencil along the innermost (last) grid axis, one
-    ///   [`compute_m`] result per combination of the other axes' indices. Same shape
-    ///   as the value grid, with the same last-axis length as the innermost grid; for
-    ///   1-D data (no outer axes) this degenerates to a single pencil, i.e. shape
-    ///   `[n + 1]` for `n` intervals. Only the innermost axis's coefficients are
-    ///   query-independent, so this is as far as caching goes; outer axes still solve
-    ///   fresh per call.
-    /// - `Strategy2D`/`Strategy3D`: the full corner-derivative tensor, shaped like the
-    ///   value grid with one extra trailing axis of length `2^N` (`N` = 2 or 3): see
-    ///   [`compute_corner_cache`]. Every query is then an O(1) lookup, no solving.
+    /// - `Strategy1D`: cached second derivatives (`M[i] = S''(x_i)`), one [`compute_m`]
+    ///   result for the single 1-D pencil, i.e. shape `[n + 1]` for `n` intervals.
+    /// - `Strategy2D`/`Strategy3D`/`StrategyND`: the full corner-derivative tensor,
+    ///   shaped like the value grid with one extra trailing axis of length `2^N` (`N` =
+    ///   the grid's dimensionality): see [`compute_corner_cache`]. Every query is then
+    ///   an O(1) lookup, no solving.
     ///
     /// Not included in the serialized form. After deserializing, call the
     /// interpolator's `init_strategy` method (e.g.
@@ -294,8 +289,8 @@ pub(crate) fn cyclic_thomas<T: Float>(
 
 /// Computes the second-derivative vector `M[0..=n]` for the given cubic spline BC.
 ///
-/// Used by [`Strategy1D::init`] (stored in `CubicC2::cache`) and
-/// [`spline_eval_1d`] (on the fly).
+/// Used by [`compute_m_cache`] (called from `Strategy1D::init`, stored in `CubicC2::cache`)
+/// and [`corner_cache_axis_pass`] (called from [`compute_corner_cache`]).
 pub(crate) fn compute_m<T: Float>(
     x: ArrayView1<T>,
     y: ArrayView1<T>,
@@ -436,20 +431,6 @@ pub(crate) fn eval_spline_from_m<T: Float>(
         + (y[i + 1] - m[i + 1] * h2_over_six) * dx / h
 }
 
-/// Computes and evaluates a 1-D cubic spline at `point` in one pass, respecting `bc`.
-///
-/// Used for the outer (query-dependent) axes in [`spline_eval_nd_cached`], which cannot
-/// be precomputed since their inputs change with the query point.
-pub(crate) fn spline_eval_1d<T: Float>(
-    x: ArrayView1<T>,
-    y: ArrayView1<T>,
-    point: T,
-    bc: &CubicC2BoundaryConditions<T>,
-) -> T {
-    let m = compute_m(x, y, bc);
-    eval_spline_from_m(x, y, ArrayView1::from(&m), point)
-}
-
 /// Checks `grid_len` against boundary condition `bc`'s minimum point requirement (e.g.
 /// [`CubicC2Endpoint::NotAKnot`] needs at least 3 grid points on its own side, 4 if both
 /// endpoints are `NotAKnot`), ahead of the real work in [`compute_m`].
@@ -479,86 +460,32 @@ pub(crate) fn validate_bc_min_points<T>(
     Ok(())
 }
 
-/// Precomputes second-derivative coefficients for every 1-D pencil along the innermost
-/// (last) axis of `values`, for [`spline_eval_nd_cached`] to look up in O(1) instead of
-/// re-solving on every `interpolate` call. Only the innermost axis's system is
-/// query-independent; outer axes still solve fresh via [`spline_eval_1d`] since their
-/// inputs (the collapsed values from inner axes) depend on the query point.
-///
-/// Returns an array shaped like `values`, except the last axis is `inner_grid.len()`
-/// long (matching [`compute_m`]'s output length). For 1-D `values` (no outer axes) this
-/// degenerates to a single pencil, i.e. one [`compute_m`] call.
-pub(crate) fn compute_m_inner_cache<T: Float>(
-    inner_grid: ArrayView1<T>,
-    values: ArrayViewD<T>,
+/// Computes and caches `M[0..=n]` (`CubicC2::cache`) for [`Strategy1D::init`], so
+/// [`spline_eval_1d_cached`] can look them up in O(1) instead of re-solving on every
+/// `interpolate` call.
+pub(crate) fn compute_m_cache<T: Float>(
+    x: ArrayView1<T>,
+    y: ArrayView1<T>,
     bc: &CubicC2BoundaryConditions<T>,
 ) -> ArrayD<T> {
-    let last_axis = Axis(values.ndim() - 1);
-    let mut out_shape = values.shape().to_vec();
-    out_shape[values.ndim() - 1] = inner_grid.len();
-    let mut cache = ArrayD::<T>::zeros(IxDyn(&out_shape));
-    for (y, mut out_lane) in values
-        .lanes(last_axis)
-        .into_iter()
-        .zip(cache.lanes_mut(last_axis))
-    {
-        let m = compute_m(inner_grid, y, bc);
-        out_lane.assign(&ArrayView1::from(&m));
-    }
-    cache
+    let m = compute_m(x, y, bc);
+    ArrayD::from_shape_vec(IxDyn(&[m.len()]), m)
+        .expect("compute_m's output length matches its own shape")
 }
 
-/// Recursively evaluates an N-D cubic spline via sequential 1-D slicing, respecting `bcs`.
-/// Looks up `m_cache` (from [`compute_m_inner_cache`]) at the innermost axis instead of
-/// re-solving it; outer axes still solve fresh via [`spline_eval_1d`].
-///
-/// `dim` is this call's axis index into `bcs` (0 at the top-level call, incrementing by
-/// one per recursive step, since `grids`/`values`/`m_cache`/`point` are all peeled down to
-/// the remaining axes but `bcs` is indexed by absolute axis index (`&bcs[dim]`).
-pub(crate) fn spline_eval_nd_cached<T: Float>(
-    grids: &[ArrayView1<T>],
-    values: ArrayViewD<T>,
+/// Evaluates [`Strategy1D`]'s cached spline (`m_cache`, from [`compute_m_cache`]) at `point`.
+pub(crate) fn spline_eval_1d_cached<T: Float>(
+    x: ArrayView1<T>,
+    y: ArrayView1<T>,
     m_cache: ArrayViewD<T>,
-    point: &[T],
-    bcs: &PerAxis<CubicC2BoundaryConditions<T>>,
-    dim: usize,
+    point: T,
 ) -> Result<T, InterpolateError> {
-    debug_assert_eq!(grids.len(), point.len());
-
-    if grids.len() == 1 {
-        let y = values.into_dimensionality::<Ix1>().map_err(|_| {
-            InterpolateError::Other(
-                "internal: non-1-D values at 1-D base case, grids.len() == values.ndim() invariant broken".into(),
-            )
-        })?;
-        let m = m_cache.into_dimensionality::<Ix1>().map_err(|_| {
-            InterpolateError::Other(
-                "internal: non-1-D m_cache at 1-D base case, grids.len() == m_cache.ndim() invariant broken".into(),
-            )
-        })?;
-        return Ok(eval_spline_from_m(grids[0], y, m, point[0]));
-    }
-
-    let n = grids[0].len();
-    let g: Vec<T> = (0..n)
-        .map(|i| {
-            spline_eval_nd_cached(
-                &grids[1..],
-                values.index_axis(Axis(0), i),
-                m_cache.index_axis(Axis(0), i),
-                &point[1..],
-                bcs,
-                dim + 1,
-            )
-        })
-        .collect::<Result<Vec<T>, _>>()?;
-
-    Ok(spline_eval_1d(
-        grids[0],
-        ArrayView1::from(&g),
-        point[0],
-        &bcs[dim],
-    ))
+    let m = m_cache.into_dimensionality::<Ix1>().map_err(|_| {
+        InterpolateError::Other(
+            "internal: non-1-D m_cache, Strategy1D::cache invariant broken".into(),
+        )
+    })?;
+    Ok(eval_spline_from_m(x, y, m, point))
 }
 
 /// Closed-form first derivative `S'(x_i)` at every knot, from an already-solved moment
@@ -585,8 +512,7 @@ pub(crate) fn knot_derivatives_from_m<T: Float>(
 
 /// Splines every 1-D lane of `field` along `axis` and replaces it with its knot
 /// derivatives (via [`compute_m`] + [`knot_derivatives_from_m`]), returning a new array
-/// the same shape as `field`. Generalizes [`compute_m_inner_cache`]'s per-lane iteration
-/// (hardcoded to the last axis) to an arbitrary one, for [`compute_corner_cache`].
+/// the same shape as `field`, for [`compute_corner_cache`].
 fn corner_cache_axis_pass<T: Float>(
     grid: ArrayView1<T>,
     field: ArrayViewD<T>,
@@ -685,17 +611,17 @@ fn hermite_eval_1d<T: Float>(p0: T, m0: T, p1: T, m1: T, h: T, t: T) -> T {
 }
 
 /// Evaluates a Hermite patch from the full corner-derivative tensor built by
-/// [`compute_corner_cache`] in O(1), no solving, unlike [`spline_eval_nd_cached`]'s outer
-/// axes. Used by [`Strategy2D`]/[`Strategy3D`]'s `CubicC2::interpolate`.
+/// [`compute_corner_cache`] in O(1), no solving. Used by [`Strategy2D`]/[`Strategy3D`]/
+/// [`StrategyND`]'s `CubicC2::interpolate`.
 ///
 /// First localizes every axis down to just its query cell's two bounding grid indices,
 /// into an owned `2 x 2 x ... x 2 x 2^N` buffer (`N = grids.len()`) that's independent of
 /// grid size. Without this step the recursive blend would run over the full extent of
 /// every not-yet-eliminated axis at each level, making the cost grow with grid size
 /// instead of being the O(1) this cache exists to provide.
-/// [`spline_eval_corner_cached_local`] then recurses on that small buffer like
-/// [`spline_eval_nd_cached`] (peels the first axis, recurses on the rest),
-/// Hermite-blending pairs of entries instead of solving a fresh 1-D spline per level. Bit
+/// [`spline_eval_corner_cached_local`] then recurses on that small buffer, peeling the
+/// first axis and recursing on the rest, Hermite-blending pairs of entries instead of
+/// solving a fresh 1-D spline per level. Bit
 /// `i` of the cache's trailing mask axis is assigned to `grids[i]` (see
 /// [`compute_corner_cache`]), and recursion always eliminates the lowest-numbered
 /// remaining axis first, so at every level the bit being eliminated is bit 0 of the

@@ -218,16 +218,14 @@ where
         Ok(())
     }
 
+    /// Precomputes the full corner-derivative tensor via `compute_corner_cache`.
     fn init(&mut self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
         if data.ndim() == 0 {
             return Ok(());
         }
-        let inner_dim = data.values.ndim().saturating_sub(1);
-        self.cache = compute_m_inner_cache(
-            data.grid[inner_dim].view(),
-            data.values.view(),
-            &self.boundary_conditions[inner_dim],
-        );
+        let data_view = data.view();
+        self.cache =
+            compute_corner_cache(&data_view.grid, data_view.values, &self.boundary_conditions);
         Ok(())
     }
 
@@ -242,14 +240,7 @@ where
             });
         }
         let grids: Vec<ArrayView1<D::Elem>> = data.grid.iter().map(|g| g.view()).collect();
-        spline_eval_nd_cached(
-            &grids,
-            data.values.view(),
-            self.cache.view(),
-            point,
-            &self.boundary_conditions,
-            0,
-        )
+        Ok(spline_eval_corner_cached(&grids, self.cache.view(), point))
     }
 
     /// Returns `true`: the boundary cubic polynomials extend naturally.

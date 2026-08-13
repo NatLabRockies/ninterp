@@ -121,12 +121,11 @@ where
         validate_bc_min_points(&self.boundary_conditions[0], data.grid[0].len(), 0)
     }
 
-    /// Computes and caches `M[0..=n]` for the configured BC via `compute_m_inner_cache`
-    /// (a single pencil, since 1-D data has no outer axes to vary over).
+    /// Computes and caches `M[0..=n]` for the configured BC via `compute_m_cache`.
     fn init(&mut self, data: &InterpData1DBase<D>) -> Result<(), ValidateError> {
-        self.cache = compute_m_inner_cache(
+        self.cache = compute_m_cache(
             data.grid[0].view(),
-            data.values.view().into_dyn(),
+            data.values.view(),
             &self.boundary_conditions[0],
         );
         Ok(())
@@ -137,13 +136,11 @@ where
         data: &InterpData1DBase<D>,
         point: &[D::Elem; 1],
     ) -> Result<D::Elem, InterpolateError> {
-        spline_eval_nd_cached(
-            &[data.grid[0].view()],
-            data.values.view().into_dyn(),
+        spline_eval_1d_cached(
+            data.grid[0].view(),
+            data.values.view(),
             self.cache.view(),
-            point,
-            &self.boundary_conditions,
-            0,
+            point[0],
         )
     }
 

@@ -38,8 +38,8 @@ Everything below is merged to `main` but not yet tagged/released.
   `not_a_knot()`/`natural()`/`clamped(lower, upper)`/`periodic()` construct the common
   symmetric cases; `CubicC2BoundaryConditions::{not_a_knot, first_derivative,
   second_derivative}` are the per-condition constructors mixed endpoints are built from.
-  `Strategy1D`/`ND` cache the innermost axis's coefficients; `Strategy2D`/`3D`
-  additionally cache the full corner-derivative tensor for O(1) queries.
+  `Strategy1D` caches its second-derivative coefficients; `Strategy2D`/`3D`/`ND` cache
+  the full corner-derivative tensor for O(1) queries.
   `From<CubicC2BoundaryConditions<T>>` broadcasts a condition obtained generically (e.g.
   from runtime config) without matching on it first. Included in the `Strategy*Enum`
   types. With the `serde` feature, serializes keyed by `"CubicC2"` like the other

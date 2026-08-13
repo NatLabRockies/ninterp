@@ -189,10 +189,10 @@ where
     /// [`interpolate`](Self::interpolate) is an O(1) Hermite-patch lookup instead of
     /// re-solving the outer axis on every call.
     fn init(&mut self, data: &InterpData2DBase<D>) -> Result<(), ValidateError> {
-        let grids: Vec<ArrayView1<D::Elem>> = data.grid.iter().map(|g| g.view()).collect();
+        let data_view = data.view();
         self.cache = compute_corner_cache(
-            &grids,
-            data.values.view().into_dyn(),
+            &data_view.grid,
+            data_view.values.into_dyn(),
             &self.boundary_conditions,
         );
         Ok(())

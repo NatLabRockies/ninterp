@@ -68,13 +68,7 @@ fn test_cubic_spline_0d() {
 
 #[test]
 fn test_cubic_c2_periodic_outer_axis() {
-    // Regression coverage: `Periodic` on the outer axis (axis 0, re-solved on every
-    // `interpolate()` call via `spline_eval_1d`) used to run an exact `y[0] != y[n]`
-    // equality check against *derived* intermediate values from the inner-axis spline
-    // evaluation, not raw grid data. Those values can differ from their
-    // mathematically-equal counterpart by a few ULPs, causing spurious failures. That
-    // check is gone now; this just confirms Periodic on an outer axis still
-    // interpolates successfully.
+    // Smoke test: `Periodic` on a non-innermost axis still interpolates successfully.
     let interp = InterpND::new(
         vec![array![0., 1., 2., 3.], array![0., 1., 2.]],
         array![
@@ -91,8 +85,6 @@ fn test_cubic_c2_periodic_outer_axis() {
         Extrapolate::Error,
     )
     .unwrap();
-    // No exact-value oracle needed here: this is regression coverage for the removed
-    // check, not a numerical-accuracy test.
     for &(x, y) in &[(0.5, 0.5), (2.5, 1.5), (3.0, 1.0), (0.0, 1.0)] {
         interp.interpolate(&[x, y]).unwrap();
     }
@@ -101,12 +93,9 @@ fn test_cubic_c2_periodic_outer_axis() {
 #[test]
 fn test_cubic_c2_not_a_knot_cubic_exact() {
     // f(x, y) = x^3 + x^2*y + x*y^2 + y^3: same genuine-cubic cross-term function as the
-    // `Interp2D` version. `test_cubic_c2_cached_vs_uncached` (in two/tests.rs) only
-    // proves `InterpND` agrees with `Interp2D` on a zero-mixed-partial function
-    // (f(x,y)=x^2+y); it doesn't independently confirm `InterpND`'s own outer-axis
-    // recursive-collapse path (`spline_eval_1d`, not `Interp2D`'s corner-derivative
-    // cache) reproduces a genuine bicubic, one with a nonzero, non-constant mixed
-    // partial d^2f/dxdy = 2x + 2y, exactly rather than approximately.
+    // `Interp2D` version, confirming `InterpND` reproduces a genuine bicubic, one with a
+    // nonzero, non-constant mixed partial d^2f/dxdy = 2x + 2y, exactly rather than
+    // approximately.
     fn f(x: f64, y: f64) -> f64 {
         x.powi(3) + x.powi(2) * y + x * y.powi(2) + y.powi(3)
     }
@@ -128,11 +117,7 @@ fn test_cubic_c2_clamped_uses_given_derivative() {
     // Differential check, same reasoning as the 1D/2D versions: exact reproduction alone
     // can't tell "Clamped used the supplied derivative" apart from "Clamped silently
     // behaved like NotAKnot", since NotAKnot reproduces this same separable-cubic data
-    // exactly with no derivative info at all. Unlike the 1D/2D versions, this exercises
-    // `InterpND`'s own `Clamped` handling on an outer axis (plain `compute_m` via
-    // `spline_eval_1d`, not the 2D/3D corner cache's Clamped-to-Natural substitution for
-    // the mixed-partial second pass): a code path `Clamped` had never been run through
-    // at all before this test, let alone verified to actually use its supplied value.
+    // exactly with no derivative info at all.
     fn f(x: f64, y: f64) -> f64 {
         x.powi(3) + y.powi(3)
     }
@@ -157,12 +142,8 @@ fn test_cubic_c2_clamped_uses_given_derivative() {
 fn test_cubic_c2_periodic_scipy_oracle() {
     // Same additive-corner-derivative reasoning and ground truth as
     // `Interp2D::test_cubic_c2_2d_periodic` (product of two independent periodic 1D
-    // splines, scipy `CubicSpline(bc_type='periodic')`), but built via `InterpND`
-    // directly with the 5-point axis first (outer, re-solved per query via
-    // `spline_eval_1d`) and the 3-point axis second (inner, cached at construction) --
-    // the same axis roles `test_cubic_c2_periodic_outer_axis` above uses, but with a
-    // real numerical oracle instead of just an is-finite check. This is `InterpND`'s
-    // own periodic outer-axis solve, independent of `Interp2D`'s corner-cache path.
+    // splines, scipy `CubicSpline(bc_type='periodic')`), but built via `InterpND` with a
+    // 5-point axis and a 3-point axis, confirming `InterpND` reproduces it exactly.
     let interp = InterpND::new(
         vec![array![0., 1., 2., 3., 4.], array![0., 1., 2.]],
         array![
