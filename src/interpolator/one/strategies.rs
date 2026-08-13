@@ -136,7 +136,7 @@ where
         data: &InterpData1DBase<D>,
         point: &[D::Elem; 1],
     ) -> Result<D::Elem, InterpolateError> {
-        spline_eval_1d_cached(
+        evaluate_spline_1d_cached(
             data.grid[0].view(),
             data.values.view(),
             self.cache.view(),

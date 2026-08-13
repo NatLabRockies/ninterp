@@ -79,7 +79,7 @@ fn test_cubic_c2_interior_accuracy() {
 #[test]
 fn test_cubic_c2_2d_matches_nd() {
     // `Interp2D` and `InterpND` both build their corner-derivative tensor via
-    // `compute_corner_cache` and evaluate via `spline_eval_corner_cached`; this confirms
+    // `compute_corner_cache` and evaluate via `evaluate_spline_corner_cached`; this confirms
     // the two wrappers agree on the same grid/values/BC.
     let grid = array![0., 1., 2., 3.];
     let values = array![

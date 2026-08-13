@@ -240,7 +240,11 @@ where
             });
         }
         let grids: Vec<ArrayView1<D::Elem>> = data.grid.iter().map(|g| g.view()).collect();
-        Ok(spline_eval_corner_cached(&grids, self.cache.view(), point))
+        Ok(evaluate_spline_corner_cached(
+            &grids,
+            self.cache.view(),
+            point,
+        ))
     }
 
     /// Returns `true`: the boundary cubic polynomials extend naturally.
