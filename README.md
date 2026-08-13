@@ -132,9 +132,9 @@ An interpolation strategy must be specified. Provided strategies:
 | [`Step`](https://docs.rs/ninterp/latest/ninterp/strategy/step/struct.Step.html) | Step interpolation to the previous/next grid value, broadcast or per-dimension |
 | [`Linear`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.Linear.html) | Linear interpolation |
 | [`LinearUniform`](https://docs.rs/ninterp/latest/ninterp/strategy/struct.LinearUniform.html) | Linear interpolation for uniformly spaced grids |
-| [`CubicC2`](https://docs.rs/ninterp/latest/ninterp/strategy/cubic/struct.CubicC2.html) | C² cubic spline, with a boundary condition set independently per endpoint ([`CubicC2BoundaryConditions`](https://docs.rs/ninterp/latest/ninterp/strategy/cubic/enum.CubicC2BoundaryConditions.html): not-a-knot, first derivative ("clamped"), second derivative (zero is "natural"), or periodic, with mixed types across an axis's two endpoints allowed) |
+| [`CubicC2`](https://docs.rs/ninterp/latest/ninterp/strategy/cubic/struct.CubicC2.html) | C²-continuous cubic spline with boundary conditions ([`CubicC2BoundaryConditions`](https://docs.rs/ninterp/latest/ninterp/strategy/cubic/enum.CubicC2BoundaryConditions.html): not-a-knot, first derivative ("clamped"), second derivative (zero is "natural"), or periodic, with per-endpoint, per-axis configuration flexibility) |
 
-More strategies will be added in the future.
+More strategies will be added in the future, see [Issue #24](https://github.com/NatLabRockies/ninterp/issues/24).
 
 To change the interpolation strategy, supply a `Strategy*DEnum` or `Box<dyn Strategy*D>` at instantiation and call `set_strategy`.
 Custom strategies can be defined, see [`examples/custom_strategy.rs`](https://github.com/NatLabRockies/ninterp/blob/main/examples/custom_strategy.rs).

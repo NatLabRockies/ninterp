@@ -183,9 +183,9 @@ pub fn validate_uniform_grid_epsilon<T: Float>(
     dim: usize,
     tolerance: Option<T>,
 ) -> Result<(), ValidateError> {
-    let step = grid[1] - grid[0];
     let tolerance = tolerance.unwrap_or_else(|| {
         // 1024 * epsilon via 10 doublings, avoids numeric literal casting
+        let step = grid[1] - grid[0];
         let mut tol = T::epsilon();
         for _ in 0..10 {
             tol = tol + tol;
