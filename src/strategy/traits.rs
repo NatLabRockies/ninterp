@@ -46,6 +46,28 @@ macro_rules! fixed_strategy_trait {
                 point: &[D::Elem; $N],
             ) -> Result<D::Elem, InterpolateError>;
 
+            /// Resolves an out-of-bounds point under [`Extrapolate::Wrap`](`crate::interpolator::Extrapolate::Wrap`), then interpolates.
+            ///
+            /// Default wraps in `data.grid`'s own (raw) coordinate space. Override only if
+            /// this strategy's working coordinate space differs from `data.grid`'s.
+            fn interpolate_wrapped(
+                &self,
+                data: &$InterpData<D>,
+                point: [D::Elem; $N],
+            ) -> Result<D::Elem, InterpolateError>
+            where
+                D::Elem: Num + Euclid + Copy,
+            {
+                let wrapped = core::array::from_fn(|i| {
+                    wrap(
+                        point[i],
+                        *data.grid[i].first().unwrap(),
+                        *data.grid[i].last().unwrap(),
+                    )
+                });
+                self.interpolate(data, &wrapped)
+            }
+
             #[doc = concat!(
                 " Interpolate without the `Result` wrapper, assuming `point` and `data` are\n",
                 " already valid.\n",
@@ -188,6 +210,18 @@ macro_rules! fixed_strategy_trait {
             }
 
             #[inline]
+            fn interpolate_wrapped(
+                &self,
+                data: &$InterpData<D>,
+                point: [D::Elem; $N],
+            ) -> Result<D::Elem, InterpolateError>
+            where
+                D::Elem: Num + Euclid + Copy,
+            {
+                (**self).interpolate_wrapped(data, point)
+            }
+
+            #[inline]
             fn interpolate_fast(&self, data: &$InterpData<D>, point: &[D::Elem; $N]) -> D::Elem {
                 (**self).interpolate_fast(data, point)
             }
@@ -299,6 +333,32 @@ where
         data: &InterpDataNDBase<D>,
         point: &[D::Elem],
     ) -> Result<D::Elem, InterpolateError>;
+
+    /// Resolves an out-of-bounds point under [`Extrapolate::Wrap`](`crate::interpolator::Extrapolate::Wrap`), then interpolates.
+    ///
+    /// Default wraps in `data.grid`'s own (raw) coordinate space. Override only if
+    /// this strategy's working coordinate space differs from `data.grid`'s.
+    fn interpolate_wrapped(
+        &self,
+        data: &InterpDataNDBase<D>,
+        point: &[D::Elem],
+    ) -> Result<D::Elem, InterpolateError>
+    where
+        D::Elem: Num + Euclid + Copy,
+    {
+        let wrapped: Vec<D::Elem> = point
+            .iter()
+            .enumerate()
+            .map(|(dim, &pt)| {
+                wrap(
+                    pt,
+                    *data.grid[dim].first().unwrap(),
+                    *data.grid[dim].last().unwrap(),
+                )
+            })
+            .collect();
+        self.interpolate(data, &wrapped)
+    }
 
     /// Interpolate without the `Result` wrapper, assuming `point` and `data` are
     /// already valid.
@@ -436,6 +496,18 @@ where
     #[inline]
     fn allow_extrapolate(&self) -> bool {
         (**self).allow_extrapolate()
+    }
+
+    #[inline]
+    fn interpolate_wrapped(
+        &self,
+        data: &InterpDataNDBase<D>,
+        point: &[D::Elem],
+    ) -> Result<D::Elem, InterpolateError>
+    where
+        D::Elem: Num + Euclid + Copy,
+    {
+        (**self).interpolate_wrapped(data, point)
     }
 
     #[inline]

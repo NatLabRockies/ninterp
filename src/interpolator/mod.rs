@@ -287,14 +287,7 @@ macro_rules! interpolate_impl {
                             return self.strategy.interpolate(&self.data, &clamped_point);
                         }
                         Extrapolate::Wrap => {
-                            let wrapped_point = std::array::from_fn(|i| {
-                                wrap(
-                                    point[i],
-                                    *self.data.grid[i].first().unwrap(),
-                                    *self.data.grid[i].last().unwrap(),
-                                )
-                            });
-                            return self.strategy.interpolate(&self.data, &wrapped_point);
+                            return self.strategy.interpolate_wrapped(&self.data, *point);
                         }
                         Extrapolate::Error => {
                             errors.push(OutOfBoundsAt { index: 0, dim });

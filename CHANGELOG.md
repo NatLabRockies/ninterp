@@ -82,6 +82,10 @@ Everything below is merged to `main` but not yet tagged/released.
   interpolators behind `Box<dyn AnyInterpolator<T>>` and recovering the concrete type via
   `as_any`. Implemented for owned `Interp1D`/`2D`/`3D`/`ND` only, since `as_any` requires
   `Self: 'static`; viewed interpolators can still be used through `Interpolator<T>`.
+- `Strategy1D`/`2D`/`3D`/`ND::interpolate_wrapped`: resolves an `Extrapolate::Wrap`
+  query point, then interpolates. Default reproduces existing behavior (wraps in the
+  grid's own coordinate space) for every built-in strategy; a strategy whose working
+  coordinate space differs from the grid's can override it. Groundwork for #56.
 
 ### Changed
 - **Breaking:** owned data is now the default in type names, following Rust idioms

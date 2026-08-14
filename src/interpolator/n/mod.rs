@@ -362,18 +362,7 @@ where
                         return self.strategy.interpolate(&self.data, &clamped_point);
                     }
                     Extrapolate::Wrap => {
-                        let wrapped_point: Vec<_> = point
-                            .iter()
-                            .enumerate()
-                            .map(|(dim, pt)| {
-                                wrap(
-                                    *pt,
-                                    *self.data.grid[dim].first().unwrap(),
-                                    *self.data.grid[dim].last().unwrap(),
-                                )
-                            })
-                            .collect();
-                        return self.strategy.interpolate(&self.data, &wrapped_point);
+                        return self.strategy.interpolate_wrapped(&self.data, point);
                     }
                     Extrapolate::Error => {
                         errors.push(OutOfBoundsAt { index: 0, dim });
