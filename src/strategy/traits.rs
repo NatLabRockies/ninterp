@@ -58,7 +58,7 @@ macro_rules! fixed_strategy_trait {
             where
                 D::Elem: Num + Euclid + Copy,
             {
-                let wrapped = std::array::from_fn(|i| {
+                let wrapped = core::array::from_fn(|i| {
                     wrap(
                         point[i],
                         *data.grid[i].first().unwrap(),
