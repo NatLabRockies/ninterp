@@ -15,6 +15,9 @@ pub use cubic::CubicC2;
 pub mod step;
 pub use step::Step;
 
+pub mod transform;
+pub use transform::{GridTransform, Transform, ValuesTransform};
+
 pub mod enums;
 pub mod traits;
 pub mod utils;

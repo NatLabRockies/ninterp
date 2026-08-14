@@ -3,6 +3,8 @@
 use std::fmt;
 use thiserror::Error;
 
+use crate::strategy::Transform;
+
 /// Error in interpolator data validation
 #[allow(missing_docs)]
 #[derive(Error, Clone, PartialEq)]
@@ -41,6 +43,15 @@ pub enum ValidateError {
         ndim: usize,
         found: usize,
     },
+    /// A grid coordinate ([`crate::strategy::GridTransform`]) or data value
+    /// ([`crate::strategy::ValuesTransform`]) lies outside `transform`'s valid
+    /// domain (see [`Transform::in_domain`]). `label` is `"GridTransform"` or
+    /// `"ValuesTransform"`.
+    #[error("{label}: value is outside {transform:?}'s domain")]
+    TransformDomain {
+        label: &'static str,
+        transform: Transform,
+    },
     /// Escape hatch for conditions this crate doesn't model, chiefly custom strategies
     /// validating their own configuration.
     #[error("{0}")]
@@ -70,6 +81,17 @@ pub enum InterpolateError {
     },
     #[error("output slice has length {found}, expected {expected}")]
     OutputLength { expected: usize, found: usize },
+    /// A query point coordinate lies outside `transform`'s valid domain (see
+    /// [`Transform::in_domain`]), checked by [`crate::strategy::GridTransform`]
+    /// before its own [`Transform::forward`] call: without this,
+    /// `Extrapolate::Enable` pushing a query below e.g. [`Transform::Log`]'s lower
+    /// bound would silently produce `NaN` instead of a clear error. `label` is
+    /// `"GridTransform"`.
+    #[error("{label}: value is outside {transform:?}'s domain")]
+    TransformDomain {
+        label: &'static str,
+        transform: Transform,
+    },
     #[error("{0}")]
     Other(String),
 }

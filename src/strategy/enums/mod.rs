@@ -59,6 +59,7 @@ macro_rules! strategy_enum_impl {
         $TraitName:ident,
         $DataType:ident,
         $PointType:ty,
+        $PointsType:ty,
         [$(($Variant:ident, $StrategyType:ty)),* $(,)?]
     ) => {
         /// See [enums module](super) documentation.
@@ -122,10 +123,162 @@ macro_rules! strategy_enum_impl {
             }
 
             #[inline]
+            fn interpolate_wrapped(
+                &self,
+                data: &$DataType<D>,
+                point: $PointType,
+            ) -> Result<D::Elem, InterpolateError>
+            where
+                D::Elem: Num + Euclid + Copy,
+            {
+                match self {
+                    $(Self::$Variant(strategy) => $TraitName::<D>::interpolate_wrapped(strategy, data, point),)*
+                }
+            }
+
+            #[inline]
+            fn interpolate_fast(&self, data: &$DataType<D>, point: $PointType) -> D::Elem {
+                match self {
+                    $(Self::$Variant(strategy) => $TraitName::<D>::interpolate_fast(strategy, data, point),)*
+                }
+            }
+
+            #[inline]
+            fn batch_interpolate_into(
+                &self,
+                data: &$DataType<D>,
+                points: $PointsType,
+                out: &mut [D::Elem],
+            ) -> Result<(), InterpolateError> {
+                match self {
+                    $(Self::$Variant(strategy) => $TraitName::<D>::batch_interpolate_into(strategy, data, points, out),)*
+                }
+            }
+
+            #[inline]
+            fn batch_interpolate_fast_into(
+                &self,
+                data: &$DataType<D>,
+                points: $PointsType,
+                out: &mut [D::Elem],
+            ) {
+                match self {
+                    $(Self::$Variant(strategy) => $TraitName::<D>::batch_interpolate_fast_into(strategy, data, points, out),)*
+                }
+            }
+
+            #[inline]
+            fn batch_interpolate(
+                &self,
+                data: &$DataType<D>,
+                points: $PointsType,
+            ) -> Result<Vec<D::Elem>, InterpolateError>
+            where
+                D::Elem: Num,
+            {
+                match self {
+                    $(Self::$Variant(strategy) => $TraitName::<D>::batch_interpolate(strategy, data, points),)*
+                }
+            }
+
+            #[inline]
+            fn batch_interpolate_fast(&self, data: &$DataType<D>, points: $PointsType) -> Vec<D::Elem>
+            where
+                D::Elem: Num + Copy,
+            {
+                match self {
+                    $(Self::$Variant(strategy) => $TraitName::<D>::batch_interpolate_fast(strategy, data, points),)*
+                }
+            }
+
+            #[inline]
             fn allow_extrapolate(&self) -> bool {
                 match self {
                     $(Self::$Variant(strategy) => $TraitName::<D>::allow_extrapolate(strategy),)*
                 }
+            }
+        }
+
+        /// See [enums module](super) documentation. `Box` here wraps the concrete
+        /// enum (not `dyn Trait`), breaking the infinite size a wrapper strategy's
+        /// `inner: Self` field would otherwise have if it named the enum directly
+        /// (e.g. `GridTransform`'s `inner`); serde's blanket `Box<T>` impl covers it,
+        /// so unlike `Box<dyn Trait>` this is fully serde-compatible.
+        impl<D> $TraitName<D> for Box<$EnumName<D::Elem>>
+        where
+            D: Data + RawDataClone + Clone,
+            D::Elem: Float + Debug,
+        {
+            #[inline]
+            fn validate(&self, data: &$DataType<D>) -> Result<(), ValidateError> {
+                (**self).validate(data)
+            }
+
+            #[inline]
+            fn init(&mut self, data: &$DataType<D>) -> Result<(), ValidateError> {
+                (**self).init(data)
+            }
+
+            #[inline]
+            fn interpolate(&self, data: &$DataType<D>, point: $PointType) -> Result<D::Elem, InterpolateError> {
+                (**self).interpolate(data, point)
+            }
+
+            #[inline]
+            fn interpolate_wrapped(
+                &self,
+                data: &$DataType<D>,
+                point: $PointType,
+            ) -> Result<D::Elem, InterpolateError>
+            where
+                D::Elem: Num + Euclid + Copy,
+            {
+                (**self).interpolate_wrapped(data, point)
+            }
+
+            #[inline]
+            fn interpolate_fast(&self, data: &$DataType<D>, point: $PointType) -> D::Elem {
+                (**self).interpolate_fast(data, point)
+            }
+
+            #[inline]
+            fn batch_interpolate_into(
+                &self,
+                data: &$DataType<D>,
+                points: $PointsType,
+                out: &mut [D::Elem],
+            ) -> Result<(), InterpolateError> {
+                (**self).batch_interpolate_into(data, points, out)
+            }
+
+            #[inline]
+            fn batch_interpolate_fast_into(&self, data: &$DataType<D>, points: $PointsType, out: &mut [D::Elem]) {
+                (**self).batch_interpolate_fast_into(data, points, out)
+            }
+
+            #[inline]
+            fn batch_interpolate(
+                &self,
+                data: &$DataType<D>,
+                points: $PointsType,
+            ) -> Result<Vec<D::Elem>, InterpolateError>
+            where
+                D::Elem: Num,
+            {
+                (**self).batch_interpolate(data, points)
+            }
+
+            #[inline]
+            fn batch_interpolate_fast(&self, data: &$DataType<D>, points: $PointsType) -> Vec<D::Elem>
+            where
+                D::Elem: Num + Copy,
+            {
+                (**self).batch_interpolate_fast(data, points)
+            }
+
+            #[inline]
+            fn allow_extrapolate(&self) -> bool {
+                $TraitName::<D>::allow_extrapolate(&**self)
             }
         }
     };

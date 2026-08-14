@@ -287,7 +287,7 @@ macro_rules! interpolate_impl {
                             return self.strategy.interpolate(&self.data, &clamped_point);
                         }
                         Extrapolate::Wrap => {
-                            return self.strategy.interpolate_wrapped(&self.data, *point);
+                            return self.strategy.interpolate_wrapped(&self.data, point);
                         }
                         Extrapolate::Error => {
                             errors.push(OutOfBoundsAt { index: 0, dim });

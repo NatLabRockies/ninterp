@@ -53,7 +53,7 @@ macro_rules! fixed_strategy_trait {
             fn interpolate_wrapped(
                 &self,
                 data: &$InterpData<D>,
-                point: [D::Elem; $N],
+                point: &[D::Elem; $N],
             ) -> Result<D::Elem, InterpolateError>
             where
                 D::Elem: Num + Euclid + Copy,
@@ -213,7 +213,7 @@ macro_rules! fixed_strategy_trait {
             fn interpolate_wrapped(
                 &self,
                 data: &$InterpData<D>,
-                point: [D::Elem; $N],
+                point: &[D::Elem; $N],
             ) -> Result<D::Elem, InterpolateError>
             where
                 D::Elem: Num + Euclid + Copy,

@@ -86,6 +86,28 @@ Everything below is merged to `main` but not yet tagged/released.
   query point, then interpolates. Default reproduces existing behavior (wraps in the
   grid's own coordinate space) for every built-in strategy; a strategy whose working
   coordinate space differs from the grid's can override it. Groundwork for #56.
+- `strategy::Transform`, `strategy::GridTransform<T, S>`, `strategy::ValuesTransform<T,
+  S>`: composable wrappers for interpolating in a transformed coordinate/value space
+  (`Log`, `Sqrt`, `Reciprocal`, or `Identity`) instead of the raw one: standard for data
+  spanning many orders of magnitude or following a known nonlinear relationship, and for
+  bounding interpolated output (e.g. always-positive via `ValuesTransform::log`).
+  `GridTransform`'s `axes: Broadcastable<Transform>` gives one transform per grid
+  dimension or one broadcast to all; `ValuesTransform::transform` applies to the whole
+  values array. Both wrap any `Strategy1D`/`2D`/`3D`/`ND` `inner` and compose by nesting,
+  e.g. `ValuesTransform::log(GridTransform::log(CubicC2::not_a_knot()))` for full log-log
+  interpolation. `log`/`sqrt`/`reciprocal`/`broadcast`/`new` constructors mirror
+  `CubicC2`'s. Included in the `Strategy*Enum` types, with `inner` boxed to break the
+  self-referential size (`Box` around the concrete enum, not `dyn Trait`, so still
+  serde-compatible); `Strategy1D`/`2D`/`3D`/`ND` also gain a `Box<Strategy*DEnum<T>>`
+  forwarding impl for this. New `ValidateError`/`InterpolateError::TransformDomain`
+  variant for a grid coordinate, data value, or (under `Extrapolate::Enable`) query point
+  outside a transform's domain (e.g. `Log` requires `x > 0`), catching what would
+  otherwise silently `ln()` into `NaN`. Closes #56.
+- `strategy_enum_impl!`'s generated `Strategy*DEnum` impl now forwards every
+  `Strategy1D`/`2D`/`3D`/`ND` method (previously only `validate`/`init`/`interpolate`/
+  `allow_extrapolate`), so a strategy overriding `interpolate_wrapped` or the batch
+  methods dispatches correctly when nested inside the enum instead of silently falling
+  back to the trait default.
 
 ### Changed
 - **Breaking:** owned data is now the default in type names, following Rust idioms

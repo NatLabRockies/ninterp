@@ -216,3 +216,235 @@ where
         true
     }
 }
+
+impl<D, S> Strategy2D<D> for GridTransform<D::Elem, S>
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug,
+    S: for<'a> Strategy2D<ViewRepr<&'a D::Elem>> + Clone + Debug,
+{
+    /// Checks the axis count (must be 1 or 2) and that every raw grid coordinate is
+    /// in its axis's configured transform's domain.
+    fn validate(&self, data: &InterpData2DBase<D>) -> Result<(), ValidateError> {
+        self.axes.validate_len(2, "GridTransform", "axes")?;
+        let mut transformed_grid = Vec::with_capacity(2);
+        for (dim, grid) in data.grid.iter().enumerate() {
+            let transform = self.axes[dim];
+            for &x in grid.iter() {
+                if !transform.in_domain(x) {
+                    return Err(ValidateError::TransformDomain {
+                        label: "GridTransform",
+                        transform,
+                    });
+                }
+            }
+            let mut transformed = grid.mapv(|x| transform.forward(x));
+            if !transform.is_increasing() {
+                transformed.invert_axis(Axis(0));
+            }
+            transformed_grid.push(transformed);
+        }
+        let values = data.values.slice_each_axis(|ax| {
+            if self.axes[ax.axis.index()].is_increasing() {
+                Slice::new(0, None, 1)
+            } else {
+                Slice::new(0, None, -1)
+            }
+        });
+        let view = InterpData2DView {
+            grid: core::array::from_fn(|i| transformed_grid[i].view()),
+            values,
+        };
+        self.inner.validate(&view)
+    }
+
+    /// Transforms the grid into `grid_cache`, then initializes `inner` against a
+    /// transient view zipping `grid_cache` with `data.values`.
+    ///
+    /// A raw grid is always strictly increasing, but a decreasing transform (e.g.
+    /// `Reciprocal`) would otherwise leave that axis of `grid_cache` decreasing;
+    /// `Transform::is_increasing` flags that case so the transformed axis (and the
+    /// matching `values` axis) can be reversed back to ascending, matching every
+    /// downstream strategy's ascending-grid assumption.
+    fn init(&mut self, data: &InterpData2DBase<D>) -> Result<(), ValidateError> {
+        let mut grid_cache = Vec::with_capacity(2);
+        for (dim, grid) in data.grid.iter().enumerate() {
+            let transform = self.axes[dim];
+            let mut transformed = grid.mapv(|x| transform.forward(x));
+            if !transform.is_increasing() {
+                transformed.invert_axis(Axis(0));
+            }
+            grid_cache.push(transformed);
+        }
+        self.grid_cache = grid_cache;
+        let values = data.values.slice_each_axis(|ax| {
+            if self.axes[ax.axis.index()].is_increasing() {
+                Slice::new(0, None, 1)
+            } else {
+                Slice::new(0, None, -1)
+            }
+        });
+        let view = InterpData2DView {
+            grid: core::array::from_fn(|i| self.grid_cache[i].view()),
+            values,
+        };
+        self.inner.init(&view)
+    }
+
+    fn interpolate(
+        &self,
+        data: &InterpData2DBase<D>,
+        point: &[D::Elem; 2],
+    ) -> Result<D::Elem, InterpolateError> {
+        for (dim, &x) in point.iter().enumerate() {
+            let transform = self.axes[dim];
+            if !transform.in_domain(x) {
+                return Err(InterpolateError::TransformDomain {
+                    label: "GridTransform",
+                    transform,
+                });
+            }
+        }
+        let transformed_point: [D::Elem; 2] =
+            core::array::from_fn(|i| self.axes[i].forward(point[i]));
+        let values = data.values.slice_each_axis(|ax| {
+            if self.axes[ax.axis.index()].is_increasing() {
+                Slice::new(0, None, 1)
+            } else {
+                Slice::new(0, None, -1)
+            }
+        });
+        let view = InterpData2DView {
+            grid: core::array::from_fn(|i| self.grid_cache[i].view()),
+            values,
+        };
+        self.inner.interpolate(&view, &transformed_point)
+    }
+
+    /// Wraps in the transformed coordinate space (against `grid_cache`'s bounds),
+    /// not `data.grid`'s raw bounds: a nonlinear transform doesn't commute with
+    /// wrapping.
+    fn interpolate_wrapped(
+        &self,
+        data: &InterpData2DBase<D>,
+        point: &[D::Elem; 2],
+    ) -> Result<D::Elem, InterpolateError>
+    where
+        D::Elem: Num + Euclid + Copy,
+    {
+        for (dim, &x) in point.iter().enumerate() {
+            let transform = self.axes[dim];
+            if !transform.in_domain(x) {
+                return Err(InterpolateError::TransformDomain {
+                    label: "GridTransform",
+                    transform,
+                });
+            }
+        }
+        let wrapped: [D::Elem; 2] = core::array::from_fn(|i| {
+            let transformed = self.axes[i].forward(point[i]);
+            let lo = *self.grid_cache[i].first().unwrap();
+            let hi = *self.grid_cache[i].last().unwrap();
+            wrap(transformed, lo, hi)
+        });
+        let values = data.values.slice_each_axis(|ax| {
+            if self.axes[ax.axis.index()].is_increasing() {
+                Slice::new(0, None, 1)
+            } else {
+                Slice::new(0, None, -1)
+            }
+        });
+        let view = InterpData2DView {
+            grid: core::array::from_fn(|i| self.grid_cache[i].view()),
+            values,
+        };
+        self.inner.interpolate(&view, &wrapped)
+    }
+
+    fn allow_extrapolate(&self) -> bool {
+        self.inner.allow_extrapolate()
+    }
+}
+
+impl<D, S> Strategy2D<D> for ValuesTransform<D::Elem, S>
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug,
+    S: for<'a> Strategy2D<ViewRepr<&'a D::Elem>> + Clone + Debug,
+{
+    /// Checks that every data value is in the configured transform's domain.
+    fn validate(&self, data: &InterpData2DBase<D>) -> Result<(), ValidateError> {
+        for &v in data.values.iter() {
+            if !self.transform.in_domain(v) {
+                return Err(ValidateError::TransformDomain {
+                    label: "ValuesTransform",
+                    transform: self.transform,
+                });
+            }
+        }
+        let transformed_values = data.values.mapv(|v| self.transform.forward(v));
+        let view = InterpData2DView {
+            grid: core::array::from_fn(|i| data.grid[i].view()),
+            values: transformed_values.view(),
+        };
+        self.inner.validate(&view)
+    }
+
+    /// Transforms `data.values` into `values_cache`, then initializes `inner`
+    /// against a transient view zipping `data.grid` (untouched) with `values_cache`.
+    fn init(&mut self, data: &InterpData2DBase<D>) -> Result<(), ValidateError> {
+        self.values_cache = data.values.mapv(|v| self.transform.forward(v)).into_dyn();
+        let view = InterpData2DView {
+            grid: core::array::from_fn(|i| data.grid[i].view()),
+            values: self
+                .values_cache
+                .view()
+                .into_dimensionality::<Ix2>()
+                .expect("values_cache shape matches 2-D values"),
+        };
+        self.inner.init(&view)
+    }
+
+    fn interpolate(
+        &self,
+        data: &InterpData2DBase<D>,
+        point: &[D::Elem; 2],
+    ) -> Result<D::Elem, InterpolateError> {
+        let view = InterpData2DView {
+            grid: core::array::from_fn(|i| data.grid[i].view()),
+            values: self
+                .values_cache
+                .view()
+                .into_dimensionality::<Ix2>()
+                .expect("values_cache shape matches 2-D values"),
+        };
+        let result = self.inner.interpolate(&view, point)?;
+        Ok(self.transform.inverse(result))
+    }
+
+    /// Hands `point` unmodified to `inner.interpolate_wrapped`, so a nested
+    /// `GridTransform` handles the actual raw-space wrap; must not wrap here itself.
+    fn interpolate_wrapped(
+        &self,
+        data: &InterpData2DBase<D>,
+        point: &[D::Elem; 2],
+    ) -> Result<D::Elem, InterpolateError>
+    where
+        D::Elem: Num + Euclid + Copy,
+    {
+        let view = InterpData2DView {
+            grid: core::array::from_fn(|i| data.grid[i].view()),
+            values: self
+                .values_cache
+                .view()
+                .into_dimensionality::<Ix2>()
+                .expect("values_cache shape matches 2-D values"),
+        };
+        let result = self.inner.interpolate_wrapped(&view, point)?;
+        Ok(self.transform.inverse(result))
+    }
+
+    fn allow_extrapolate(&self) -> bool {
+        self.inner.allow_extrapolate()
+    }
+}
