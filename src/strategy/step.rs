@@ -68,14 +68,14 @@ pub struct Step {
     // explicit in the output, consistent with how Linear, Nearest, etc. serialize to
     // their type name.
     #[cfg_attr(feature = "serde", serde(rename = "Step"))]
-    pub directions: PerAxis<StepDirection>,
+    pub directions: Broadcastable<StepDirection>,
 }
 
 impl From<StepDirection> for Step {
     /// Broadcasts `dir` to all dimensions.
     fn from(dir: StepDirection) -> Self {
         Step {
-            directions: PerAxis::Broadcast(dir),
+            directions: Broadcastable::Broadcast(dir),
         }
     }
 }
@@ -87,7 +87,7 @@ impl Step {
     /// shares the same direction.
     pub fn new(directions: Vec<StepDirection>) -> Self {
         Step {
-            directions: PerAxis::Axes(directions),
+            directions: Broadcastable::Each(directions),
         }
     }
 
@@ -113,7 +113,7 @@ mod step_serde {
     #[derive(Deserialize)]
     struct StepShape {
         #[serde(rename = "Step")]
-        directions: PerAxis<StepDirection>,
+        directions: Broadcastable<StepDirection>,
     }
 
     /// Pre-`Step` serialized names for a fixed-direction strategy (from the removed

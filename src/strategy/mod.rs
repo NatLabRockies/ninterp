@@ -6,8 +6,8 @@
 
 use super::*;
 
-pub mod per_axis;
-use per_axis::PerAxis;
+pub mod broadcast;
+use broadcast::Broadcastable;
 
 pub mod cubic;
 pub use cubic::CubicC2;

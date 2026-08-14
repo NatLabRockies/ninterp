@@ -13,23 +13,23 @@ Everything below is merged to `main` but not yet tagged/released.
 ### Added
 - `strategy::LinearUniform`: an O(1)-index alternative to `Linear` for uniformly-spaced
   grids (1D/2D/3D/ND), validated at construction/`init` time.
-- `strategy::per_axis::PerAxis<T>`: `Broadcast(T)` applies one value to every grid
-  dimension, `Axes(Vec<T>)` gives one value per dimension. Shared by `Step` and `CubicC2`
-  for their per-axis configuration; indexes via `Index<usize>` (panics like a slice if
-  `dim` is out of range) and validates via the public `validate_len`, which reports a
-  mismatched count as `ValidateError::PerAxisLen { label, noun, ndim, found }`. Both are
-  usable by custom strategies built on `PerAxis`.
+- `strategy::broadcast::Broadcastable<T>`: `Broadcast(T)` applies one value to every
+  grid dimension, `Each(Vec<T>)` gives one value per dimension. Shared by `Step` and
+  `CubicC2` for their per-axis configuration; indexes via `Index<usize>` (panics like a
+  slice if `dim` is out of range) and validates via the public `validate_len`, which
+  reports a mismatched count as `ValidateError::PerAxisLen { label, noun, ndim, found }`.
+  Both are usable by custom strategies built on `Broadcastable`.
 - `strategy::Step`: a parameterized step (piecewise-constant) strategy across all
   dimensionalities, replacing `LeftNearest`/`RightNearest`. Its `directions` field is a
-  `PerAxis<StepDirection>`: `Broadcast` applies one direction to every axis, `Axes` gives
-  per-axis control. `Step::lower()`/`Step::upper()` construct the common broadcast cases;
-  `Step::new(Vec<StepDirection>)` constructs the per-axis case.
+  `Broadcastable<StepDirection>`: `Broadcast` applies one direction to every axis, `Each`
+  gives per-axis control. `Step::lower()`/`Step::upper()` construct the common broadcast
+  cases; `Step::new(Vec<StepDirection>)` constructs the per-axis case.
 - `LinearUniform` and `Step` are available for every dimensionality and included in the
   `Strategy*Enum` types.
 - `strategy::CubicC2`: a C² piecewise cubic spline strategy (1D/2D/3D/ND) with
   configurable boundary conditions given via
-  `boundary_conditions: PerAxis<CubicC2BoundaryConditions<T>>` (`Broadcast` for one
-  condition on every axis, `Axes` for one per axis), a single tridiagonal solve per axis.
+  `boundary_conditions: Broadcastable<CubicC2BoundaryConditions<T>>` (`Broadcast` for one
+  condition on every axis, `Each` for one per axis), a single tridiagonal solve per axis.
   `CubicC2BoundaryConditions` is either `Periodic`, or `Endpoints { lower, upper }` where
   `lower`/`upper` are independent `CubicC2Endpoint`s (`NotAKnot`, `FirstDerivative(T)`
   "clamped", or `SecondDerivative(T)`, zero being the classic "natural" case); the two

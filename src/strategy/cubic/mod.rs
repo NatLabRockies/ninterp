@@ -47,7 +47,7 @@ pub struct CubicC2<T> {
     // strategy type explicit in the output, consistent with how Linear, Nearest, Step,
     // etc. serialize to their type name.
     #[cfg_attr(feature = "serde", serde(rename = "CubicC2"))]
-    pub boundary_conditions: PerAxis<CubicC2BoundaryConditions<T>>,
+    pub boundary_conditions: Broadcastable<CubicC2BoundaryConditions<T>>,
     /// Precomputed derivative data, populated by `Strategy1D`/`2D`/`3D`/`ND::init`. Its
     /// shape depends on which of those populated it:
     ///
@@ -172,7 +172,7 @@ impl<T> From<CubicC2BoundaryConditions<T>> for CubicC2<T> {
     /// value obtained generically (e.g. from runtime config), without matching on it first.
     fn from(bc: CubicC2BoundaryConditions<T>) -> Self {
         Self {
-            boundary_conditions: PerAxis::Broadcast(bc),
+            boundary_conditions: Broadcastable::Broadcast(bc),
             cache: empty_cache(),
         }
     }
@@ -186,7 +186,7 @@ impl<T> CubicC2<T> {
     /// dimension shares the same condition.
     pub fn new(boundary_conditions: Vec<CubicC2BoundaryConditions<T>>) -> Self {
         Self {
-            boundary_conditions: PerAxis::Axes(boundary_conditions),
+            boundary_conditions: Broadcastable::Each(boundary_conditions),
             cache: empty_cache(),
         }
     }
@@ -195,7 +195,7 @@ impl<T> CubicC2<T> {
     /// Requires at least 4 data points per dimension.
     pub fn not_a_knot() -> Self {
         Self {
-            boundary_conditions: PerAxis::Broadcast(CubicC2BoundaryConditions::not_a_knot()),
+            boundary_conditions: Broadcastable::Broadcast(CubicC2BoundaryConditions::not_a_knot()),
             cache: empty_cache(),
         }
     }
@@ -206,10 +206,9 @@ impl<T> CubicC2<T> {
         T: Zero,
     {
         Self {
-            boundary_conditions: PerAxis::Broadcast(CubicC2BoundaryConditions::second_derivative(
-                T::zero(),
-                T::zero(),
-            )),
+            boundary_conditions: Broadcastable::Broadcast(
+                CubicC2BoundaryConditions::second_derivative(T::zero(), T::zero()),
+            ),
             cache: empty_cache(),
         }
     }
@@ -217,9 +216,9 @@ impl<T> CubicC2<T> {
     /// Create a cubic spline with specified first derivatives at both endpoints.
     pub fn clamped(lower: T, upper: T) -> Self {
         Self {
-            boundary_conditions: PerAxis::Broadcast(CubicC2BoundaryConditions::first_derivative(
-                lower, upper,
-            )),
+            boundary_conditions: Broadcastable::Broadcast(
+                CubicC2BoundaryConditions::first_derivative(lower, upper),
+            ),
             cache: empty_cache(),
         }
     }
@@ -229,7 +228,7 @@ impl<T> CubicC2<T> {
     /// `values[0]`, though this isn't enforced.
     pub fn periodic() -> Self {
         Self {
-            boundary_conditions: PerAxis::Broadcast(CubicC2BoundaryConditions::Periodic),
+            boundary_conditions: Broadcastable::Broadcast(CubicC2BoundaryConditions::Periodic),
             cache: empty_cache(),
         }
     }
@@ -559,7 +558,7 @@ fn corner_cache_axis_pass<T: Float>(
 pub(crate) fn compute_corner_cache<T: Float>(
     grids: &[ArrayView1<T>],
     values: ArrayViewD<T>,
-    bcs: &PerAxis<CubicC2BoundaryConditions<T>>,
+    bcs: &Broadcastable<CubicC2BoundaryConditions<T>>,
 ) -> ArrayD<T> {
     let n_axes = grids.len();
     let n_bits = 1usize << n_axes;

@@ -14,27 +14,27 @@ use super::*;
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 #[cfg_attr(feature = "serde", serde(untagged))]
-pub enum PerAxis<T> {
+pub enum Broadcastable<T> {
     /// Same value applied to every dimension.
     Broadcast(T),
     /// One value per dimension. Length must equal the interpolator's dimensionality;
     /// checked by each strategy's `validate` via `validate_len`.
-    Axes(Vec<T>),
+    Each(Vec<T>),
 }
 
-impl<T> From<T> for PerAxis<T> {
+impl<T> From<T> for Broadcastable<T> {
     /// Broadcasts `value` to every dimension.
     fn from(value: T) -> Self {
-        PerAxis::Broadcast(value)
+        Broadcastable::Broadcast(value)
     }
 }
 
-impl<T> PerAxis<T> {
+impl<T> Broadcastable<T> {
     /// Checks the stored count against an interpolator's dimensionality: `Broadcast` is
-    /// always valid, `Axes` must have exactly `ndim` entries. `label` names the strategy
+    /// always valid, `Each` must have exactly `ndim` entries. `label` names the strategy
     /// (e.g. `"Step"`) and `noun` names what's being counted (e.g. `"directions"`).
     ///
-    /// Custom strategies built on `PerAxis` should call this from `validate`, before
+    /// Custom strategies built on `Broadcastable` should call this from `validate`, before
     /// indexing via [`Index`](core::ops::Index), the same way [`Step`] and [`CubicC2`] do.
     pub fn validate_len(
         &self,
@@ -42,7 +42,7 @@ impl<T> PerAxis<T> {
         label: &'static str,
         noun: &'static str,
     ) -> Result<(), ValidateError> {
-        let PerAxis::Axes(values) = self else {
+        let Broadcastable::Each(values) = self else {
             return Ok(());
         };
         let found = values.len();
@@ -58,17 +58,17 @@ impl<T> PerAxis<T> {
     }
 }
 
-impl<T> core::ops::Index<usize> for PerAxis<T> {
+impl<T> core::ops::Index<usize> for Broadcastable<T> {
     type Output = T;
 
     /// Returns the value for dimension `dim`. `Broadcast` returns the same value for every
-    /// `dim`; `Axes` indexes normally (panics if `dim` is out of range). Call
+    /// `dim`; `Each` indexes normally (panics if `dim` is out of range). Call
     /// [`validate_len`](Self::validate_len) first to confirm the count matches the
     /// interpolator's dimensionality.
     fn index(&self, dim: usize) -> &T {
         match self {
-            PerAxis::Broadcast(value) => value,
-            PerAxis::Axes(values) => &values[dim],
+            Broadcastable::Broadcast(value) => value,
+            Broadcastable::Each(values) => &values[dim],
         }
     }
 }
