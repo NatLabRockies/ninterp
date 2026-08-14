@@ -95,7 +95,7 @@ fn empty_cache<T>() -> ArrayD<T> {
 /// instead of the raw one.
 ///
 /// `inner`'s own working space is the transformed grid: e.g. wrapping
-/// [`CubicC2`](crate::strategy::CubicC2)'s `clamped`/`second_derivative` boundary
+/// [`CubicC2`]'s `clamped`/`second_derivative` boundary
 /// conditions supplies derivatives *with respect to the transformed coordinate*, not
 /// the raw one. `not_a_knot`/`periodic` are unaffected: those are structural
 /// conditions on the spline's own space, not physical-value targets.
