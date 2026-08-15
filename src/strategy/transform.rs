@@ -71,10 +71,7 @@ impl Transform {
             Transform::Identity => true,
             Transform::Log => x > T::zero(),
             Transform::Sqrt => x >= T::zero(),
-            // `x != 0` alone would accept NaN (IEEE 754: `NaN != 0.0` is `true`,
-            // unlike the `>`/`>=` comparisons above, which are `false` for NaN and so
-            // already exclude it); reject it explicitly here too.
-            Transform::Reciprocal => !x.is_nan() && x != T::zero(),
+            Transform::Reciprocal => x != T::zero(),
         }
     }
 
@@ -276,13 +273,21 @@ impl<T: Float, S> GridTransform<T, S> {
     /// [`check_point_domain`](Self::check_point_domain) (`index` fixed at 0) and
     /// [`check_batch_domain`](Self::check_batch_domain) across all four
     /// dimensionalities.
+    ///
+    /// Rejects NaN explicitly here, on top of `transform.in_domain`. `forward(NaN)`
+    /// is a clean `NaN` for every transform (no panic), but a NaN *query point*
+    /// reaching the inner strategy's grid search breaks its comparisons and panics.
+    /// A NaN *grid* coordinate can't reach this far (the raw grid's own
+    /// strictly-increasing check rejects it first), and a NaN *data value* is a
+    /// different, safe case entirely (see [`ValuesTransform::transform_values`]),
+    /// so this check is deliberately scoped to query points only.
     pub(crate) fn point_domain_failures(&self, index: usize, point: &[T]) -> Vec<OutsideDomainAt> {
         point
             .iter()
             .enumerate()
             .filter_map(|(dim, &x)| {
                 let transform = self.transforms[dim];
-                (!transform.in_domain(x)).then_some(OutsideDomainAt {
+                (x.is_nan() || !transform.in_domain(x)).then_some(OutsideDomainAt {
                     index,
                     dim,
                     transform,
@@ -400,13 +405,21 @@ impl<T: Float, S> ValuesTransform<T, S> {
     /// Domain-checks and forward-transforms `values` (single pass, fused). Shared
     /// by `validate` (result discarded) and `init` (result cached into
     /// `values_cache`) across all four dimensionalities.
+    ///
+    /// `NaN` values bypass the domain check and forward-transform to `NaN`
+    /// (`forward(NaN)` is a clean `NaN` for every transform, no panic): real
+    /// datasets commonly use `NaN` as a "no data" sentinel for unmeasured grid
+    /// points, and that should propagate through, not fail construction. This is
+    /// unlike a NaN *query point* under `GridTransform`, which is rejected (see
+    /// [`GridTransform::point_domain_failures`]) since it would otherwise reach the
+    /// inner strategy's grid search and panic there instead.
     pub(crate) fn transform_values<Dim: Dimension>(
         &self,
         values: ArrayView<T, Dim>,
     ) -> Result<Array<T, Dim>, ValidateError> {
         let mut transformed = Vec::with_capacity(values.len());
         for (pattern, &v) in indices_of(&values).into_iter().zip(values.iter()) {
-            if !self.transform.in_domain(v) {
+            if !(v.is_nan() || self.transform.in_domain(v)) {
                 let index: Dim = pattern.into_dimension();
                 return Err(ValidateError::ValuesTransformDomain {
                     transform: self.transform,

@@ -263,6 +263,37 @@ fn values_transform_domain_violation_at_construction() {
 }
 
 #[test]
+fn values_transform_allows_nan_as_missing_data_sentinel() {
+    // Real N-D datasets commonly leave grid corners unmeasured (NaN) while a "blob"
+    // of real data covers the interior: three NaN cells per corner here (an L-shaped
+    // notch), leaving a rounded-corner diamond of real data in the middle.
+    // ValuesTransform must let NaN propagate through construction and interpolation
+    // instead of rejecting it as a domain violation: forward(NaN) is a clean NaN for
+    // every transform, and NaN only poisons interpolated results near the missing
+    // corners, not the whole dataset.
+    let x = array![1., 2., 3., 4., 5.];
+    let y = array![1., 2., 3., 4., 5.];
+    let f_xy = array![
+        [f64::NAN, f64::NAN, 4., f64::NAN, f64::NAN],
+        [f64::NAN, 4., 5., 6., f64::NAN],
+        [4., 5., 6., 7., 8.],
+        [f64::NAN, 6., 7., 8., f64::NAN],
+        [f64::NAN, f64::NAN, 8., f64::NAN, f64::NAN],
+    ];
+
+    let interp =
+        Interp2D::new(x, y, f_xy, ValuesTransform::log(Linear), Extrapolate::Error).unwrap();
+
+    // Exactly at a missing corner: NaN propagates through unchanged.
+    assert!(interp.interpolate(&[1., 1.]).unwrap().is_nan());
+    // Blending toward a missing corner: NaN poisons the local result.
+    assert!(interp.interpolate(&[1.5, 1.5]).unwrap().is_nan());
+    // Inside the real interior blob: interpolation is unaffected.
+    let got = interp.interpolate(&[2.5, 2.5]).unwrap();
+    assert!(got.is_finite(), "expected a finite value, got {got}");
+}
+
+#[test]
 fn grid_transform_reciprocal_rejects_nan_query() {
     // `x != 0` alone accepts NaN (`NaN != 0.0` is `true` in IEEE 754), unlike `Log`'s
     // `x > 0`/`Sqrt`'s `x >= 0`, which are `false` for NaN and so already exclude it.
