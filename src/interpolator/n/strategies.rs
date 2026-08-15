@@ -409,6 +409,14 @@ where
             .batch_interpolate_into(&view, &transformed_refs, out)
     }
 
+    /// Delegates to the inherent [`GridTransform::check_batch_domain`], the same
+    /// aggregating check `batch_interpolate_into` already runs; exposed here so
+    /// generic callers (e.g. `Extrapolate::Wrap`'s batch dispatch) can pre-scan a
+    /// batch without knowing the concrete strategy type.
+    fn check_batch_domain(&self, points: &[&[D::Elem]]) -> Result<(), InterpolateError> {
+        GridTransform::check_batch_domain(self, points.iter().copied())
+    }
+
     fn allow_extrapolate(&self) -> bool {
         self.inner.allow_extrapolate()
     }
@@ -482,6 +490,38 @@ where
         };
         let result = self.inner.interpolate_fast(&view, point);
         self.transform.inverse(result)
+    }
+
+    /// Delegates the whole batch to `inner` via a transient view over `values_cache`,
+    /// so a nested `GridTransform`'s batch-domain aggregation isn't lost to the
+    /// point-by-point default; inverse-transforms every output afterward.
+    fn batch_interpolate_into(
+        &self,
+        data: &InterpDataNDBase<D>,
+        points: &[&[D::Elem]],
+        out: &mut [D::Elem],
+    ) -> Result<(), InterpolateError> {
+        if out.len() != points.len() {
+            return Err(InterpolateError::OutputLength {
+                expected: points.len(),
+                found: out.len(),
+            });
+        }
+        let view = InterpDataNDView {
+            grid: data.grid.iter().map(|g| g.view()).collect(),
+            values: self.values_cache.view(),
+        };
+        self.inner.batch_interpolate_into(&view, points, out)?;
+        for o in out.iter_mut() {
+            *o = self.transform.inverse(*o);
+        }
+        Ok(())
+    }
+
+    /// Forwards to `inner`, so a nested `GridTransform`'s domain is still checked
+    /// through a wrapping `ValuesTransform`.
+    fn check_batch_domain(&self, points: &[&[D::Elem]]) -> Result<(), InterpolateError> {
+        self.inner.check_batch_domain(points)
     }
 
     fn allow_extrapolate(&self) -> bool {

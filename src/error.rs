@@ -292,7 +292,7 @@ fn fmt_outside_domain(failures: &[OutsideDomainAt]) -> String {
             } else {
                 "point"
             };
-            let mut s = format!("GridTransform: {subject} outside their transform's domain:");
+            let mut s = format!("GridTransform: {subject} outside transform's domain:");
             for at in many {
                 s.push_str(&format!(
                     "\n    {} in dim {} ({:?}'s domain)",

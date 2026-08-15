@@ -110,7 +110,14 @@ Everything below is merged to `main` but not yet tagged/released.
   point outside a transform's domain under `Extrapolate::Enable`, catching what would
   otherwise silently `ln()` into `NaN`; one entry per offending point coordinate,
   aggregated across a whole `batch_interpolate`/`batch_interpolate_into` call rather than
-  erroring on the first one, mirroring `InterpolateError::OutOfBounds`. Closes #56.
+  erroring on the first one, mirroring `InterpolateError::OutOfBounds`. New
+  `Strategy1D`/`2D`/`3D`/`ND::check_batch_domain`: pre-scans a batch for domain
+  violations before doing any actual interpolation work. Default no-op; `GridTransform`
+  overrides it and `ValuesTransform` forwards to `inner`. Lets `Extrapolate::Wrap`'s
+  per-point dispatch (which can't reach `batch_interpolate_into`'s own aggregation,
+  since which points wrap vs. interpolate normally is decided per point) still
+  aggregate every domain violation across the whole batch instead of erroring on the
+  first one. Closes #56.
 - `strategy_enum_impl!`'s generated `Strategy*DEnum` impl now forwards every
   `Strategy1D`/`2D`/`3D`/`ND` method (previously only `validate`/`init`/`interpolate`/
   `allow_extrapolate`), so a strategy overriding `interpolate_wrapped` or the batch

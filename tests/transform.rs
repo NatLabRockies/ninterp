@@ -211,6 +211,28 @@ fn grid_transform_reciprocal_rejects_sign_crossing_grid() {
 }
 
 #[test]
+fn grid_transform_reciprocal_rejects_equal_transformed_coordinates() {
+    // Distinct subnormal-magnitude grid coordinates can both overflow to
+    // `f64::INFINITY` under `Reciprocal`, producing two *equal* transformed
+    // coordinates even though the raw grid is strictly increasing and every
+    // coordinate individually passes the `x != 0` domain check. The
+    // decreasing-transform branch of the monotonicity check must reject that (not
+    // just a transformed increase), or a zero-width interval reaches the inner
+    // strategy.
+    let x = array![1e-320, 2e-320, 3., 4.];
+    let y = array![10., 20., 30., 40.];
+    let interp = Interp1D::new(x, y, GridTransform::reciprocal(Linear), Extrapolate::Error);
+    assert!(matches!(
+        interp.unwrap_err(),
+        ValidateError::GridTransformNotMonotonic {
+            transform: Transform::Reciprocal,
+            dim: 0,
+            index: 1,
+        }
+    ));
+}
+
+#[test]
 fn grid_transform_domain_violation_at_query_time_under_enable() {
     // Without the query-time check, `Extrapolate::Enable` pushing the query below
     // `Log`'s domain would silently `ln()` into `NaN` instead of a clear error.
@@ -364,6 +386,80 @@ fn grid_transform_batch_domain_violations_all_reported() {
     };
     assert_eq!(failures.len(), 3);
     for (failure, expected_index) in failures.iter().zip([0, 2, 3]) {
+        assert!(matches!(
+            failure,
+            OutsideDomainAt {
+                index,
+                dim: 0,
+                transform: Transform::Log,
+                ..
+            } if *index == expected_index
+        ));
+    }
+}
+
+#[test]
+fn grid_transform_wrap_batch_domain_violations_all_reported() {
+    // The `Extrapolate::Wrap` batch dispatch can't reach `GridTransform`'s own
+    // aggregating `batch_interpolate_into` (which point wraps vs. interpolates
+    // normally is decided per point), so it pre-scans with `check_batch_domain`
+    // instead: query 0 and 2 both violate `Log`'s domain (`x > 0`), and both must be
+    // reported, not just the first.
+    let x = array![1., 2., 3., 4.];
+    let y = array![1., 2., 3., 4.];
+    let interp = Interp1D::new(x, y, GridTransform::log(Linear), Extrapolate::Wrap).unwrap();
+
+    let points = [[-1.], [2.5], [-3.], [10.]];
+    let mut out = [0.; 4];
+    let err = interp
+        .batch_interpolate_into(&points, &mut out)
+        .unwrap_err();
+    let InterpolateError::GridTransformDomain(failures) = &err else {
+        panic!("expected GridTransformDomain, got {err:?}");
+    };
+    assert_eq!(failures.len(), 2);
+    for (failure, expected_index) in failures.iter().zip([0, 2]) {
+        assert!(matches!(
+            failure,
+            OutsideDomainAt {
+                index,
+                dim: 0,
+                transform: Transform::Log,
+                ..
+            } if *index == expected_index
+        ));
+    }
+}
+
+#[test]
+fn grid_transform_nd_wrap_batch_domain_violations_all_reported() {
+    // Same as `grid_transform_wrap_batch_domain_violations_all_reported`, but for
+    // `InterpND`, which implements `batch_interpolate_into`'s `Extrapolate::Wrap` arm
+    // by hand rather than through the macro shared by `Interp1D`/`2D`/`3D`.
+    let x = array![1., 2., 3., 4.];
+    let y = x.mapv(|v: f64| v.ln());
+    let interp = InterpND::new(
+        vec![x],
+        y.into_dyn(),
+        GridTransform::log(Linear),
+        Extrapolate::Wrap,
+    )
+    .unwrap();
+
+    let p0 = [-1.];
+    let p1 = [2.5];
+    let p2 = [-3.];
+    let p3 = [10.];
+    let points: [&[f64]; 4] = [&p0, &p1, &p2, &p3];
+    let mut out = [0.; 4];
+    let err = interp
+        .batch_interpolate_into(&points, &mut out)
+        .unwrap_err();
+    let InterpolateError::GridTransformDomain(failures) = &err else {
+        panic!("expected GridTransformDomain, got {err:?}");
+    };
+    assert_eq!(failures.len(), 2);
+    for (failure, expected_index) in failures.iter().zip([0, 2]) {
         assert!(matches!(
             failure,
             OutsideDomainAt {

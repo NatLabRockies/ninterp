@@ -246,7 +246,12 @@ impl<T: Float, S> GridTransform<T, S> {
             }
             let fx = transform.forward(x);
             if let Some(&prev) = transformed.last() {
-                if (fx > prev) != transform.is_increasing() {
+                let ordered = if transform.is_increasing() {
+                    fx > prev
+                } else {
+                    fx < prev
+                };
+                if !ordered {
                     return Err(ValidateError::GridTransformNotMonotonic {
                         transform,
                         dim,

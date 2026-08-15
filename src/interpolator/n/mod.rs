@@ -454,6 +454,13 @@ where
                 // points go through it; `wrap()` isn't identity exactly at the
                 // boundary, so an in-bounds point must still take the plain
                 // `interpolate` path.
+                //
+                // Pre-scans the whole batch for domain violations before doing any
+                // actual interpolation work, so a nested `GridTransform`'s
+                // aggregation isn't lost to this per-point dispatch (it can't use
+                // `batch_interpolate_into` directly: which points wrap and which
+                // interpolate normally is decided per point).
+                self.strategy.check_batch_domain(points)?;
                 for (o, &point) in out.iter_mut().zip(points) {
                     *o = if out_of_bounds(&self.data.grid, point) {
                         self.strategy.interpolate_wrapped(&self.data, point)?
