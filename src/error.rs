@@ -6,16 +6,21 @@ use thiserror::Error;
 use crate::strategy::Transform;
 
 /// Error in interpolator data validation
-#[allow(missing_docs)]
 #[derive(Error, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum ValidateError {
+    /// The strategy's [`allow_extrapolate`](crate::strategy::traits::Strategy1D::allow_extrapolate)
+    /// returns `false`, so `Extrapolate::Enable` isn't supported by it.
     #[error("`Extrapolate::Enable` is not supported by this strategy")]
     ExtrapolateUnsupported,
 
+    /// A grid axis has fewer than the 2 points every strategy needs. The `usize` is
+    /// the offending dimension.
     #[error("at least 2 grid points are required per dimension: dim {0}")]
     InsufficientGridPoints(usize),
 
+    /// A grid axis isn't strictly increasing. The `usize` is the offending
+    /// dimension.
     #[error("supplied coordinates must be strictly increasing: dim {0}")]
     NotStrictlyIncreasing(usize),
 
@@ -26,8 +31,16 @@ pub enum ValidateError {
     /// `index` is the first coordinate whose following interval, `grid[index + 1] -
     /// grid[index]`, differs from the grid's first interval, in either direction.
     #[error("grid[{dim}] is not uniformly spaced (spacing changes at index {index})")]
-    NonUniform { dim: usize, index: usize },
+    NonUniform {
+        /// The axis that isn't uniformly spaced.
+        dim: usize,
+        /// The first coordinate whose following interval differs from the grid's
+        /// first interval.
+        index: usize,
+    },
 
+    /// The supplied grid and values don't have compatible shapes. The `usize` is the
+    /// offending dimension.
     #[error("supplied grid and values are not compatible shapes: dim {0}")]
     IncompatibleShapes(usize),
 
@@ -35,7 +48,12 @@ pub enum ValidateError {
     /// for `InterpDataND`, whose axis count isn't fixed by the type. Distinct from
     /// [`ValidateError::IncompatibleShapes`], which compares extents within one axis.
     #[error("grid has {found} axes, expected {expected} to match the values")]
-    GridAxisCount { expected: usize, found: usize },
+    GridAxisCount {
+        /// Number of axes `values`'s own dimensionality requires.
+        expected: usize,
+        /// Number of grid axes actually supplied.
+        found: usize,
+    },
 
     /// Raised by [`crate::strategy::broadcast::Broadcastable::validate_len`], so any
     /// strategy built on [`crate::strategy::broadcast::Broadcastable`] reports a
@@ -44,9 +62,13 @@ pub enum ValidateError {
     /// counted (e.g. `"directions"`).
     #[error("{label} has {found} {noun} but interpolator is {ndim}-D (expected {ndim})")]
     PerAxisLen {
+        /// Name of the strategy that raised this, e.g. `"Step"`.
         label: &'static str,
+        /// What's being counted, e.g. `"directions"`.
         noun: &'static str,
+        /// The interpolator's dimensionality.
         ndim: usize,
+        /// How many entries were actually supplied.
         found: usize,
     },
 
@@ -56,8 +78,11 @@ pub enum ValidateError {
     /// position within `grid[dim]`, mirroring [`ValidateError::NonUniform`].
     #[error("GridTransform: grid[{dim}][{index}] is outside {transform:?}'s domain")]
     GridTransformDomain {
+        /// The transform whose domain was violated.
         transform: Transform,
+        /// The axis the offending coordinate is on.
         dim: usize,
+        /// The offending coordinate's position within `grid[dim]`.
         index: usize,
     },
 
@@ -74,8 +99,11 @@ pub enum ValidateError {
          (direction changes at index {index})"
     )]
     GridTransformNotMonotonic {
+        /// The transform under which `grid[dim]` isn't monotonic.
         transform: Transform,
+        /// The axis that isn't monotonic under `transform`.
         dim: usize,
+        /// The first position where the transformed direction breaks.
         index: usize,
     },
 
@@ -87,7 +115,9 @@ pub enum ValidateError {
         fmt_values_index(index)
     )]
     ValuesTransformDomain {
+        /// The transform whose domain was violated.
         transform: Transform,
+        /// The offending element's position in `values`, e.g. `[6, 153, 2]`.
         index: Vec<usize>,
     },
 
@@ -104,7 +134,6 @@ impl fmt::Debug for ValidateError {
 }
 
 /// Error in interpolation call
-#[allow(missing_docs)]
 #[derive(Error, Clone, PartialEq)]
 #[non_exhaustive]
 pub enum InterpolateError {
@@ -116,12 +145,21 @@ pub enum InterpolateError {
     /// One entry per point whose length didn't match the interpolator's dimensionality.
     #[error("{}", fmt_point_length(*expected, failures))]
     PointLength {
+        /// The dimensionality every point must match.
         expected: usize,
+        /// One entry per point with the wrong length.
         failures: Vec<WrongLengthAt>,
     },
 
+    /// The output slice passed to a `*_into` batch call doesn't have the same length
+    /// as the points slice.
     #[error("output slice has length {found}, expected {expected}")]
-    OutputLength { expected: usize, found: usize },
+    OutputLength {
+        /// Length the output slice needed to be: the number of points.
+        expected: usize,
+        /// Length the output slice actually was.
+        found: usize,
+    },
 
     /// A query point coordinate lies outside `transform`'s valid domain (see
     /// [`Transform::in_domain`]), checked by [`crate::strategy::GridTransform`]
@@ -129,8 +167,15 @@ pub enum InterpolateError {
     /// `Extrapolate::Enable` pushing a query below e.g. [`Transform::Log`]'s lower
     /// bound would silently produce `NaN` instead of a clear error.
     #[error("GridTransform: point[{dim}] is outside {transform:?}'s domain")]
-    GridTransformDomain { transform: Transform, dim: usize },
+    GridTransformDomain {
+        /// The transform whose domain was violated.
+        transform: Transform,
+        /// The axis the offending point coordinate is on.
+        dim: usize,
+    },
 
+    /// Escape hatch for conditions this crate doesn't model, chiefly custom
+    /// strategies' own fallible work.
     #[error("{0}")]
     Other(String),
 }
