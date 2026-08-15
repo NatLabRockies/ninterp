@@ -276,6 +276,61 @@ fn grid_transform_wrap_out_of_domain_point_errors_not_nan() {
 }
 
 #[test]
+fn grid_transform_batch_wrap_matches_single_point() {
+    // `batch_interpolate`/`batch_interpolate_into`'s `Extrapolate::Wrap` arm used to
+    // wrap in the *raw* grid's coordinate space directly, bypassing
+    // `interpolate_wrapped` entirely, unlike the single-point `interpolate` path
+    // (which has always gone through `interpolate_wrapped`). Wrapping doesn't
+    // commute with a nonlinear transform, so this silently gave batch calls a
+    // different (wrong) answer from the single-point call for the exact same query.
+    let x = array![1., 2., 4., 8., 16.];
+    let y = array![1., 2., 4., 8., 1.];
+    let interp = Interp1D::new(
+        x,
+        y,
+        GridTransform::log(CubicC2::periodic()),
+        Extrapolate::Wrap,
+    )
+    .unwrap();
+
+    for query in [20.0_f64, 32., 0.5, 4.] {
+        let single = interp.interpolate(&[query]).unwrap();
+        let batch = interp.batch_interpolate(&[[query]]).unwrap()[0];
+        assert!(
+            (single - batch).abs() < 1e-9,
+            "query={query}: single={single}, batch={batch}"
+        );
+    }
+}
+
+#[test]
+fn grid_transform_nd_batch_wrap_matches_single_point() {
+    // Same as `grid_transform_batch_wrap_matches_single_point`, but for `InterpND`,
+    // which implements `batch_interpolate_into` by hand rather than through the
+    // macro shared by `Interp1D`/`2D`/`3D`, and had the identical bug independently.
+    let x = array![1., 2., 4., 8., 16.];
+    let y = x.mapv(|v: f64| v.ln());
+
+    let interp = InterpND::new(
+        vec![x],
+        y.into_dyn(),
+        GridTransform::log(CubicC2::periodic()),
+        Extrapolate::Wrap,
+    )
+    .unwrap();
+
+    for query in [20.0_f64, 32., 0.5, 4.] {
+        let single = interp.interpolate(&[query]).unwrap();
+        let point = [query];
+        let batch = interp.batch_interpolate(&[&point[..]]).unwrap()[0];
+        assert!(
+            (single - batch).abs() < 1e-9,
+            "query={query}: single={single}, batch={batch}"
+        );
+    }
+}
+
+#[test]
 fn grid_transform_clamp_and_fill() {
     let x = array![1., 2., 4., 8., 16.];
     let y = array![1., 4., 16., 64., 256.];
