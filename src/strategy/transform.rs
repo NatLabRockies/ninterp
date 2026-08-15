@@ -149,7 +149,8 @@ fn empty_cache<T>() -> ArrayD<T> {
 )]
 pub struct GridTransform<T, S> {
     /// Transform applied to each grid axis, one per dimension or a single entry
-    /// broadcast to all.
+    /// broadcast to all. Serializes as `grid_transform`.
+    #[cfg_attr(feature = "serde", serde(rename = "grid_transform"))]
     pub axes: Broadcastable<Transform>,
     /// Wrapped strategy, evaluated in the transformed coordinate space.
     pub inner: S,
@@ -363,7 +364,8 @@ impl<T: Float, S> GridTransform<T, S> {
     ))
 )]
 pub struct ValuesTransform<T, S> {
-    /// Transform applied to `values`.
+    /// Transform applied to `values`. Serializes as `values_transform`.
+    #[cfg_attr(feature = "serde", serde(rename = "values_transform"))]
     pub transform: Transform,
     /// Wrapped strategy, evaluated against transformed values.
     pub inner: S,
