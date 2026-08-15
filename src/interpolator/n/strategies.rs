@@ -415,28 +415,52 @@ where
             .batch_interpolate_into(&view, &transformed_refs, out)
     }
 
-    /// Checks this layer's own domain via the inherent
-    /// `GridTransform::check_batch_domain` (the same aggregating check
-    /// `batch_interpolate_into` already runs), then recurses into `inner` with the
-    /// forward-transformed batch, so a `GridTransform` nested inside another one
-    /// still gets pre-scanned; exposed here so generic callers (e.g.
-    /// `Extrapolate::Wrap`'s batch dispatch) can pre-scan a batch without knowing
-    /// the concrete strategy type.
+    /// Checks this layer's own domain per point (not bailing on the first violation),
+    /// then recurses into `inner` with only the *outer-valid* points' forward
+    /// transforms, remapping `inner`'s failure indices back to their true batch
+    /// position: an outer-invalid point can't be forward-transformed meaningfully, but
+    /// its presence must not hide `inner`'s own violations for the *other* points, so
+    /// a `GridTransform` nested inside another one still gets every one of its
+    /// violations aggregated, not just the outer layer's. Exposed here so generic
+    /// callers (e.g. `Extrapolate::Wrap`'s batch dispatch) can pre-scan a batch
+    /// without knowing the concrete strategy type.
     fn check_batch_domain(&self, points: &[&[D::Elem]]) -> Result<(), InterpolateError> {
-        GridTransform::check_batch_domain(self, points.iter().copied())?;
-        let transformed_points: Vec<Vec<D::Elem>> = points
-            .iter()
-            .map(|point| {
-                point
-                    .iter()
-                    .enumerate()
-                    .map(|(dim, &x)| self.transforms[dim].forward(x))
-                    .collect()
-            })
-            .collect();
+        let mut failures = Vec::new();
+        let mut valid_indices = Vec::new();
+        let mut transformed_points: Vec<Vec<D::Elem>> = Vec::new();
+        for (index, &point) in points.iter().enumerate() {
+            let point_failures = self.point_domain_failures(index, point);
+            if point_failures.is_empty() {
+                valid_indices.push(index);
+                transformed_points.push(
+                    point
+                        .iter()
+                        .enumerate()
+                        .map(|(dim, &x)| self.transforms[dim].forward(x))
+                        .collect(),
+                );
+            } else {
+                failures.extend(point_failures);
+            }
+        }
         let transformed_refs: Vec<&[D::Elem]> =
             transformed_points.iter().map(Vec::as_slice).collect();
-        self.inner.check_batch_domain(&transformed_refs)
+        match self.inner.check_batch_domain(&transformed_refs) {
+            Ok(()) => {}
+            Err(InterpolateError::GridTransformDomain(inner_failures)) => {
+                failures.extend(inner_failures.into_iter().map(|f| OutsideDomainAt {
+                    index: valid_indices[f.index],
+                    ..f
+                }));
+            }
+            Err(other) => return Err(other),
+        }
+        failures.sort_by_key(|f| (f.index, f.dim));
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(InterpolateError::GridTransformDomain(failures))
+        }
     }
 
     fn allow_extrapolate(&self) -> bool {

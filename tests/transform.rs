@@ -263,6 +263,33 @@ fn values_transform_domain_violation_at_construction() {
 }
 
 #[test]
+fn grid_transform_reciprocal_rejects_nan_query() {
+    // `x != 0` alone accepts NaN (`NaN != 0.0` is `true` in IEEE 754), unlike `Log`'s
+    // `x > 0`/`Sqrt`'s `x >= 0`, which are `false` for NaN and so already exclude it.
+    // Without excluding NaN explicitly, a NaN query would pass this domain check,
+    // `forward()` to NaN via `recip()`, and panic deep in grid search instead of
+    // returning a clear domain error.
+    let x = array![1., 2., 4., 8.];
+    let y = array![1., 2., 4., 8.];
+    let interp =
+        Interp1D::new(x, y, GridTransform::reciprocal(Linear), Extrapolate::Enable).unwrap();
+    let err = interp.interpolate(&[f64::NAN]).unwrap_err();
+    let InterpolateError::GridTransformDomain(failures) = &err else {
+        panic!("expected GridTransformDomain, got {err:?}");
+    };
+    assert_eq!(failures.len(), 1);
+    assert!(matches!(
+        failures[0],
+        OutsideDomainAt {
+            index: 0,
+            dim: 0,
+            transform: Transform::Reciprocal,
+            ..
+        }
+    ));
+}
+
+#[test]
 fn grid_transform_reciprocal_rejects_sign_crossing_grid() {
     // `Reciprocal`'s domain (`x != 0`) is two disconnected pieces, and `1/x` is only
     // decreasing *within* each piece, not across the gap between them. A raw grid
@@ -579,6 +606,50 @@ fn grid_transform_nested_wrap_batch_domain_violations_all_reported() {
                 transform: Transform::Log,
                 ..
             } if *index == expected_index
+        ));
+    }
+}
+
+#[test]
+fn grid_transform_nested_wrap_batch_reports_outer_and_inner_violations_together() {
+    // Bailing out of the outer `Sqrt` layer's own domain check (via `?`) as soon as it
+    // finds *any* violation, before ever recursing into `inner`, would hide `Log`'s own
+    // violations for the *other* points in the same batch entirely (not just mislabel
+    // them): a batch with an outer (`Sqrt`) violation at one point and an inner
+    // (`Log`, once sqrt-transformed) violation at a different point must report both.
+    let x = array![1., 2., 3., 4.];
+    let y = array![1., 2., 3., 4.];
+    let interp = Interp1D::new(
+        x,
+        y,
+        GridTransform::sqrt(GridTransform::log(Linear)),
+        Extrapolate::Wrap,
+    )
+    .unwrap();
+
+    // index 0: -1. violates outer Sqrt (x >= 0).
+    // index 1: 0. passes outer Sqrt but violates inner Log once sqrt-transformed
+    //          (sqrt(0.) == 0., not > 0.).
+    // index 2: 4. valid all the way through.
+    // index 3: -5. violates outer Sqrt again.
+    let points = [[-1.], [0.], [4.], [-5.]];
+    let mut out = [0.; 4];
+    let err = interp
+        .batch_interpolate_into(&points, &mut out)
+        .unwrap_err();
+    let InterpolateError::GridTransformDomain(failures) = &err else {
+        panic!("expected GridTransformDomain, got {err:?}");
+    };
+    assert_eq!(failures.len(), 3);
+    for (failure, (expected_index, expected_transform)) in failures.iter().zip([
+        (0, Transform::Sqrt),
+        (1, Transform::Log),
+        (3, Transform::Sqrt),
+    ]) {
+        assert!(matches!(
+            failure,
+            OutsideDomainAt { index, dim: 0, transform, .. }
+            if *index == expected_index && *transform == expected_transform
         ));
     }
 }

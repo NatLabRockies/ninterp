@@ -71,7 +71,10 @@ impl Transform {
             Transform::Identity => true,
             Transform::Log => x > T::zero(),
             Transform::Sqrt => x >= T::zero(),
-            Transform::Reciprocal => x != T::zero(),
+            // `x != 0` alone would accept NaN (IEEE 754: `NaN != 0.0` is `true`,
+            // unlike the `>`/`>=` comparisons above, which are `false` for NaN and so
+            // already exclude it); reject it explicitly here too.
+            Transform::Reciprocal => !x.is_nan() && x != T::zero(),
         }
     }
 
