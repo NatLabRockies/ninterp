@@ -156,13 +156,6 @@ impl<T> CubicC2BoundaryConditions<T> {
     }
 }
 
-/// Placeholder for [`CubicC2::cache`] before [`Strategy1D::init`]/`2D`/`3D`/`ND`
-/// populates it. No `T: Clone + Zero` bound needed (unlike `ArrayD::zeros`), so the
-/// constructors below stay unconstrained.
-fn empty_cache<T>() -> ArrayD<T> {
-    ArrayD::from_shape_vec(IxDyn(&[0]), Vec::new()).expect("empty shape matches empty vec")
-}
-
 impl<T> From<CubicC2BoundaryConditions<T>> for CubicC2<T> {
     /// Broadcasts `bc` to all dimensions.
     ///

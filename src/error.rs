@@ -222,11 +222,7 @@ pub struct OutsideDomainAt {
 
 /// Renders a values-array index as `values[i][j][k]`, e.g. `values[6][153][2]`.
 fn fmt_values_index(index: &[usize]) -> String {
-    let mut s = String::from("");
-    for i in index {
-        s.push_str(&format!("[{i}]"));
-    }
-    s
+    index.iter().map(|i| format!("[{i}]")).collect()
 }
 
 /// Renders `point`, or `point[i]` when there is anything to disambiguate. Every
@@ -263,15 +259,14 @@ fn fmt_out_of_bounds(failures: &[OutOfBoundsAt]) -> String {
             } else {
                 "point"
             };
-            let mut s = format!("{subject} out of bounds with `Extrapolate::Error` set:");
-            for at in many {
-                s.push_str(&format!(
-                    "\n    {} in dim {}",
-                    point_at(at.index, show),
-                    at.dim
-                ));
-            }
-            s
+            core::iter::once(format!(
+                "{subject} out of bounds with `Extrapolate::Error` set:"
+            ))
+            .chain(
+                many.iter()
+                    .map(|at| format!("\n    {} in dim {}", point_at(at.index, show), at.dim)),
+            )
+            .collect()
         }
     }
 }
@@ -292,16 +287,18 @@ fn fmt_outside_domain(failures: &[OutsideDomainAt]) -> String {
             } else {
                 "point"
             };
-            let mut s = format!("GridTransform: {subject} outside transform's domain:");
-            for at in many {
-                s.push_str(&format!(
+            core::iter::once(format!(
+                "GridTransform: {subject} outside transform's domain:"
+            ))
+            .chain(many.iter().map(|at| {
+                format!(
                     "\n    {} in dim {} ({:?}'s domain)",
                     point_at(at.index, show),
                     at.dim,
                     at.transform
-                ));
-            }
-            s
+                )
+            }))
+            .collect()
         }
     }
 }
@@ -318,15 +315,15 @@ fn fmt_point_length(expected: usize, failures: &[WrongLengthAt]) -> String {
         many => {
             // Unlike out-of-bounds, each failure here is a distinct point, so reaching
             // this arm always means more than one.
-            let mut s = format!("points have the wrong length for {expected}-D interpolation:");
-            for at in many {
-                s.push_str(&format!(
-                    "\n    {} has length {}",
-                    point_at(at.index, show),
-                    at.found
-                ));
-            }
-            s
+            core::iter::once(format!(
+                "points have the wrong length for {expected}-D interpolation:"
+            ))
+            .chain(
+                many.iter().map(|at| {
+                    format!("\n    {} has length {}", point_at(at.index, show), at.found)
+                }),
+            )
+            .collect()
         }
     }
 }
