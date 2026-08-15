@@ -262,15 +262,61 @@ impl<T: Float, S> GridTransform<T, S> {
         Ok(transformed)
     }
 
-    /// Domain-checks `point` against each axis's configured transform.
+    /// Domain-checks every axis of `point` (batch position `index`), collecting
+    /// every violation instead of stopping at the first. Shared by
+    /// [`check_point_domain`](Self::check_point_domain) (`index` fixed at 0) and
+    /// [`check_batch_domain`](Self::check_batch_domain) across all four
+    /// dimensionalities.
+    pub(crate) fn point_domain_failures(&self, index: usize, point: &[T]) -> Vec<OutsideDomainAt> {
+        point
+            .iter()
+            .enumerate()
+            .filter_map(|(dim, &x)| {
+                let transform = self.axes[dim];
+                (!transform.in_domain(x)).then_some(OutsideDomainAt {
+                    index,
+                    dim,
+                    transform,
+                })
+            })
+            .collect()
+    }
+
+    /// Domain-checks `point` against each axis's configured transform, aggregating
+    /// every violating dimension (not just the first) into one
+    /// [`InterpolateError::GridTransformDomain`], mirroring how `Extrapolate::Error`
+    /// aggregates `OutOfBoundsAt` failures across every dimension of a point.
     pub(crate) fn check_point_domain(&self, point: &[T]) -> Result<(), InterpolateError> {
-        for (dim, &x) in point.iter().enumerate() {
-            let transform = self.axes[dim];
-            if !transform.in_domain(x) {
-                return Err(InterpolateError::GridTransformDomain { transform, dim });
-            }
+        let failures = self.point_domain_failures(0, point);
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(InterpolateError::GridTransformDomain(failures))
         }
-        Ok(())
+    }
+
+    /// Domain-checks every point in a batch, aggregating every violation across the
+    /// *whole batch* (not just the first point) into one
+    /// [`InterpolateError::GridTransformDomain`], mirroring how `Extrapolate::Error`
+    /// aggregates `OutOfBoundsAt` failures across a whole batch instead of erroring
+    /// on the first out-of-bounds point. Shared by `batch_interpolate_into` across
+    /// all four dimensionalities.
+    pub(crate) fn check_batch_domain<'p>(
+        &self,
+        points: impl Iterator<Item = &'p [T]>,
+    ) -> Result<(), InterpolateError>
+    where
+        T: 'p,
+    {
+        let failures: Vec<OutsideDomainAt> = points
+            .enumerate()
+            .flat_map(|(index, point)| self.point_domain_failures(index, point))
+            .collect();
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(InterpolateError::GridTransformDomain(failures))
+        }
     }
 
     /// Forward-transforms `x` on axis `dim` and wraps it against `grid_cache[dim]`'s

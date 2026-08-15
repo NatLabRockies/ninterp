@@ -161,18 +161,15 @@ pub enum InterpolateError {
         found: usize,
     },
 
-    /// A query point coordinate lies outside `transform`'s valid domain (see
-    /// [`Transform::in_domain`]), checked by [`crate::strategy::GridTransform`]
-    /// before its own [`Transform::forward`] call: without this,
-    /// `Extrapolate::Enable` pushing a query below e.g. [`Transform::Log`]'s lower
-    /// bound would silently produce `NaN` instead of a clear error.
-    #[error("GridTransform: point[{dim}] is outside {transform:?}'s domain")]
-    GridTransformDomain {
-        /// The transform whose domain was violated.
-        transform: Transform,
-        /// The axis the offending point coordinate is on.
-        dim: usize,
-    },
+    /// One entry per query point coordinate that fell outside its axis's configured
+    /// transform's domain (see [`Transform::in_domain`]), checked by
+    /// [`crate::strategy::GridTransform`] before its own [`Transform::forward`] call:
+    /// without this, `Extrapolate::Enable` pushing a query below e.g.
+    /// [`Transform::Log`]'s lower bound would silently produce `NaN` instead of a
+    /// clear error. A single point out of domain in two dimensions yields two
+    /// entries.
+    #[error("{}", fmt_outside_domain(.0))]
+    GridTransformDomain(Vec<OutsideDomainAt>),
 
     /// Escape hatch for conditions this crate doesn't model, chiefly custom
     /// strategies' own fallible work.
@@ -208,6 +205,19 @@ pub struct WrongLengthAt {
     /// The length it actually had. The expected length is on the variant, shared by
     /// every entry.
     pub found: usize,
+}
+
+/// A query point coordinate outside its axis's transform domain, in
+/// [`InterpolateError::GridTransformDomain`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[non_exhaustive]
+pub struct OutsideDomainAt {
+    /// Position of the point within the batch, or 0 for a single-point call.
+    pub index: usize,
+    /// Dimension whose transform domain the point coordinate violated.
+    pub dim: usize,
+    /// The transform whose domain was violated.
+    pub transform: Transform,
 }
 
 /// Renders a values-array index as `values[i][j][k]`, e.g. `values[6][153][2]`.
@@ -259,6 +269,36 @@ fn fmt_out_of_bounds(failures: &[OutOfBoundsAt]) -> String {
                     "\n    {} in dim {}",
                     point_at(at.index, show),
                     at.dim
+                ));
+            }
+            s
+        }
+    }
+}
+
+/// See [`fmt_out_of_bounds`].
+fn fmt_outside_domain(failures: &[OutsideDomainAt]) -> String {
+    let show = show_index(failures.iter().map(|at| at.index));
+    match failures {
+        [at] => format!(
+            "GridTransform: {} is outside {:?}'s domain in dim {}",
+            point_at(at.index, show),
+            at.transform,
+            at.dim
+        ),
+        many => {
+            let subject = if many.iter().any(|at| at.index != many[0].index) {
+                "points"
+            } else {
+                "point"
+            };
+            let mut s = format!("GridTransform: {subject} outside their transform's domain:");
+            for at in many {
+                s.push_str(&format!(
+                    "\n    {} in dim {} ({:?}'s domain)",
+                    point_at(at.index, show),
+                    at.dim,
+                    at.transform
                 ));
             }
             s

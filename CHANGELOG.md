@@ -100,10 +100,16 @@ Everything below is merged to `main` but not yet tagged/released.
   self-referential size (`Box` around the concrete enum, not `dyn Trait`, so still
   serde-compatible); `Strategy1D`/`2D`/`3D`/`ND` also gain a `Box<Strategy*DEnum<T>>`
   forwarding impl for this. New `ValidateError::GridTransformDomain`/
-  `ValidateError::ValuesTransformDomain`/`InterpolateError::GridTransformDomain`
-  variants for a grid coordinate, data value, or (under `Extrapolate::Enable`) query
-  point outside a transform's domain (e.g. `Log` requires `x > 0`), catching what would
-  otherwise silently `ln()` into `NaN`. Closes #56.
+  `ValidateError::GridTransformNotMonotonic`/`ValidateError::ValuesTransformDomain`
+  variants for a grid coordinate outside a transform's domain (e.g. `Log` requires `x >
+  0`), a raw grid that's non-monotonic once transformed (possible even when every
+  coordinate individually passes the domain check, since a transform's domain can be
+  disconnected, e.g. `Reciprocal`'s `x != 0`), or a data value outside a transform's
+  domain. New `InterpolateError::GridTransformDomain(Vec<OutsideDomainAt>)` for a query
+  point outside a transform's domain under `Extrapolate::Enable`, catching what would
+  otherwise silently `ln()` into `NaN`; one entry per offending point coordinate,
+  aggregated across a whole `batch_interpolate`/`batch_interpolate_into` call rather than
+  erroring on the first one, mirroring `InterpolateError::OutOfBounds`. Closes #56.
 - `strategy_enum_impl!`'s generated `Strategy*DEnum` impl now forwards every
   `Strategy1D`/`2D`/`3D`/`ND` method (previously only `validate`/`init`/`interpolate`/
   `allow_extrapolate`), so a strategy overriding `interpolate_wrapped` or the batch

@@ -5,7 +5,7 @@
 //! composed `ValuesTransform(GridTransform(...))` case.
 
 use ndarray::prelude::*;
-use ninterp::error::{InterpolateError, ValidateError};
+use ninterp::error::{InterpolateError, OutsideDomainAt, ValidateError};
 use ninterp::prelude::*;
 use ninterp::strategy::*;
 
@@ -217,11 +217,18 @@ fn grid_transform_domain_violation_at_query_time_under_enable() {
     let x = array![1., 2., 3., 4.];
     let y = array![1., 2., 3., 4.];
     let interp = Interp1D::new(x, y, GridTransform::log(Linear), Extrapolate::Enable).unwrap();
+    let err = interp.interpolate(&[-1.]).unwrap_err();
+    let InterpolateError::GridTransformDomain(failures) = &err else {
+        panic!("expected GridTransformDomain, got {err:?}");
+    };
+    assert_eq!(failures.len(), 1);
     assert!(matches!(
-        interp.interpolate(&[-1.]).unwrap_err(),
-        InterpolateError::GridTransformDomain {
-            transform: Transform::Log,
+        failures[0],
+        OutsideDomainAt {
+            index: 0,
             dim: 0,
+            transform: Transform::Log,
+            ..
         }
     ));
 }
@@ -266,11 +273,18 @@ fn grid_transform_wrap_out_of_domain_point_errors_not_nan() {
         Extrapolate::Wrap,
     )
     .unwrap();
+    let err = interp.interpolate(&[-5.]).unwrap_err();
+    let InterpolateError::GridTransformDomain(failures) = &err else {
+        panic!("expected GridTransformDomain, got {err:?}");
+    };
+    assert_eq!(failures.len(), 1);
     assert!(matches!(
-        interp.interpolate(&[-5.]).unwrap_err(),
-        InterpolateError::GridTransformDomain {
-            transform: Transform::Log,
+        failures[0],
+        OutsideDomainAt {
+            index: 0,
             dim: 0,
+            transform: Transform::Log,
+            ..
         }
     ));
 }
@@ -327,6 +341,71 @@ fn grid_transform_nd_batch_wrap_matches_single_point() {
             (single - batch).abs() < 1e-9,
             "query={query}: single={single}, batch={batch}"
         );
+    }
+}
+
+#[test]
+fn grid_transform_batch_domain_violations_all_reported() {
+    // `GridTransform::batch_interpolate_into` pre-scans the whole batch and
+    // aggregates every domain violation, rather than the trait default's
+    // short-circuit on the first `interpolate` call: query 1 and 3 both violate
+    // `Log`'s domain (`x > 0`), and both must be reported, not just the first.
+    let x = array![1., 2., 3., 4.];
+    let y = array![1., 2., 3., 4.];
+    let interp = Interp1D::new(x, y, GridTransform::log(Linear), Extrapolate::Enable).unwrap();
+
+    let points = [[-1.], [2.5], [-3.], [0.]];
+    let mut out = [0.; 4];
+    let err = interp
+        .batch_interpolate_into(&points, &mut out)
+        .unwrap_err();
+    let InterpolateError::GridTransformDomain(failures) = &err else {
+        panic!("expected GridTransformDomain, got {err:?}");
+    };
+    assert_eq!(failures.len(), 3);
+    for (failure, expected_index) in failures.iter().zip([0, 2, 3]) {
+        assert!(matches!(
+            failure,
+            OutsideDomainAt {
+                index,
+                dim: 0,
+                transform: Transform::Log,
+                ..
+            } if *index == expected_index
+        ));
+    }
+}
+
+#[test]
+fn grid_transform_batch_domain_violations_multiple_dims_per_point() {
+    // A single point can violate the domain on more than one axis; both must be
+    // reported, mirroring how `Extrapolate::Error` aggregates `OutOfBoundsAt` per
+    // dimension for a single out-of-bounds point.
+    let x = array![1., 2., 3.];
+    let y = array![1., 2., 3.];
+    let f_xy = Array2::from_shape_fn((3, 3), |(i, j)| x[i] + y[j]);
+    let interp =
+        Interp2D::new(x, y, f_xy, GridTransform::log(Linear), Extrapolate::Enable).unwrap();
+
+    let points = [[1.5, 1.5], [-1., -1.]];
+    let mut out = [0.; 2];
+    let err = interp
+        .batch_interpolate_into(&points, &mut out)
+        .unwrap_err();
+    let InterpolateError::GridTransformDomain(failures) = &err else {
+        panic!("expected GridTransformDomain, got {err:?}");
+    };
+    assert_eq!(failures.len(), 2);
+    for (failure, expected_dim) in failures.iter().zip([0, 1]) {
+        assert!(matches!(
+            failure,
+            OutsideDomainAt {
+                index: 1,
+                dim,
+                transform: Transform::Log,
+                ..
+            } if *dim == expected_dim
+        ));
     }
 }
 

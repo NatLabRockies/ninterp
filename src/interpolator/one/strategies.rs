@@ -245,6 +245,36 @@ where
         self.inner.interpolate_fast(&view, &transformed_point)
     }
 
+    /// Domain-checks every point in the batch before transforming, aggregating
+    /// every violation across the *whole batch* into one
+    /// [`InterpolateError::GridTransformDomain`] instead of erroring on the first
+    /// one, mirroring how `Extrapolate::Error` aggregates out-of-bounds points.
+    fn batch_interpolate_into(
+        &self,
+        data: &InterpData1DBase<D>,
+        points: &[[D::Elem; 1]],
+        out: &mut [D::Elem],
+    ) -> Result<(), InterpolateError> {
+        if out.len() != points.len() {
+            return Err(InterpolateError::OutputLength {
+                expected: points.len(),
+                found: out.len(),
+            });
+        }
+        self.check_batch_domain(points.iter().map(|p| p.as_slice()))?;
+        let transformed_points: Vec<[D::Elem; 1]> = points
+            .iter()
+            .map(|point| [self.axes[0].forward(point[0])])
+            .collect();
+        let values = self.transformed_values_view(data.values.view());
+        let view = InterpData1DView {
+            grid: [self.grid_cache[0].view()],
+            values,
+        };
+        self.inner
+            .batch_interpolate_into(&view, &transformed_points, out)
+    }
+
     fn allow_extrapolate(&self) -> bool {
         self.inner.allow_extrapolate()
     }
