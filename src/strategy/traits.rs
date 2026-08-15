@@ -184,8 +184,7 @@ macro_rules! fixed_strategy_trait {
                 "\n",
                 " Default no-op: most strategies accept any `D::Elem`. Override only if `self`\n",
                 " (or a wrapped inner strategy) restricts the domain further, e.g.\n",
-                " [`GridTransform`](crate::strategy::transform::GridTransform)'s configured\n",
-                " [`Transform`](crate::strategy::transform::Transform). Called as a pre-scan\n",
+                " [`GridTransform`]'s configured [`Transform`]. Called as a pre-scan\n",
                 " before doing any actual interpolation work, so it must stay cheap.",
             )]
             fn check_batch_domain(
@@ -495,9 +494,8 @@ where
     ///
     /// Default no-op: most strategies accept any `D::Elem`. Override only if `self`
     /// (or a wrapped inner strategy) restricts the domain further, e.g.
-    /// [`GridTransform`](crate::strategy::transform::GridTransform)'s configured
-    /// [`Transform`](crate::strategy::transform::Transform). Called as a pre-scan
-    /// before doing any actual interpolation work, so it must stay cheap.
+    /// [`GridTransform`]'s configured [`Transform`]. Called as a pre-scan before
+    /// doing any actual interpolation work, so it must stay cheap.
     fn check_batch_domain(&self, _points: &[&[D::Elem]]) -> Result<(), InterpolateError> {
         Ok(())
     }

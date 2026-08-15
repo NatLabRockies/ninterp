@@ -355,7 +355,7 @@ where
             .batch_interpolate_into(&view, &transformed_points, out)
     }
 
-    /// Delegates to the inherent [`GridTransform::check_batch_domain`], the same
+    /// Delegates to the inherent `GridTransform::check_batch_domain`, the same
     /// aggregating check `batch_interpolate_into` already runs; exposed here so
     /// generic callers (e.g. `Extrapolate::Wrap`'s batch dispatch) can pre-scan a
     /// batch without knowing the concrete strategy type.
