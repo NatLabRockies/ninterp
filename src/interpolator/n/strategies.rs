@@ -345,6 +345,32 @@ where
         self.inner.interpolate(&view, &wrapped)
     }
 
+    /// Skips the domain check `interpolate` does, and calls `inner.interpolate_fast`
+    /// rather than `inner.interpolate`, so "fast" propagates through nested
+    /// `GridTransform`/`ValuesTransform` layers instead of stopping at the outermost
+    /// one.
+    ///
+    /// An out-of-domain point is the caller's problem here, same as any other
+    /// unchecked `_fast` method: `forward`-ing it produces `NaN` (`Log`/`Sqrt`) or
+    /// `+-inf` (`Reciprocal`, only at `x == 0`). `NaN` poisons the grid search's
+    /// comparisons and panics; `+-inf` compares normally, so it's treated like an
+    /// ordinary out-of-bounds extrapolation query and silently produces `NaN` output
+    /// instead. Expected, not a bug: check [`Transform::in_domain`] yourself first if
+    /// you need a guarantee either way.
+    fn interpolate_fast(&self, data: &InterpDataNDBase<D>, point: &[D::Elem]) -> D::Elem {
+        let transformed_point: Vec<D::Elem> = point
+            .iter()
+            .enumerate()
+            .map(|(dim, &x)| self.axes[dim].forward(x))
+            .collect();
+        let values = self.transformed_values_view(data.values.view());
+        let view = InterpDataNDView {
+            grid: self.grid_cache.iter().map(|g| g.view()).collect(),
+            values,
+        };
+        self.inner.interpolate_fast(&view, &transformed_point)
+    }
+
     fn allow_extrapolate(&self) -> bool {
         self.inner.allow_extrapolate()
     }
@@ -406,6 +432,18 @@ where
         };
         let result = self.inner.interpolate_wrapped(&view, point)?;
         Ok(self.transform.inverse(result))
+    }
+
+    /// Calls `inner.interpolate_fast` rather than `inner.interpolate`, so "fast"
+    /// propagates through nested `GridTransform`/`ValuesTransform` layers instead of
+    /// stopping at the outermost one.
+    fn interpolate_fast(&self, data: &InterpDataNDBase<D>, point: &[D::Elem]) -> D::Elem {
+        let view = InterpDataNDView {
+            grid: data.grid.iter().map(|g| g.view()).collect(),
+            values: self.values_cache.view(),
+        };
+        let result = self.inner.interpolate_fast(&view, point);
+        self.transform.inverse(result)
     }
 
     fn allow_extrapolate(&self) -> bool {

@@ -43,14 +43,26 @@ pub enum ValidateError {
         ndim: usize,
         found: usize,
     },
-    /// A grid coordinate ([`crate::strategy::GridTransform`]) or data value
-    /// ([`crate::strategy::ValuesTransform`]) lies outside `transform`'s valid
-    /// domain (see [`Transform::in_domain`]). `label` is `"GridTransform"` or
-    /// `"ValuesTransform"`.
-    #[error("{label}: value is outside {transform:?}'s domain")]
-    TransformDomain {
-        label: &'static str,
+    /// A grid coordinate lies outside `transform`'s valid domain (see
+    /// [`Transform::in_domain`]), raised per-axis by
+    /// [`crate::strategy::GridTransform`]. `index` is the offending coordinate's
+    /// position within `grid[dim]`, mirroring [`ValidateError::NonUniform`].
+    #[error("GridTransform: grid[{dim}][{index}] is outside {transform:?}'s domain")]
+    GridTransformDomain {
         transform: Transform,
+        dim: usize,
+        index: usize,
+    },
+    /// A data value lies outside `transform`'s valid domain (see
+    /// [`Transform::in_domain`]), raised by [`crate::strategy::ValuesTransform`].
+    /// `index` is the offending element's position in `values`, e.g. `[6, 153, 2]`.
+    #[error(
+        "ValuesTransform: values{} is outside {transform:?}'s domain",
+        fmt_values_index(index)
+    )]
+    ValuesTransformDomain {
+        transform: Transform,
+        index: Vec<usize>,
     },
     /// Escape hatch for conditions this crate doesn't model, chiefly custom strategies
     /// validating their own configuration.
@@ -85,13 +97,9 @@ pub enum InterpolateError {
     /// [`Transform::in_domain`]), checked by [`crate::strategy::GridTransform`]
     /// before its own [`Transform::forward`] call: without this,
     /// `Extrapolate::Enable` pushing a query below e.g. [`Transform::Log`]'s lower
-    /// bound would silently produce `NaN` instead of a clear error. `label` is
-    /// `"GridTransform"`.
-    #[error("{label}: value is outside {transform:?}'s domain")]
-    TransformDomain {
-        label: &'static str,
-        transform: Transform,
-    },
+    /// bound would silently produce `NaN` instead of a clear error.
+    #[error("GridTransform: point[{dim}] is outside {transform:?}'s domain")]
+    GridTransformDomain { transform: Transform, dim: usize },
     #[error("{0}")]
     Other(String),
 }
@@ -124,6 +132,15 @@ pub struct WrongLengthAt {
     /// The length it actually had. The expected length is on the variant, shared by
     /// every entry.
     pub found: usize,
+}
+
+/// Renders a values-array index as `values[i][j][k]`, e.g. `values[6][153][2]`.
+fn fmt_values_index(index: &[usize]) -> String {
+    let mut s = String::from("");
+    for i in index {
+        s.push_str(&format!("[{i}]"));
+    }
+    s
 }
 
 /// Renders `point`, or `point[i]` when there is anything to disambiguate. Every

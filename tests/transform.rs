@@ -166,9 +166,10 @@ fn grid_transform_domain_violation_at_construction() {
     let interp = Interp1D::new(x, y, GridTransform::log(Linear), Extrapolate::Error);
     assert!(matches!(
         interp.unwrap_err(),
-        ValidateError::TransformDomain {
-            label: "GridTransform",
+        ValidateError::GridTransformDomain {
             transform: Transform::Log,
+            dim: 0,
+            index: 0,
         }
     ));
 }
@@ -180,10 +181,10 @@ fn values_transform_domain_violation_at_construction() {
     let interp = Interp1D::new(x, y, ValuesTransform::log(Linear), Extrapolate::Error);
     assert!(matches!(
         interp.unwrap_err(),
-        ValidateError::TransformDomain {
-            label: "ValuesTransform",
+        ValidateError::ValuesTransformDomain {
             transform: Transform::Log,
-        }
+            index,
+        } if index == [1]
     ));
 }
 
@@ -196,9 +197,9 @@ fn grid_transform_domain_violation_at_query_time_under_enable() {
     let interp = Interp1D::new(x, y, GridTransform::log(Linear), Extrapolate::Enable).unwrap();
     assert!(matches!(
         interp.interpolate(&[-1.]).unwrap_err(),
-        InterpolateError::TransformDomain {
-            label: "GridTransform",
+        InterpolateError::GridTransformDomain {
             transform: Transform::Log,
+            dim: 0,
         }
     ));
 }
@@ -245,9 +246,9 @@ fn grid_transform_wrap_out_of_domain_point_errors_not_nan() {
     .unwrap();
     assert!(matches!(
         interp.interpolate(&[-5.]).unwrap_err(),
-        InterpolateError::TransformDomain {
-            label: "GridTransform",
+        InterpolateError::GridTransformDomain {
             transform: Transform::Log,
+            dim: 0,
         }
     ));
 }

@@ -33,8 +33,8 @@ impl Transform {
     ///
     /// Does not itself check [`Transform::in_domain`]; callers ([`GridTransform`],
     /// [`ValuesTransform`]) check first and return a
-    /// [`ValidateError::TransformDomain`]/[`InterpolateError::TransformDomain`]
-    /// instead of calling this out of domain.
+    /// [`ValidateError::GridTransformDomain`]/[`ValidateError::ValuesTransformDomain`]/
+    /// [`InterpolateError::GridTransformDomain`] instead of calling this out of domain.
     pub fn forward<T: Float>(self, x: T) -> T {
         match self {
             Transform::Identity => x,
@@ -209,11 +209,12 @@ impl<T: Float, S> GridTransform<T, S> {
     ) -> Result<Array1<T>, ValidateError> {
         let transform = self.axes[dim];
         let mut transformed = Vec::with_capacity(grid.len());
-        for &x in grid.iter() {
+        for (index, &x) in grid.iter().enumerate() {
             if !transform.in_domain(x) {
-                return Err(ValidateError::TransformDomain {
-                    label: "GridTransform",
+                return Err(ValidateError::GridTransformDomain {
                     transform,
+                    dim,
+                    index,
                 });
             }
             transformed.push(transform.forward(x));
@@ -230,10 +231,7 @@ impl<T: Float, S> GridTransform<T, S> {
         for (dim, &x) in point.iter().enumerate() {
             let transform = self.axes[dim];
             if !transform.in_domain(x) {
-                return Err(InterpolateError::TransformDomain {
-                    label: "GridTransform",
-                    transform,
-                });
+                return Err(InterpolateError::GridTransformDomain { transform, dim });
             }
         }
         Ok(())
@@ -328,11 +326,12 @@ impl<T: Float, S> ValuesTransform<T, S> {
         values: ArrayView<T, Dim>,
     ) -> Result<Array<T, Dim>, ValidateError> {
         let mut transformed = Vec::with_capacity(values.len());
-        for &v in values.iter() {
+        for (pattern, &v) in indices_of(&values).into_iter().zip(values.iter()) {
             if !self.transform.in_domain(v) {
-                return Err(ValidateError::TransformDomain {
-                    label: "ValuesTransform",
+                let index: Dim = pattern.into_dimension();
+                return Err(ValidateError::ValuesTransformDomain {
                     transform: self.transform,
+                    index: index.slice().to_vec(),
                 });
             }
             transformed.push(self.transform.forward(v));

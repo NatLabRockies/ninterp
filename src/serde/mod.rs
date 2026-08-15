@@ -28,7 +28,7 @@ pub(crate) use ser::{ArrayWrapper, GridArrWrapper, GridVecWrapper};
 /// The public surface, re-exported from [`crate::prelude`].
 pub use ser::{serialize_nested, Nested, SerializeNested};
 
-pub(crate) use ndarray::{DataOwned, IntoDimension};
+pub(crate) use ndarray::DataOwned;
 pub(crate) use serde::ser::{SerializeSeq, SerializeStruct, Serializer};
 pub(crate) use serde::{Deserialize, Serialize};
 pub(crate) use serde_unit_struct::{Deserialize_unit_struct, Serialize_unit_struct};

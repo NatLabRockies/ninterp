@@ -223,6 +223,28 @@ where
         self.inner.interpolate(&view, &wrapped)
     }
 
+    /// Skips the domain check `interpolate` does, and calls `inner.interpolate_fast`
+    /// rather than `inner.interpolate`, so "fast" propagates through nested
+    /// `GridTransform`/`ValuesTransform` layers instead of stopping at the outermost
+    /// one.
+    ///
+    /// An out-of-domain point is the caller's problem here, same as any other
+    /// unchecked `_fast` method: `forward`-ing it produces `NaN` (`Log`/`Sqrt`) or
+    /// `+-inf` (`Reciprocal`, only at `x == 0`). `NaN` poisons the grid search's
+    /// comparisons and panics; `+-inf` compares normally, so it's treated like an
+    /// ordinary out-of-bounds extrapolation query and silently produces `NaN` output
+    /// instead. Expected, not a bug: check [`Transform::in_domain`] yourself first if
+    /// you need a guarantee either way.
+    fn interpolate_fast(&self, data: &InterpData1DBase<D>, point: &[D::Elem; 1]) -> D::Elem {
+        let transformed_point = [self.axes[0].forward(point[0])];
+        let values = self.transformed_values_view(data.values.view());
+        let view = InterpData1DView {
+            grid: [self.grid_cache[0].view()],
+            values,
+        };
+        self.inner.interpolate_fast(&view, &transformed_point)
+    }
+
     fn allow_extrapolate(&self) -> bool {
         self.inner.allow_extrapolate()
     }
@@ -296,6 +318,22 @@ where
         };
         let result = self.inner.interpolate_wrapped(&view, point)?;
         Ok(self.transform.inverse(result))
+    }
+
+    /// Calls `inner.interpolate_fast` rather than `inner.interpolate`, so "fast"
+    /// propagates through nested `GridTransform`/`ValuesTransform` layers instead of
+    /// stopping at the outermost one.
+    fn interpolate_fast(&self, data: &InterpData1DBase<D>, point: &[D::Elem; 1]) -> D::Elem {
+        let view = InterpData1DView {
+            grid: [data.grid[0].view()],
+            values: self
+                .values_cache
+                .view()
+                .into_dimensionality::<Ix1>()
+                .expect("values_cache shape matches 1-D values"),
+        };
+        let result = self.inner.interpolate_fast(&view, point);
+        self.transform.inverse(result)
     }
 
     fn allow_extrapolate(&self) -> bool {

@@ -99,9 +99,10 @@ Everything below is merged to `main` but not yet tagged/released.
   `CubicC2`'s. Included in the `Strategy*Enum` types, with `inner` boxed to break the
   self-referential size (`Box` around the concrete enum, not `dyn Trait`, so still
   serde-compatible); `Strategy1D`/`2D`/`3D`/`ND` also gain a `Box<Strategy*DEnum<T>>`
-  forwarding impl for this. New `ValidateError`/`InterpolateError::TransformDomain`
-  variant for a grid coordinate, data value, or (under `Extrapolate::Enable`) query point
-  outside a transform's domain (e.g. `Log` requires `x > 0`), catching what would
+  forwarding impl for this. New `ValidateError::GridTransformDomain`/
+  `ValidateError::ValuesTransformDomain`/`InterpolateError::GridTransformDomain`
+  variants for a grid coordinate, data value, or (under `Extrapolate::Enable`) query
+  point outside a transform's domain (e.g. `Log` requires `x > 0`), catching what would
   otherwise silently `ln()` into `NaN`. Closes #56.
 - `strategy_enum_impl!`'s generated `Strategy*DEnum` impl now forwards every
   `Strategy1D`/`2D`/`3D`/`ND` method (previously only `validate`/`init`/`interpolate`/
