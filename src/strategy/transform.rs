@@ -66,13 +66,20 @@ impl Transform {
     }
 
     /// Whether `x` is valid input to [`Transform::forward`].
+    ///
+    /// `NaN` is always in-domain: `forward(NaN)` is a clean `NaN` for every variant
+    /// (no panic), so there's no mathematical reason to exclude it here. Callers
+    /// that need to reject NaN for a different reason (e.g. a query point reaching
+    /// the inner strategy's grid search, which panics on NaN comparisons) check
+    /// `x.is_nan()` themselves on top of this.
     pub fn in_domain<T: Float>(self, x: T) -> bool {
-        match self {
-            Transform::Identity => true,
-            Transform::Log => x > T::zero(),
-            Transform::Sqrt => x >= T::zero(),
-            Transform::Reciprocal => x != T::zero(),
-        }
+        x.is_nan()
+            || match self {
+                Transform::Identity => true,
+                Transform::Log => x > T::zero(),
+                Transform::Sqrt => x >= T::zero(),
+                Transform::Reciprocal => x != T::zero(),
+            }
     }
 
     /// Whether `forward` is increasing (vs. decreasing) on its domain.
@@ -274,13 +281,14 @@ impl<T: Float, S> GridTransform<T, S> {
     /// [`check_batch_domain`](Self::check_batch_domain) across all four
     /// dimensionalities.
     ///
-    /// Rejects NaN explicitly here, on top of `transform.in_domain`. `forward(NaN)`
-    /// is a clean `NaN` for every transform (no panic), but a NaN *query point*
-    /// reaching the inner strategy's grid search breaks its comparisons and panics.
-    /// A NaN *grid* coordinate can't reach this far (the raw grid's own
-    /// strictly-increasing check rejects it first), and a NaN *data value* is a
-    /// different, safe case entirely (see [`ValuesTransform::transform_values`]),
-    /// so this check is deliberately scoped to query points only.
+    /// Rejects NaN explicitly here, overriding `transform.in_domain` (which treats
+    /// NaN as in-domain). A NaN *query point* reaching the inner strategy's grid
+    /// search breaks its comparisons and panics, so it can't be let through here the
+    /// way `in_domain` alone would allow. A NaN *grid* coordinate can't reach this
+    /// far (the raw grid's own strictly-increasing check rejects it first), and a
+    /// NaN *data value* is a different, safe case entirely (see
+    /// [`ValuesTransform::transform_values`]), so this override is deliberately
+    /// scoped to query points only.
     pub(crate) fn point_domain_failures(&self, index: usize, point: &[T]) -> Vec<OutsideDomainAt> {
         point
             .iter()
@@ -406,11 +414,11 @@ impl<T: Float, S> ValuesTransform<T, S> {
     /// by `validate` (result discarded) and `init` (result cached into
     /// `values_cache`) across all four dimensionalities.
     ///
-    /// `NaN` values bypass the domain check and forward-transform to `NaN`
-    /// (`forward(NaN)` is a clean `NaN` for every transform, no panic): real
-    /// datasets commonly use `NaN` as a "no data" sentinel for unmeasured grid
-    /// points, and that should propagate through, not fail construction. This is
-    /// unlike a NaN *query point* under `GridTransform`, which is rejected (see
+    /// `NaN` values pass the domain check (`in_domain` treats `NaN` as always
+    /// in-domain) and forward-transform to `NaN` untouched: real datasets commonly
+    /// use `NaN` as a "no data" sentinel for unmeasured grid points, and that should
+    /// propagate through, not fail construction. This is unlike a NaN *query point*
+    /// under `GridTransform`, which is rejected (see
     /// [`GridTransform::point_domain_failures`]) since it would otherwise reach the
     /// inner strategy's grid search and panic there instead.
     pub(crate) fn transform_values<Dim: Dimension>(
@@ -419,7 +427,7 @@ impl<T: Float, S> ValuesTransform<T, S> {
     ) -> Result<Array<T, Dim>, ValidateError> {
         let mut transformed = Vec::with_capacity(values.len());
         for (pattern, &v) in indices_of(&values).into_iter().zip(values.iter()) {
-            if !(v.is_nan() || self.transform.in_domain(v)) {
+            if !self.transform.in_domain(v) {
                 let index: Dim = pattern.into_dimension();
                 return Err(ValidateError::ValuesTransformDomain {
                     transform: self.transform,
@@ -470,6 +478,11 @@ mod tests {
         assert!(!Transform::Reciprocal.in_domain(0.));
         assert!(Transform::Reciprocal.in_domain(-1.));
         assert!(Transform::Reciprocal.in_domain(1.));
+
+        assert!(Transform::Identity.in_domain(f64::NAN));
+        assert!(Transform::Log.in_domain(f64::NAN));
+        assert!(Transform::Sqrt.in_domain(f64::NAN));
+        assert!(Transform::Reciprocal.in_domain(f64::NAN));
     }
 
     #[test]

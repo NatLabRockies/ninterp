@@ -106,11 +106,13 @@ Everything below is merged to `main` but not yet tagged/released.
   0`), a raw grid that's non-monotonic once transformed (possible even when every
   coordinate individually passes the domain check, since a transform's domain can be
   disconnected, e.g. `Reciprocal`'s `x != 0`), or a data value outside a transform's
-  domain. `NaN` is treated differently at the two checkpoints: a `NaN` query point is
-  always rejected (it would otherwise reach the inner strategy's grid search and
-  panic there), but a `NaN` data value passes `ValuesTransform`'s domain check and
-  forward-transforms to `NaN` untouched, so it can still be used as a "no data"
-  sentinel for unmeasured grid points. New
+  domain. `Transform::in_domain` treats `NaN` as in-domain for every variant
+  (`forward(NaN)` is a clean `NaN`, never a panic), but `NaN` is still treated
+  differently at the two domain-check call sites built on top of it: a `NaN` query
+  point is rejected regardless (it would otherwise reach the inner strategy's grid
+  search and panic there), while a `NaN` data value passes `ValuesTransform`'s
+  domain check and forward-transforms to `NaN` untouched, so it can still be used as
+  a "no data" sentinel for unmeasured grid points. New
   `InterpolateError::GridTransformDomain(Vec<OutsideDomainAt>)` for a query
   point outside a transform's domain under `Extrapolate::Enable`, catching what would
   otherwise silently `ln()` into `NaN`; one entry per offending point coordinate,
