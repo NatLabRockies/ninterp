@@ -91,8 +91,8 @@ Everything below is merged to `main` but not yet tagged/released.
   (`Log`, `Sqrt`, `Reciprocal`, or `Identity`) instead of the raw one: standard for data
   spanning many orders of magnitude or following a known nonlinear relationship, and for
   bounding interpolated output (e.g. always-positive via `ValuesTransform::log`).
-  `GridTransform`'s `axes: Broadcastable<Transform>` (serialized as `grid_transform`)
-  gives one transform per grid dimension or one broadcast to all;
+  `GridTransform`'s `transforms: Broadcastable<Transform>` (serialized as
+  `grid_transform`) gives one transform per grid dimension or one broadcast to all;
   `ValuesTransform::transform` (serialized as `values_transform`) applies to the whole
   values array. Both wrap any `Strategy1D`/`2D`/`3D`/`ND` `inner` and compose by nesting,
   e.g. `ValuesTransform::log(GridTransform::log(CubicC2::not_a_knot()))` for full log-log

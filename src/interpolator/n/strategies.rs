@@ -262,8 +262,8 @@ where
     /// Checks the axis count and that every raw grid coordinate is in its axis's
     /// configured transform's domain.
     fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
-        self.axes
-            .validate_len(data.ndim(), "GridTransform", "axes")?;
+        self.transforms
+            .validate_len(data.ndim(), "GridTransform", "transforms")?;
         let transformed_grid: Vec<Array1<D::Elem>> = data
             .grid
             .iter()
@@ -310,7 +310,7 @@ where
         let transformed_point: Vec<D::Elem> = point
             .iter()
             .enumerate()
-            .map(|(dim, &x)| self.axes[dim].forward(x))
+            .map(|(dim, &x)| self.transforms[dim].forward(x))
             .collect();
         let values = self.transformed_values_view(data.values.view());
         let view = InterpDataNDView {
@@ -361,7 +361,7 @@ where
         let transformed_point: Vec<D::Elem> = point
             .iter()
             .enumerate()
-            .map(|(dim, &x)| self.axes[dim].forward(x))
+            .map(|(dim, &x)| self.transforms[dim].forward(x))
             .collect();
         let values = self.transformed_values_view(data.values.view());
         let view = InterpDataNDView {
@@ -394,7 +394,7 @@ where
                 point
                     .iter()
                     .enumerate()
-                    .map(|(dim, &x)| self.axes[dim].forward(x))
+                    .map(|(dim, &x)| self.transforms[dim].forward(x))
                     .collect()
             })
             .collect();

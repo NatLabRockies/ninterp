@@ -151,7 +151,7 @@ pub struct GridTransform<T, S> {
     /// Transform applied to each grid axis, one per dimension or a single entry
     /// broadcast to all. Serializes as `grid_transform`.
     #[cfg_attr(feature = "serde", serde(rename = "grid_transform"))]
-    pub axes: Broadcastable<Transform>,
+    pub transforms: Broadcastable<Transform>,
     /// Wrapped strategy, evaluated in the transformed coordinate space.
     pub inner: S,
     /// Transformed grid, one axis per dimension. Not included in the serialized
@@ -162,12 +162,12 @@ pub struct GridTransform<T, S> {
 }
 
 impl<T, S> GridTransform<T, S> {
-    /// Distinct transform per grid dimension. `axes.len()` must equal the
+    /// Distinct transform per grid dimension. `transforms.len()` must equal the
     /// interpolator's dimensionality; checked by [`Broadcastable::validate_len`] in
     /// `validate`.
-    pub fn new(axes: Vec<Transform>, inner: S) -> Self {
+    pub fn new(transforms: Vec<Transform>, inner: S) -> Self {
         Self {
-            axes: Broadcastable::Each(axes),
+            transforms: Broadcastable::Each(transforms),
             inner,
             grid_cache: Vec::new(),
         }
@@ -179,7 +179,7 @@ impl<T, S> GridTransform<T, S> {
     /// generically (e.g. from runtime config), without matching on it first.
     pub fn broadcast(transform: Transform, inner: S) -> Self {
         Self {
-            axes: Broadcastable::Broadcast(transform),
+            transforms: Broadcastable::Broadcast(transform),
             inner,
             grid_cache: Vec::new(),
         }
@@ -208,7 +208,7 @@ impl<T, S> GridTransform<T, S> {
         mut values: ArrayView<'v, A, Dim>,
     ) -> ArrayView<'v, A, Dim> {
         values.slice_each_axis_inplace(|ax| {
-            if self.axes[ax.axis.index()].is_increasing() {
+            if self.transforms[ax.axis.index()].is_increasing() {
                 Slice::new(0, None, 1)
             } else {
                 Slice::new(0, None, -1)
@@ -234,7 +234,7 @@ impl<T: Float, S> GridTransform<T, S> {
         dim: usize,
         grid: ArrayView1<T>,
     ) -> Result<Array1<T>, ValidateError> {
-        let transform = self.axes[dim];
+        let transform = self.transforms[dim];
         let mut transformed: Vec<T> = Vec::with_capacity(grid.len());
         for (index, &x) in grid.iter().enumerate() {
             if !transform.in_domain(x) {
@@ -273,7 +273,7 @@ impl<T: Float, S> GridTransform<T, S> {
             .iter()
             .enumerate()
             .filter_map(|(dim, &x)| {
-                let transform = self.axes[dim];
+                let transform = self.transforms[dim];
                 (!transform.in_domain(x)).then_some(OutsideDomainAt {
                     index,
                     dim,
@@ -327,7 +327,7 @@ impl<T: Float, S> GridTransform<T, S> {
     where
         T: Num + Euclid,
     {
-        let transformed = self.axes[dim].forward(x);
+        let transformed = self.transforms[dim].forward(x);
         let lo = *self.grid_cache[dim].first().unwrap();
         let hi = *self.grid_cache[dim].last().unwrap();
         wrap(transformed, lo, hi)

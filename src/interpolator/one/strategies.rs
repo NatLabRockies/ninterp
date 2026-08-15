@@ -159,7 +159,8 @@ where
     /// Checks the axis count (must be 1) and that every raw grid coordinate is in
     /// the configured transform's domain.
     fn validate(&self, data: &InterpData1DBase<D>) -> Result<(), ValidateError> {
-        self.axes.validate_len(1, "GridTransform", "axes")?;
+        self.transforms
+            .validate_len(1, "GridTransform", "transforms")?;
         let transformed_grid = self.transform_axis(0, data.grid[0].view())?;
         let values = self.transformed_values_view(data.values.view());
         let view = InterpData1DView {
@@ -193,7 +194,7 @@ where
         point: &[D::Elem; 1],
     ) -> Result<D::Elem, InterpolateError> {
         self.check_point_domain(point)?;
-        let transformed_point = [self.axes[0].forward(point[0])];
+        let transformed_point = [self.transforms[0].forward(point[0])];
         let values = self.transformed_values_view(data.values.view());
         let view = InterpData1DView {
             grid: [self.grid_cache[0].view()],
@@ -236,7 +237,7 @@ where
     /// instead. Expected, not a bug: check [`Transform::in_domain`] yourself first if
     /// you need a guarantee either way.
     fn interpolate_fast(&self, data: &InterpData1DBase<D>, point: &[D::Elem; 1]) -> D::Elem {
-        let transformed_point = [self.axes[0].forward(point[0])];
+        let transformed_point = [self.transforms[0].forward(point[0])];
         let values = self.transformed_values_view(data.values.view());
         let view = InterpData1DView {
             grid: [self.grid_cache[0].view()],
@@ -264,7 +265,7 @@ where
         self.check_batch_domain(points.iter().map(|p| p.as_slice()))?;
         let transformed_points: Vec<[D::Elem; 1]> = points
             .iter()
-            .map(|point| [self.axes[0].forward(point[0])])
+            .map(|point| [self.transforms[0].forward(point[0])])
             .collect();
         let values = self.transformed_values_view(data.values.view());
         let view = InterpData1DView {

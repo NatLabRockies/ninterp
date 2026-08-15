@@ -226,7 +226,8 @@ where
     /// Checks the axis count (must be 1 or 2) and that every raw grid coordinate is
     /// in its axis's configured transform's domain.
     fn validate(&self, data: &InterpData2DBase<D>) -> Result<(), ValidateError> {
-        self.axes.validate_len(2, "GridTransform", "axes")?;
+        self.transforms
+            .validate_len(2, "GridTransform", "transforms")?;
         let transformed_grid: Vec<Array1<D::Elem>> = data
             .grid
             .iter()
@@ -271,7 +272,7 @@ where
     ) -> Result<D::Elem, InterpolateError> {
         self.check_point_domain(point)?;
         let transformed_point: [D::Elem; 2] =
-            core::array::from_fn(|i| self.axes[i].forward(point[i]));
+            core::array::from_fn(|i| self.transforms[i].forward(point[i]));
         let values = self.transformed_values_view(data.values.view());
         let view = InterpData2DView {
             grid: core::array::from_fn(|i| self.grid_cache[i].view()),
@@ -315,7 +316,7 @@ where
     /// you need a guarantee either way.
     fn interpolate_fast(&self, data: &InterpData2DBase<D>, point: &[D::Elem; 2]) -> D::Elem {
         let transformed_point: [D::Elem; 2] =
-            core::array::from_fn(|i| self.axes[i].forward(point[i]));
+            core::array::from_fn(|i| self.transforms[i].forward(point[i]));
         let values = self.transformed_values_view(data.values.view());
         let view = InterpData2DView {
             grid: core::array::from_fn(|i| self.grid_cache[i].view()),
@@ -343,7 +344,7 @@ where
         self.check_batch_domain(points.iter().map(|p| p.as_slice()))?;
         let transformed_points: Vec<[D::Elem; 2]> = points
             .iter()
-            .map(|point| core::array::from_fn(|i| self.axes[i].forward(point[i])))
+            .map(|point| core::array::from_fn(|i| self.transforms[i].forward(point[i])))
             .collect();
         let values = self.transformed_values_view(data.values.view());
         let view = InterpData2DView {
