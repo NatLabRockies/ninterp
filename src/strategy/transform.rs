@@ -8,12 +8,21 @@ use super::*;
 /// orders of magnitude, or following a known nonlinear relationship (power-law,
 /// Arrhenius, diffusion-type).
 ///
-/// | Variant | `forward(x)` | `inverse(x)` | Domain |
-/// |---|---|---|---|
-/// | [`Identity`](Transform::Identity) | `x` | `x` | none |
-/// | [`Log`](Transform::Log) | `ln(x)` | `exp(x)` | `x > 0` |
-/// | [`Sqrt`](Transform::Sqrt) | `sqrt(x)` | `x^2` | `x >= 0` |
-/// | [`Reciprocal`](Transform::Reciprocal) | `1/x` | `1/x` | `x != 0` |
+/// | Variant | `forward(x)` | `inverse(x)` | Domain | Monotonicity |
+/// |---|---|---|---|---|
+/// | [`Identity`](Transform::Identity) | `x` | `x` | none | increasing |
+/// | [`Log`](Transform::Log) | `ln(x)` | `exp(x)` | `x > 0` | increasing |
+/// | [`Sqrt`](Transform::Sqrt) | `sqrt(x)` | `x^2` | `x >= 0` | increasing |
+/// | [`Reciprocal`](Transform::Reciprocal) | `1/x` | `1/x` | `x != 0` | **decreasing** |
+///
+/// [`GridTransform`] relies on this: a raw grid is always strictly increasing, so
+/// wrapping it in a *decreasing* transform (only [`Reciprocal`](Transform::Reciprocal)
+/// today) would otherwise leave the transformed grid decreasing. `GridTransform`
+/// detects that case and reverses the transformed grid (and the matching `values`
+/// axis, kept in lockstep) back to ascending internally, so every downstream strategy
+/// still sees an ascending grid, exactly like every other `Transform`. See
+/// [`GridTransform`]'s docs for the one user-visible consequence of this: which
+/// physical endpoint a `clamped`/`second_derivative` boundary condition applies to.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 #[non_exhaustive]
@@ -24,7 +33,9 @@ pub enum Transform {
     Log,
     /// Square root / square. Requires `x >= 0`.
     Sqrt,
-    /// Reciprocal, its own inverse. Requires `x != 0`.
+    /// Reciprocal, its own inverse. Requires `x != 0`. Monotonically *decreasing*,
+    /// unlike every other variant: see [`Transform`]'s own docs for what that means
+    /// for [`GridTransform`].
     Reciprocal,
 }
 
@@ -99,6 +110,15 @@ fn empty_cache<T>() -> ArrayD<T> {
 /// conditions supplies derivatives *with respect to the transformed coordinate*, not
 /// the raw one. `not_a_knot`/`periodic` are unaffected: those are structural
 /// conditions on the spline's own space, not physical-value targets.
+///
+/// Under a monotonically *decreasing* transform (only [`Transform::Reciprocal`]
+/// today), the transformed grid comes out backwards, since the raw grid is always
+/// increasing; `GridTransform` reverses it (and `values` in lockstep) back to
+/// ascending internally, so `inner` always sees an ascending grid like normal. This
+/// swaps which physical endpoint sits at index 0 vs. the last index: if `inner` is
+/// [`CubicC2`] with `clamped`/`second_derivative` boundary conditions, its `lower`
+/// endpoint ends up applying to what was the raw grid's *highest* coordinate, and
+/// vice versa, under a decreasing transform.
 ///
 /// # Example
 /// ```
