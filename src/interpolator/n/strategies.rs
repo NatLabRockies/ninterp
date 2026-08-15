@@ -264,30 +264,13 @@ where
     fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
         self.axes
             .validate_len(data.ndim(), "GridTransform", "axes")?;
-        let mut transformed_grid = Vec::with_capacity(data.ndim());
-        for (dim, grid) in data.grid.iter().enumerate() {
-            let transform = self.axes[dim];
-            for &x in grid.iter() {
-                if !transform.in_domain(x) {
-                    return Err(ValidateError::TransformDomain {
-                        label: "GridTransform",
-                        transform,
-                    });
-                }
-            }
-            let mut transformed = grid.mapv(|x| transform.forward(x));
-            if !transform.is_increasing() {
-                transformed.invert_axis(Axis(0));
-            }
-            transformed_grid.push(transformed);
-        }
-        let values = data.values.slice_each_axis(|ax| {
-            if self.axes[ax.axis.index()].is_increasing() {
-                Slice::new(0, None, 1)
-            } else {
-                Slice::new(0, None, -1)
-            }
-        });
+        let transformed_grid: Vec<Array1<D::Elem>> = data
+            .grid
+            .iter()
+            .enumerate()
+            .map(|(dim, grid)| self.transform_axis(dim, grid.view()))
+            .collect::<Result<_, _>>()?;
+        let values = self.transformed_values_view(data.values.view());
         let view = InterpDataNDView {
             grid: transformed_grid.iter().map(|g| g.view()).collect(),
             values,
@@ -304,23 +287,13 @@ where
     /// matching `values` axis) can be reversed back to ascending, matching every
     /// downstream strategy's ascending-grid assumption.
     fn init(&mut self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
-        let mut grid_cache = Vec::with_capacity(data.ndim());
-        for (dim, grid) in data.grid.iter().enumerate() {
-            let transform = self.axes[dim];
-            let mut transformed = grid.mapv(|x| transform.forward(x));
-            if !transform.is_increasing() {
-                transformed.invert_axis(Axis(0));
-            }
-            grid_cache.push(transformed);
-        }
-        self.grid_cache = grid_cache;
-        let values = data.values.slice_each_axis(|ax| {
-            if self.axes[ax.axis.index()].is_increasing() {
-                Slice::new(0, None, 1)
-            } else {
-                Slice::new(0, None, -1)
-            }
-        });
+        self.grid_cache = data
+            .grid
+            .iter()
+            .enumerate()
+            .map(|(dim, grid)| self.transform_axis(dim, grid.view()))
+            .collect::<Result<_, _>>()?;
+        let values = self.transformed_values_view(data.values.view());
         let view = InterpDataNDView {
             grid: self.grid_cache.iter().map(|g| g.view()).collect(),
             values,
@@ -333,27 +306,13 @@ where
         data: &InterpDataNDBase<D>,
         point: &[D::Elem],
     ) -> Result<D::Elem, InterpolateError> {
-        for (dim, &x) in point.iter().enumerate() {
-            let transform = self.axes[dim];
-            if !transform.in_domain(x) {
-                return Err(InterpolateError::TransformDomain {
-                    label: "GridTransform",
-                    transform,
-                });
-            }
-        }
+        self.check_point_domain(point)?;
         let transformed_point: Vec<D::Elem> = point
             .iter()
             .enumerate()
             .map(|(dim, &x)| self.axes[dim].forward(x))
             .collect();
-        let values = data.values.slice_each_axis(|ax| {
-            if self.axes[ax.axis.index()].is_increasing() {
-                Slice::new(0, None, 1)
-            } else {
-                Slice::new(0, None, -1)
-            }
-        });
+        let values = self.transformed_values_view(data.values.view());
         let view = InterpDataNDView {
             grid: self.grid_cache.iter().map(|g| g.view()).collect(),
             values,
@@ -372,32 +331,13 @@ where
     where
         D::Elem: Num + Euclid + Copy,
     {
-        for (dim, &x) in point.iter().enumerate() {
-            let transform = self.axes[dim];
-            if !transform.in_domain(x) {
-                return Err(InterpolateError::TransformDomain {
-                    label: "GridTransform",
-                    transform,
-                });
-            }
-        }
+        self.check_point_domain(point)?;
         let wrapped: Vec<D::Elem> = point
             .iter()
             .enumerate()
-            .map(|(dim, &x)| {
-                let transformed = self.axes[dim].forward(x);
-                let lo = *self.grid_cache[dim].first().unwrap();
-                let hi = *self.grid_cache[dim].last().unwrap();
-                wrap(transformed, lo, hi)
-            })
+            .map(|(dim, &x)| self.wrap_axis(dim, x))
             .collect();
-        let values = data.values.slice_each_axis(|ax| {
-            if self.axes[ax.axis.index()].is_increasing() {
-                Slice::new(0, None, 1)
-            } else {
-                Slice::new(0, None, -1)
-            }
-        });
+        let values = self.transformed_values_view(data.values.view());
         let view = InterpDataNDView {
             grid: self.grid_cache.iter().map(|g| g.view()).collect(),
             values,
@@ -418,15 +358,7 @@ where
 {
     /// Checks that every data value is in the configured transform's domain.
     fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
-        for &v in data.values.iter() {
-            if !self.transform.in_domain(v) {
-                return Err(ValidateError::TransformDomain {
-                    label: "ValuesTransform",
-                    transform: self.transform,
-                });
-            }
-        }
-        let transformed_values = data.values.mapv(|v| self.transform.forward(v));
+        let transformed_values = self.transform_values(data.values.view())?;
         let view = InterpDataNDView {
             grid: data.grid.iter().map(|g| g.view()).collect(),
             values: transformed_values.view(),
@@ -437,7 +369,7 @@ where
     /// Transforms `data.values` into `values_cache`, then initializes `inner`
     /// against a transient view zipping `data.grid` (untouched) with `values_cache`.
     fn init(&mut self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
-        self.values_cache = data.values.mapv(|v| self.transform.forward(v));
+        self.values_cache = self.transform_values(data.values.view())?;
         let view = InterpDataNDView {
             grid: data.grid.iter().map(|g| g.view()).collect(),
             values: self.values_cache.view(),

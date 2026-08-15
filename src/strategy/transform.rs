@@ -178,6 +178,79 @@ impl<T, S> GridTransform<T, S> {
     pub fn reciprocal(inner: S) -> Self {
         Self::broadcast(Transform::Reciprocal, inner)
     }
+
+    /// A view of `values` with every decreasing-transform axis reversed, matching
+    /// `grid_cache`'s ascending order. Shared by `validate`/`init`/`interpolate`/
+    /// `interpolate_wrapped` across all four dimensionalities.
+    pub(crate) fn transformed_values_view<'v, A, Dim: Dimension>(
+        &self,
+        mut values: ArrayView<'v, A, Dim>,
+    ) -> ArrayView<'v, A, Dim> {
+        values.slice_each_axis_inplace(|ax| {
+            if self.axes[ax.axis.index()].is_increasing() {
+                Slice::new(0, None, 1)
+            } else {
+                Slice::new(0, None, -1)
+            }
+        });
+        values
+    }
+}
+
+impl<T: Float, S> GridTransform<T, S> {
+    /// Domain-checks and forward-transforms one grid axis (single pass, fused),
+    /// reversing it to stay ascending if `dim`'s configured transform is
+    /// decreasing. Shared by `validate` (result discarded) and `init` (result
+    /// cached into `grid_cache`) across all four dimensionalities.
+    pub(crate) fn transform_axis(
+        &self,
+        dim: usize,
+        grid: ArrayView1<T>,
+    ) -> Result<Array1<T>, ValidateError> {
+        let transform = self.axes[dim];
+        let mut transformed = Vec::with_capacity(grid.len());
+        for &x in grid.iter() {
+            if !transform.in_domain(x) {
+                return Err(ValidateError::TransformDomain {
+                    label: "GridTransform",
+                    transform,
+                });
+            }
+            transformed.push(transform.forward(x));
+        }
+        let mut transformed = Array1::from_vec(transformed);
+        if !transform.is_increasing() {
+            transformed.invert_axis(Axis(0));
+        }
+        Ok(transformed)
+    }
+
+    /// Domain-checks `point` against each axis's configured transform.
+    pub(crate) fn check_point_domain(&self, point: &[T]) -> Result<(), InterpolateError> {
+        for (dim, &x) in point.iter().enumerate() {
+            let transform = self.axes[dim];
+            if !transform.in_domain(x) {
+                return Err(InterpolateError::TransformDomain {
+                    label: "GridTransform",
+                    transform,
+                });
+            }
+        }
+        Ok(())
+    }
+
+    /// Forward-transforms `x` on axis `dim` and wraps it against `grid_cache[dim]`'s
+    /// (ascending) bounds. Assumes [`check_point_domain`](Self::check_point_domain)
+    /// already passed and `grid_cache` is populated.
+    pub(crate) fn wrap_axis(&self, dim: usize, x: T) -> T
+    where
+        T: Num + Euclid,
+    {
+        let transformed = self.axes[dim].forward(x);
+        let lo = *self.grid_cache[dim].first().unwrap();
+        let hi = *self.grid_cache[dim].last().unwrap();
+        wrap(transformed, lo, hi)
+    }
 }
 
 /// Wraps a [`Strategy1D`]/[`Strategy2D`]/[`Strategy3D`]/[`StrategyND`] `inner`
@@ -243,6 +316,29 @@ impl<T, S> ValuesTransform<T, S> {
     /// [`Transform::Reciprocal`].
     pub fn reciprocal(inner: S) -> Self {
         Self::new(Transform::Reciprocal, inner)
+    }
+}
+
+impl<T: Float, S> ValuesTransform<T, S> {
+    /// Domain-checks and forward-transforms `values` (single pass, fused). Shared
+    /// by `validate` (result discarded) and `init` (result cached into
+    /// `values_cache`) across all four dimensionalities.
+    pub(crate) fn transform_values<Dim: Dimension>(
+        &self,
+        values: ArrayView<T, Dim>,
+    ) -> Result<Array<T, Dim>, ValidateError> {
+        let mut transformed = Vec::with_capacity(values.len());
+        for &v in values.iter() {
+            if !self.transform.in_domain(v) {
+                return Err(ValidateError::TransformDomain {
+                    label: "ValuesTransform",
+                    transform: self.transform,
+                });
+            }
+            transformed.push(self.transform.forward(v));
+        }
+        Ok(Array::from_shape_vec(values.raw_dim(), transformed)
+            .expect("transformed shape matches values shape"))
     }
 }
 
