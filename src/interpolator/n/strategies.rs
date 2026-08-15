@@ -320,9 +320,15 @@ where
         self.inner.interpolate(&view, &transformed_point)
     }
 
-    /// Wraps in the transformed coordinate space (against `grid_cache`'s bounds),
-    /// not `data.grid`'s raw bounds: a nonlinear transform doesn't commute with
-    /// wrapping.
+    /// Forward-transforms into `grid_cache`'s coordinate space, then delegates the
+    /// actual wrap to `inner.interpolate_wrapped` rather than wrapping here itself:
+    /// wrapping doesn't commute with a nonlinear transform, so it must happen in the
+    /// *final* (innermost) transformed space where the periodic strategy actually
+    /// lives, mirroring how `ValuesTransform::interpolate_wrapped` defers to `inner`
+    /// for the same reason (composing two `GridTransform`s and wrapping at the outer
+    /// layer's space, then forward-transforming again, uses the wrong period). For a
+    /// non-transform `inner`, `StrategyND::interpolate_wrapped`'s default wraps
+    /// directly against `grid_cache`, reproducing this layer's own wrap exactly.
     fn interpolate_wrapped(
         &self,
         data: &InterpDataNDBase<D>,
@@ -332,17 +338,17 @@ where
         D::Elem: Num + Euclid + Copy,
     {
         self.check_point_domain(point)?;
-        let wrapped: Vec<D::Elem> = point
+        let transformed_point: Vec<D::Elem> = point
             .iter()
             .enumerate()
-            .map(|(dim, &x)| self.wrap_axis(dim, x))
+            .map(|(dim, &x)| self.transforms[dim].forward(x))
             .collect();
         let values = self.transformed_values_view(data.values.view());
         let view = InterpDataNDView {
             grid: self.grid_cache.iter().map(|g| g.view()).collect(),
             values,
         };
-        self.inner.interpolate(&view, &wrapped)
+        self.inner.interpolate_wrapped(&view, &transformed_point)
     }
 
     /// Skips the domain check `interpolate` does, and calls `inner.interpolate_fast`

@@ -203,9 +203,15 @@ where
         self.inner.interpolate(&view, &transformed_point)
     }
 
-    /// Wraps in the transformed coordinate space (against `grid_cache`'s bounds),
-    /// not `data.grid`'s raw bounds: a nonlinear transform doesn't commute with
-    /// wrapping.
+    /// Forward-transforms into `grid_cache`'s coordinate space, then delegates the
+    /// actual wrap to `inner.interpolate_wrapped` rather than wrapping here itself:
+    /// wrapping doesn't commute with a nonlinear transform, so it must happen in the
+    /// *final* (innermost) transformed space where the periodic strategy actually
+    /// lives, mirroring how `ValuesTransform::interpolate_wrapped` defers to `inner`
+    /// for the same reason (composing two `GridTransform`s and wrapping at the outer
+    /// layer's space, then forward-transforming again, uses the wrong period). For a
+    /// non-transform `inner`, `Strategy1D::interpolate_wrapped`'s default wraps
+    /// directly against `grid_cache`, reproducing this layer's own wrap exactly.
     fn interpolate_wrapped(
         &self,
         data: &InterpData1DBase<D>,
@@ -215,13 +221,13 @@ where
         D::Elem: Num + Euclid + Copy,
     {
         self.check_point_domain(point)?;
-        let wrapped = [self.wrap_axis(0, point[0])];
+        let transformed_point = [self.transforms[0].forward(point[0])];
         let values = self.transformed_values_view(data.values.view());
         let view = InterpData1DView {
             grid: [self.grid_cache[0].view()],
             values,
         };
-        self.inner.interpolate(&view, &wrapped)
+        self.inner.interpolate_wrapped(&view, &transformed_point)
     }
 
     /// Skips the domain check `interpolate` does, and calls `inner.interpolate_fast`

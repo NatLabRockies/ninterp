@@ -117,7 +117,13 @@ Everything below is merged to `main` but not yet tagged/released.
   per-point dispatch (which can't reach `batch_interpolate_into`'s own aggregation,
   since which points wrap vs. interpolate normally is decided per point) still
   aggregate every domain violation across the whole batch instead of erroring on the
-  first one. Closes #56.
+  first one. `GridTransform::interpolate_wrapped` now forward-transforms and defers
+  the actual wrap to `inner.interpolate_wrapped` instead of wrapping at its own layer
+  and calling `inner.interpolate`: wrapping doesn't commute with a nonlinear
+  transform, so composing two `GridTransform`s needs the wrap to happen exactly once,
+  in the final (innermost) transformed space, mirroring how
+  `ValuesTransform::interpolate_wrapped` already deferred to `inner` for the same
+  reason. Closes #56.
 - `strategy_enum_impl!`'s generated `Strategy*DEnum` impl now forwards every
   `Strategy1D`/`2D`/`3D`/`ND` method (previously only `validate`/`init`/`interpolate`/
   `allow_extrapolate`), so a strategy overriding `interpolate_wrapped` or the batch

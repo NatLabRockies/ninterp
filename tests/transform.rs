@@ -119,6 +119,80 @@ fn grid_transform_mixed_increasing_and_decreasing_axes_2d() {
 }
 
 #[test]
+fn grid_transform_mixed_increasing_and_decreasing_axes_3d() {
+    // `Interp3D`'s `GridTransform` strategy impl is hand-written, not derived from the
+    // 2-D/ND paths, so it needs its own axis-reversal coverage: axis 0 uses
+    // `Reciprocal` (decreasing), axes 1 and 2 use `Log`/`Sqrt` (increasing). `Linear`
+    // interpolation on a function that's additively separable and linear in each
+    // axis's *transformed* coordinate is exact everywhere, not just at grid points, so
+    // any mismatch means an axis didn't get reversed/transformed correctly.
+    let x = array![1., 2., 4.];
+    let y = array![1., std::f64::consts::E, std::f64::consts::E.powi(2)];
+    let z: Array1<f64> = array![1., 4., 9.];
+    let f_xyz = Array3::from_shape_fn((3, 3, 3), |(i, j, k)| {
+        2. / x[i] + 3. * y[j].ln() + 4. * z[k].sqrt()
+    });
+
+    let interp = Interp3D::new(
+        x,
+        y,
+        z,
+        f_xyz,
+        GridTransform::new(
+            vec![Transform::Reciprocal, Transform::Log, Transform::Sqrt],
+            Linear,
+        ),
+        Extrapolate::Error,
+    )
+    .unwrap();
+
+    for (qx, qy, qz) in [(1.5_f64, 2.0_f64, 2.0_f64), (3.0, 5.0, 6.25)] {
+        let expected = 2. / qx + 3. * qy.ln() + 4. * qz.sqrt();
+        let got = interp.interpolate(&[qx, qy, qz]).unwrap();
+        assert!(
+            (got - expected).abs() < 1e-9,
+            "query=({qx},{qy},{qz}): got={got}, expected={expected}"
+        );
+    }
+}
+
+#[test]
+fn grid_transform_3d_wrap_matches_nd() {
+    // Same hand-written-vs-shared-path concern as
+    // `grid_transform_mixed_increasing_and_decreasing_axes_3d`, but for
+    // `Extrapolate::Wrap` dispatch specifically: confirms `Interp3D`'s
+    // `interpolate_wrapped` matches the well-covered `InterpND` path exactly, for a
+    // query out of bounds on every axis so every axis actually wraps.
+    let x = array![1., 2., 4., 8., 16.];
+    let y = array![1., 2., 4., 8., 16.];
+    let z = array![1., 2., 4., 8., 16.];
+    let f_xyz = Array3::from_shape_fn((5, 5, 5), |(i, j, k)| x[i] + y[j] + z[k]);
+
+    let interp_3d = Interp3D::new(
+        x.clone(),
+        y.clone(),
+        z.clone(),
+        f_xyz.clone(),
+        GridTransform::log(CubicC2::periodic()),
+        Extrapolate::Wrap,
+    )
+    .unwrap();
+    let interp_nd = InterpND::new(
+        vec![x, y, z],
+        f_xyz.into_dyn(),
+        GridTransform::log(CubicC2::periodic()),
+        Extrapolate::Wrap,
+    )
+    .unwrap();
+
+    for query in [[20.0_f64, 20., 20.], [0.5, 0.5, 0.5], [20., 0.5, 3.]] {
+        let a = interp_3d.interpolate(&query).unwrap();
+        let b = interp_nd.interpolate(&query).unwrap();
+        assert!((a - b).abs() < 1e-9, "query={query:?}: 3d={a}, nd={b}");
+    }
+}
+
+#[test]
 fn grid_transform_log_linear_uniform_checks_transformed_grid_uniformity() {
     // Raw grid is geometric (ratio 2), so ln(x) is uniformly spaced.
     let x = array![1., 2., 4., 8., 16.];
@@ -277,6 +351,40 @@ fn grid_transform_wrap_matches_manual_log_grid() {
     for query in [20.0_f64, 32., 0.5] {
         let a = via_wrapper.interpolate(&[query]).unwrap();
         let b = manual.interpolate(&[query.ln()]).unwrap();
+        assert!(
+            (a - b).abs() < 1e-9,
+            "query={query}: wrapper={a}, manual={b}"
+        );
+    }
+}
+
+#[test]
+fn nested_grid_transform_wrap_matches_manual_composed_grid() {
+    // Composing two `GridTransform`s (`GridTransform::sqrt(GridTransform::log(...))`:
+    // `Sqrt` applied to the raw query first, `Log` applied to that result second) must
+    // wrap in the *fully composed* `ln(sqrt(x))` space, not just the outer `sqrt(x)`
+    // space: wrapping doesn't commute with either nonlinear transform, so wrapping only
+    // at the outer layer (then forward-transforming the already-wrapped value through
+    // the inner layer, as if via plain `interpolate`) uses the wrong period entirely.
+    // Confirmed against a manual oracle built directly on the fully composed grid,
+    // mirroring `grid_transform_wrap_matches_manual_log_grid`'s single-layer version.
+    let x = array![1., 2., 4., 8., 16.];
+    let y = array![1., 2., 4., 8., 1.]; // not exactly periodic; Periodic doesn't require it
+
+    let via_wrapper = Interp1D::new(
+        x.clone(),
+        y.clone(),
+        GridTransform::sqrt(GridTransform::log(CubicC2::periodic())),
+        Extrapolate::Wrap,
+    )
+    .unwrap();
+
+    let x_composed = x.mapv(|v: f64| v.sqrt().ln());
+    let manual = Interp1D::new(x_composed, y, CubicC2::periodic(), Extrapolate::Wrap).unwrap();
+
+    for query in [20.0_f64, 32., 0.5] {
+        let a = via_wrapper.interpolate(&[query]).unwrap();
+        let b = manual.interpolate(&[query.sqrt().ln()]).unwrap();
         assert!(
             (a - b).abs() < 1e-9,
             "query={query}: wrapper={a}, manual={b}"

@@ -324,19 +324,6 @@ impl<T: Float, S> GridTransform<T, S> {
             Err(InterpolateError::GridTransformDomain(failures))
         }
     }
-
-    /// Forward-transforms `x` on axis `dim` and wraps it against `grid_cache[dim]`'s
-    /// (ascending) bounds. Assumes [`check_point_domain`](Self::check_point_domain)
-    /// already passed and `grid_cache` is populated.
-    pub(crate) fn wrap_axis(&self, dim: usize, x: T) -> T
-    where
-        T: Num + Euclid,
-    {
-        let transformed = self.transforms[dim].forward(x);
-        let lo = *self.grid_cache[dim].first().unwrap();
-        let hi = *self.grid_cache[dim].last().unwrap();
-        wrap(transformed, lo, hi)
-    }
 }
 
 /// Wraps a [`Strategy1D`]/[`Strategy2D`]/[`Strategy3D`]/[`StrategyND`] `inner`
