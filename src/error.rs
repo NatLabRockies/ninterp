@@ -12,10 +12,13 @@ use crate::strategy::Transform;
 pub enum ValidateError {
     #[error("`Extrapolate::Enable` is not supported by this strategy")]
     ExtrapolateUnsupported,
+
     #[error("at least 2 grid points are required per dimension: dim {0}")]
     InsufficientGridPoints(usize),
+
     #[error("supplied coordinates must be strictly increasing: dim {0}")]
     NotStrictlyIncreasing(usize),
+
     /// Raised by [`crate::strategy::utils::validate_uniform_grid`] and
     /// [`crate::strategy::utils::validate_uniform_grid_epsilon`], so any strategy
     /// requiring uniform spacing reports it the same way, not just `LinearUniform`.
@@ -24,13 +27,16 @@ pub enum ValidateError {
     /// grid[index]`, differs from the grid's first interval, in either direction.
     #[error("grid[{dim}] is not uniformly spaced (spacing changes at index {index})")]
     NonUniform { dim: usize, index: usize },
+
     #[error("supplied grid and values are not compatible shapes: dim {0}")]
     IncompatibleShapes(usize),
+
     /// Number of grid axes doesn't match the dimensionality of `values`. Only reachable
     /// for `InterpDataND`, whose axis count isn't fixed by the type. Distinct from
     /// [`ValidateError::IncompatibleShapes`], which compares extents within one axis.
     #[error("grid has {found} axes, expected {expected} to match the values")]
     GridAxisCount { expected: usize, found: usize },
+
     /// Raised by [`crate::strategy::broadcast::Broadcastable::validate_len`], so any
     /// strategy built on [`crate::strategy::broadcast::Broadcastable`] reports a
     /// mismatched per-axis count
@@ -43,6 +49,7 @@ pub enum ValidateError {
         ndim: usize,
         found: usize,
     },
+
     /// A grid coordinate lies outside `transform`'s valid domain (see
     /// [`Transform::in_domain`]), raised per-axis by
     /// [`crate::strategy::GridTransform`]. `index` is the offending coordinate's
@@ -53,6 +60,25 @@ pub enum ValidateError {
         dim: usize,
         index: usize,
     },
+
+    /// `transform` isn't monotonic across the whole of `grid[dim]`, raised by
+    /// [`crate::strategy::GridTransform`]. Every coordinate can individually pass
+    /// [`Transform::in_domain`] and still trigger this: `transform`'s domain can be
+    /// disconnected (e.g. [`Transform::Reciprocal`]'s `x != 0` is two separate
+    /// pieces), and a transform that's monotonic on each piece separately isn't
+    /// necessarily monotonic across a raw grid that spans both. `index` is the first
+    /// position where the transformed direction breaks, mirroring
+    /// [`ValidateError::NonUniform`].
+    #[error(
+        "GridTransform: grid[{dim}] is not monotonic under {transform:?} \
+         (direction changes at index {index})"
+    )]
+    GridTransformNotMonotonic {
+        transform: Transform,
+        dim: usize,
+        index: usize,
+    },
+
     /// A data value lies outside `transform`'s valid domain (see
     /// [`Transform::in_domain`]), raised by [`crate::strategy::ValuesTransform`].
     /// `index` is the offending element's position in `values`, e.g. `[6, 153, 2]`.
@@ -64,6 +90,7 @@ pub enum ValidateError {
         transform: Transform,
         index: Vec<usize>,
     },
+
     /// Escape hatch for conditions this crate doesn't model, chiefly custom strategies
     /// validating their own configuration.
     #[error("{0}")]
@@ -85,14 +112,17 @@ pub enum InterpolateError {
     /// in two dimensions yields two entries.
     #[error("{}", fmt_out_of_bounds(.0))]
     OutOfBounds(Vec<OutOfBoundsAt>),
+
     /// One entry per point whose length didn't match the interpolator's dimensionality.
     #[error("{}", fmt_point_length(*expected, failures))]
     PointLength {
         expected: usize,
         failures: Vec<WrongLengthAt>,
     },
+
     #[error("output slice has length {found}, expected {expected}")]
     OutputLength { expected: usize, found: usize },
+
     /// A query point coordinate lies outside `transform`'s valid domain (see
     /// [`Transform::in_domain`]), checked by [`crate::strategy::GridTransform`]
     /// before its own [`Transform::forward`] call: without this,
@@ -100,6 +130,7 @@ pub enum InterpolateError {
     /// bound would silently produce `NaN` instead of a clear error.
     #[error("GridTransform: point[{dim}] is outside {transform:?}'s domain")]
     GridTransformDomain { transform: Transform, dim: usize },
+
     #[error("{0}")]
     Other(String),
 }

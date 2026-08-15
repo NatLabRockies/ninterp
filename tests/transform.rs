@@ -189,6 +189,28 @@ fn values_transform_domain_violation_at_construction() {
 }
 
 #[test]
+fn grid_transform_reciprocal_rejects_sign_crossing_grid() {
+    // `Reciprocal`'s domain (`x != 0`) is two disconnected pieces, and `1/x` is only
+    // decreasing *within* each piece, not across the gap between them. A raw grid
+    // that crosses zero (e.g. [-2, -1, 1, 2]) transforms to a non-monotonic sequence
+    // ([-0.5, -1, 1, 0.5]) that no single reversal can restore to ascending order:
+    // reversing it gives [0.5, 1, -1, -0.5], still not ascending. Every individual
+    // coordinate passes the per-element `in_domain` check (none is exactly 0), so
+    // only a monotonicity check across the whole axis catches this.
+    let x = array![-2., -1., 1., 2.];
+    let y = array![10., 20., 30., 40.];
+    let interp = Interp1D::new(x, y, GridTransform::reciprocal(Linear), Extrapolate::Error);
+    assert!(matches!(
+        interp.unwrap_err(),
+        ValidateError::GridTransformNotMonotonic {
+            transform: Transform::Reciprocal,
+            dim: 0,
+            index: 2,
+        }
+    ));
+}
+
+#[test]
 fn grid_transform_domain_violation_at_query_time_under_enable() {
     // Without the query-time check, `Extrapolate::Enable` pushing the query below
     // `Log`'s domain would silently `ln()` into `NaN` instead of a clear error.

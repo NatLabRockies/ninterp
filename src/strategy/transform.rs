@@ -222,13 +222,19 @@ impl<T: Float, S> GridTransform<T, S> {
     /// reversing it to stay ascending if `dim`'s configured transform is
     /// decreasing. Shared by `validate` (result discarded) and `init` (result
     /// cached into `grid_cache`) across all four dimensionalities.
+    ///
+    /// Also checks that `forward` is monotonic across the *whole* axis, not just
+    /// per-element domain membership: `transform`'s domain can be disconnected (e.g.
+    /// [`Transform::Reciprocal`]'s `x != 0`), in which case every coordinate can
+    /// individually be in-domain while the transformed sequence as a whole still
+    /// isn't monotonic, and no single reversal can fix that up to ascending.
     pub(crate) fn transform_axis(
         &self,
         dim: usize,
         grid: ArrayView1<T>,
     ) -> Result<Array1<T>, ValidateError> {
         let transform = self.axes[dim];
-        let mut transformed = Vec::with_capacity(grid.len());
+        let mut transformed: Vec<T> = Vec::with_capacity(grid.len());
         for (index, &x) in grid.iter().enumerate() {
             if !transform.in_domain(x) {
                 return Err(ValidateError::GridTransformDomain {
@@ -237,7 +243,17 @@ impl<T: Float, S> GridTransform<T, S> {
                     index,
                 });
             }
-            transformed.push(transform.forward(x));
+            let fx = transform.forward(x);
+            if let Some(&prev) = transformed.last() {
+                if (fx > prev) != transform.is_increasing() {
+                    return Err(ValidateError::GridTransformNotMonotonic {
+                        transform,
+                        dim,
+                        index,
+                    });
+                }
+            }
+            transformed.push(fx);
         }
         let mut transformed = Array1::from_vec(transformed);
         if !transform.is_increasing() {
