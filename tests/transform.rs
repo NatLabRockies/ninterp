@@ -432,6 +432,88 @@ fn grid_transform_wrap_batch_domain_violations_all_reported() {
 }
 
 #[test]
+fn grid_transform_nested_wrap_batch_domain_violations_all_reported() {
+    // `GridTransform::check_batch_domain`'s trait-level pre-scan must recurse into
+    // `inner` with the forward-transformed batch (mirroring `batch_interpolate_into`),
+    // not just check its own layer. Composing two transforms
+    // (`GridTransform::sqrt(GridTransform::log(Linear))`: `Sqrt` applied to the raw
+    // query first, then `Log` applied to that result) means a query of exactly `0.`
+    // passes the outer `Sqrt` domain (`x >= 0`) but violates the inner `Log` domain
+    // once sqrt-transformed (`sqrt(0.) == 0.`, not `> 0.`). Without recursing into
+    // `inner`, that violation is invisible to the pre-scan and only surfaces (aborting
+    // the whole batch, mislabeled as index 0) once the per-point loop happens to reach
+    // it, instead of being aggregated with the other violation at its true index.
+    let x = array![1., 2., 3., 4.];
+    let y = array![1., 2., 3., 4.];
+    let interp = Interp1D::new(
+        x,
+        y,
+        GridTransform::sqrt(GridTransform::log(Linear)),
+        Extrapolate::Wrap,
+    )
+    .unwrap();
+
+    let points = [[0.], [2.], [0.], [3.]];
+    let mut out = [0.; 4];
+    let err = interp
+        .batch_interpolate_into(&points, &mut out)
+        .unwrap_err();
+    let InterpolateError::GridTransformDomain(failures) = &err else {
+        panic!("expected GridTransformDomain, got {err:?}");
+    };
+    assert_eq!(failures.len(), 2);
+    for (failure, expected_index) in failures.iter().zip([0, 2]) {
+        assert!(matches!(
+            failure,
+            OutsideDomainAt {
+                index,
+                dim: 0,
+                transform: Transform::Log,
+                ..
+            } if *index == expected_index
+        ));
+    }
+}
+
+#[test]
+fn grid_transform_enum_wrap_batch_domain_violations_all_reported() {
+    // `Strategy1DEnum`'s generated `check_batch_domain` forwarding (both the
+    // match-based enum impl and its `Box` impl) must reach a `GridTransform`
+    // variant's own aggregating check instead of silently falling back to the
+    // trait's no-op default: query 0 and 2 both violate `Log`'s domain, and both
+    // must be reported, not just the first.
+    use ninterp::strategy::enums::Strategy1DEnum;
+
+    let x = array![1., 2., 3., 4.];
+    let y = array![1., 2., 3., 4.];
+    let strategy: Strategy1DEnum<f64> =
+        GridTransform::log(Box::new(Strategy1DEnum::from(Linear))).into();
+    let interp: Interp1D<_, Strategy1DEnum<f64>> =
+        Interp1D::new(x, y, strategy, Extrapolate::Wrap).unwrap();
+
+    let points = [[-1.], [2.5], [-3.], [10.]];
+    let mut out = [0.; 4];
+    let err = interp
+        .batch_interpolate_into(&points, &mut out)
+        .unwrap_err();
+    let InterpolateError::GridTransformDomain(failures) = &err else {
+        panic!("expected GridTransformDomain, got {err:?}");
+    };
+    assert_eq!(failures.len(), 2);
+    for (failure, expected_index) in failures.iter().zip([0, 2]) {
+        assert!(matches!(
+            failure,
+            OutsideDomainAt {
+                index,
+                dim: 0,
+                transform: Transform::Log,
+                ..
+            } if *index == expected_index
+        ));
+    }
+}
+
+#[test]
 fn grid_transform_nd_wrap_batch_domain_violations_all_reported() {
     // Same as `grid_transform_wrap_batch_domain_violations_all_reported`, but for
     // `InterpND`, which implements `batch_interpolate_into`'s `Extrapolate::Wrap` arm

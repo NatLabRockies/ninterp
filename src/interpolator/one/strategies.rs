@@ -276,12 +276,20 @@ where
             .batch_interpolate_into(&view, &transformed_points, out)
     }
 
-    /// Delegates to the inherent `GridTransform::check_batch_domain`, the same
-    /// aggregating check `batch_interpolate_into` already runs; exposed here so
-    /// generic callers (e.g. `Extrapolate::Wrap`'s batch dispatch) can pre-scan a
-    /// batch without knowing the concrete strategy type.
+    /// Checks this layer's own domain via the inherent
+    /// `GridTransform::check_batch_domain` (the same aggregating check
+    /// `batch_interpolate_into` already runs), then recurses into `inner` with the
+    /// forward-transformed batch, so a `GridTransform` nested inside another one
+    /// still gets pre-scanned; exposed here so generic callers (e.g.
+    /// `Extrapolate::Wrap`'s batch dispatch) can pre-scan a batch without knowing
+    /// the concrete strategy type.
     fn check_batch_domain(&self, points: &[[D::Elem; 1]]) -> Result<(), InterpolateError> {
-        GridTransform::check_batch_domain(self, points.iter().map(|p| p.as_slice()))
+        GridTransform::check_batch_domain(self, points.iter().map(|p| p.as_slice()))?;
+        let transformed_points: Vec<[D::Elem; 1]> = points
+            .iter()
+            .map(|point| [self.transforms[0].forward(point[0])])
+            .collect();
+        self.inner.check_batch_domain(&transformed_points)
     }
 
     fn allow_extrapolate(&self) -> bool {

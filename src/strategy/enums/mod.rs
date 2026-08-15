@@ -197,6 +197,13 @@ macro_rules! strategy_enum_impl {
                     $(Self::$Variant(strategy) => $TraitName::<D>::allow_extrapolate(strategy),)*
                 }
             }
+
+            #[inline]
+            fn check_batch_domain(&self, points: $PointsType) -> Result<(), InterpolateError> {
+                match self {
+                    $(Self::$Variant(strategy) => $TraitName::<D>::check_batch_domain(strategy, points),)*
+                }
+            }
         }
 
         /// See [enums module](super) documentation. `Box` here wraps the concrete
@@ -279,6 +286,11 @@ macro_rules! strategy_enum_impl {
             #[inline]
             fn allow_extrapolate(&self) -> bool {
                 $TraitName::<D>::allow_extrapolate(&**self)
+            }
+
+            #[inline]
+            fn check_batch_domain(&self, points: $PointsType) -> Result<(), InterpolateError> {
+                $TraitName::<D>::check_batch_domain(&**self, points)
             }
         }
     };
