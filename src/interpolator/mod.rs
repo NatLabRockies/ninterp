@@ -428,6 +428,15 @@ macro_rules! batch_interpolate_into_impl {
                     // `batch_interpolate_into` directly: which points wrap and which
                     // interpolate normally is decided per point).
                     self.strategy.check_batch_domain(points)?;
+                    // TODO: every point here calls `interpolate`/`interpolate_wrapped`
+                    // one at a time rather than routing the in-bounds subset through
+                    // `batch_interpolate_into`. No strategy shipped in this crate
+                    // overrides `batch_interpolate_into` for real amortized work, so
+                    // this costs nothing today; if one ever does, partition points into
+                    // in-bounds/out-of-bounds first (like the `Fill` arm above) and
+                    // route the in-bounds subset through `batch_interpolate_into` to
+                    // pick it up. Not worth the added trait-surface complexity until
+                    // there's a strategy that would actually benefit.
                     for (o, point) in out.iter_mut().zip(points) {
                         *o = if out_of_bounds(&self.data.grid, point) {
                             self.strategy.interpolate_wrapped(&self.data, point)?
