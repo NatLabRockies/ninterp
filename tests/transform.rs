@@ -234,6 +234,22 @@ fn grid_transform_per_axis_count_mismatch() {
 }
 
 #[test]
+fn grid_transform_nd_0d_placeholder_does_not_panic() {
+    // `InterpND`'s 0-D case (a single value, no real axes) represents "no axes" with
+    // one empty grid entry rather than an empty `Vec`, so a `GridTransform` with the
+    // matching 0 transforms must not index into `transforms` while validating/
+    // transforming that placeholder axis.
+    let interp = InterpND::new(
+        vec![array![]],
+        array![42.].into_dyn(),
+        GridTransform::new(vec![], Linear),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(interp.interpolate(&[]).unwrap(), 42.);
+}
+
+#[test]
 fn grid_transform_domain_violation_at_construction() {
     let x = array![-1., 0., 1., 2.];
     let y = array![1., 2., 3., 4.];

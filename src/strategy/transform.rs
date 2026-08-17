@@ -203,12 +203,19 @@ impl<T, S> GridTransform<T, S> {
     /// A view of `values` with every decreasing-transform axis reversed, matching
     /// `grid_cache`'s ascending order. Shared by `validate`/`init`/`interpolate`/
     /// `interpolate_wrapped` across all four dimensionalities.
+    ///
+    /// Skips the transform lookup on a length-≤1 axis: `InterpDataNDBase::validate`
+    /// requires every *real* axis to have at least 2 points, so a length-≤1 axis can
+    /// only be `InterpND`'s 0-D placeholder (a single grid entry with an empty grid,
+    /// paired with a 1-element `values`), which has no entry in `self.transforms` to
+    /// look up. Reversal is a no-op on a length-≤1 axis regardless, so this changes
+    /// no real axis's behavior.
     pub(crate) fn transformed_values_view<'v, A, Dim: Dimension>(
         &self,
         mut values: ArrayView<'v, A, Dim>,
     ) -> ArrayView<'v, A, Dim> {
         values.slice_each_axis_inplace(|ax| {
-            if self.transforms[ax.axis.index()].is_increasing() {
+            if ax.len <= 1 || self.transforms[ax.axis.index()].is_increasing() {
                 Slice::new(0, None, 1)
             } else {
                 Slice::new(0, None, -1)
@@ -229,11 +236,21 @@ impl<T: Float, S> GridTransform<T, S> {
     /// [`Transform::Reciprocal`]'s `x != 0`), in which case every coordinate can
     /// individually be in-domain while the transformed sequence as a whole still
     /// isn't monotonic, and no single reversal can fix that up to ascending.
+    ///
+    /// Returns `grid` unchanged, without touching `self.transforms`, when it's
+    /// empty: `InterpND`'s 0-D placeholder represents "no real axes" with a single
+    /// empty grid entry rather than an empty `Vec<Array1<_>>`, so `dim` here can be
+    /// `0` while `self.transforms` (correctly validated against `ndim() == 0`) has
+    /// no entries at all. Mirrors `Linear::interpolate`'s own
+    /// `grid[dim].is_empty()` skip for the same placeholder.
     pub(crate) fn transform_axis(
         &self,
         dim: usize,
         grid: ArrayView1<T>,
     ) -> Result<Array1<T>, ValidateError> {
+        if grid.is_empty() {
+            return Ok(grid.to_owned());
+        }
         let transform = self.transforms[dim];
         let mut transformed: Vec<T> = Vec::with_capacity(grid.len());
         for (index, &x) in grid.iter().enumerate() {
