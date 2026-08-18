@@ -446,31 +446,38 @@ where
                     .batch_interpolate_into(&self.data, &clamped, out)
             }
             Extrapolate::Wrap => {
-                // Unlike `Clamp`, `wrap()` isn't identity exactly at the boundary,
-                // so only out-of-bounds points get wrapped.
-                let wrapped: Vec<Vec<D::Elem>> = points
-                    .iter()
-                    .map(|&point| {
-                        if out_of_bounds(&self.data.grid, point) {
-                            point
-                                .iter()
-                                .enumerate()
-                                .map(|(dim, pt)| {
-                                    wrap(
-                                        *pt,
-                                        *self.data.grid[dim].first().unwrap(),
-                                        *self.data.grid[dim].last().unwrap(),
-                                    )
-                                })
-                                .collect()
-                        } else {
-                            point.to_vec()
-                        }
-                    })
-                    .collect();
-                let wrapped: Vec<&[D::Elem]> = wrapped.iter().map(Vec::as_slice).collect();
-                self.strategy
-                    .batch_interpolate_into(&self.data, &wrapped, out)
+                // Must go through `interpolate_wrapped`, not a raw-space `wrap()`
+                // here plus the checked `batch_interpolate_into`: a strategy whose
+                // working coordinate space differs from the grid's (e.g.
+                // `GridTransform`) needs to wrap in its own space, since wrapping
+                // doesn't commute with a nonlinear transform. Only out-of-bounds
+                // points go through it; `wrap()` isn't identity exactly at the
+                // boundary, so an in-bounds point must still take the plain
+                // `interpolate` path.
+                //
+                // Pre-scans the whole batch for domain violations before doing any
+                // actual interpolation work, so a nested `GridTransform`'s
+                // aggregation isn't lost to this per-point dispatch (it can't use
+                // `batch_interpolate_into` directly: which points wrap and which
+                // interpolate normally is decided per point).
+                self.strategy.check_batch_domain(points)?;
+                // TODO: every point here calls `interpolate`/`interpolate_wrapped`
+                // one at a time rather than routing the in-bounds subset through
+                // `batch_interpolate_into`. No strategy shipped in this crate
+                // overrides `batch_interpolate_into` for real amortized work, so
+                // this costs nothing today; if one ever does, partition points into
+                // in-bounds/out-of-bounds first (like the `Fill` arm above) and
+                // route the in-bounds subset through `batch_interpolate_into` to
+                // pick it up. Not worth the added trait-surface complexity until
+                // there's a strategy that would actually benefit.
+                for (o, &point) in out.iter_mut().zip(points) {
+                    *o = if out_of_bounds(&self.data.grid, point) {
+                        self.strategy.interpolate_wrapped(&self.data, point)?
+                    } else {
+                        self.strategy.interpolate(&self.data, point)?
+                    };
+                }
+                Ok(())
             }
             Extrapolate::Fill(value) => {
                 // Pre-fill output with the fill value, then scatter interpolated

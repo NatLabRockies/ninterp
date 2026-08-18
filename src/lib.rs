@@ -58,7 +58,7 @@ pub(crate) use std::fmt::Debug;
 
 pub use ndarray;
 pub(crate) use ndarray::prelude::*;
-pub(crate) use ndarray::{Data, Ix, OwnedRepr, RawDataClone, ViewRepr};
+pub(crate) use ndarray::{Data, IntoDimension, Ix, OwnedRepr, RawDataClone, Slice, ViewRepr};
 
 pub use num_traits;
 pub(crate) use num_traits::{clamp, Euclid, Float, Num, One, Zero};

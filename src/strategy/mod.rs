@@ -15,9 +15,24 @@ pub use cubic::CubicC2;
 pub mod step;
 pub use step::Step;
 
+pub mod transform;
+pub(crate) use transform::{
+    grid_transform_strategy_impl, values_transform_strategy_impl, Transform,
+};
+pub use transform::{GridTransform, ValuesTransform};
+
 pub mod enums;
 pub mod traits;
 pub mod utils;
+
+/// Placeholder for a strategy's coefficient/transform cache before
+/// [`Strategy1D::init`](traits::Strategy1D::init)/`2D`/`3D`/`ND` populates it. Shared
+/// by [`CubicC2::cache`] and [`GridTransform::grid_cache`]/[`ValuesTransform::
+/// values_cache`]. No `T: Clone + Zero` bound needed (unlike `ArrayD::zeros`), so
+/// callers stay unconstrained.
+fn empty_cache<T>() -> ArrayD<T> {
+    ArrayD::from_shape_vec(IxDyn(&[0]), Vec::new()).expect("empty shape matches empty vec")
+}
 
 /// Linear interpolation: <https://en.wikipedia.org/wiki/Linear_interpolation>
 #[derive(Debug, Clone, PartialEq)]

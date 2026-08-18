@@ -38,9 +38,13 @@ fn bare_strategies_round_trip() {
     for bc in cubic_c2_variants() {
         round_trip(&bc);
     }
+    round_trip(&GridTransform::<f64, _>::log(Linear));
+    round_trip(&ValuesTransform::<f64, _>::log(Linear));
 }
 
-/// Generates a round-trip test for `$Enum` over every strategy variant, `CubicC2` included.
+/// Generates a round-trip test for `$Enum` over every strategy variant, `CubicC2` and
+/// `GridTransform`/`ValuesTransform` (nested one level, since each enum's own variant
+/// boxes its `inner`) included.
 macro_rules! enum_round_trip_test {
     ($test_name:ident, $Enum:ident) => {
         #[test]
@@ -57,6 +61,9 @@ macro_rules! enum_round_trip_test {
             for bc in cubic_c2_variants() {
                 round_trip(&$Enum::from(bc));
             }
+            let inner: Box<$Enum<f64>> = Box::new($Enum::<f64>::from(Linear));
+            round_trip(&$Enum::<f64>::from(GridTransform::log(inner.clone())));
+            round_trip(&$Enum::<f64>::from(ValuesTransform::log(inner)));
         }
     };
 }

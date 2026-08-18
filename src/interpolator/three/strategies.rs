@@ -322,3 +322,6 @@ where
         true
     }
 }
+
+grid_transform_strategy_impl!(Strategy3D, InterpData3DBase, InterpData3DView, 3);
+values_transform_strategy_impl!(Strategy3D, InterpData3DBase, InterpData3DView, Ix3, 3);

@@ -149,3 +149,6 @@ where
         true
     }
 }
+
+grid_transform_strategy_impl!(Strategy1D, InterpData1DBase, InterpData1DView, 1);
+values_transform_strategy_impl!(Strategy1D, InterpData1DBase, InterpData1DView, Ix1, 1);

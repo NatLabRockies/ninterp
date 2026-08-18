@@ -5,12 +5,15 @@ strategy_enum_impl!(
     Strategy3D,
     InterpData3DBase,
     &[D::Elem; 3],
+    &[[D::Elem; 3]],
     [
         (Nearest, strategy::Nearest),
         (Step, strategy::Step),
         (Linear, strategy::Linear),
         (LinearUniform, strategy::LinearUniform),
         (CubicC2, strategy::CubicC2<T>),
+        (GridTransform, strategy::GridTransform<T, Box<Strategy3DEnum<T>>>),
+        (ValuesTransform, strategy::ValuesTransform<T, Box<Strategy3DEnum<T>>>),
     ]
 );
 

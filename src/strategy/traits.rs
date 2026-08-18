@@ -53,7 +53,7 @@ macro_rules! fixed_strategy_trait {
             fn interpolate_wrapped(
                 &self,
                 data: &$InterpData<D>,
-                point: [D::Elem; $N],
+                point: &[D::Elem; $N],
             ) -> Result<D::Elem, InterpolateError>
             where
                 D::Elem: Num + Euclid + Copy,
@@ -178,6 +178,23 @@ macro_rules! fixed_strategy_trait {
             }
 
             #[doc = concat!(
+                " Domain-checks a batch of points against this strategy's own validity domain\n",
+                " (distinct from `data.grid`'s bounds), aggregating every violation across the\n",
+                " whole batch instead of just the first.\n",
+                "\n",
+                " Default no-op: most strategies accept any `D::Elem`. Override only if `self`\n",
+                " (or a wrapped inner strategy) restricts the domain further, e.g.\n",
+                " [`GridTransform`]'s configured [`Transform`]. Called as a pre-scan\n",
+                " before doing any actual interpolation work, so it must stay cheap.",
+            )]
+            fn check_batch_domain(
+                &self,
+                _points: &[[D::Elem; $N]],
+            ) -> Result<(), InterpolateError> {
+                Ok(())
+            }
+
+            #[doc = concat!(
                 " Does this type's [`", stringify!($Trait), "::interpolate`] provision for extrapolation?",
             )]
             fn allow_extrapolate(&self) -> bool;
@@ -213,7 +230,7 @@ macro_rules! fixed_strategy_trait {
             fn interpolate_wrapped(
                 &self,
                 data: &$InterpData<D>,
-                point: [D::Elem; $N],
+                point: &[D::Elem; $N],
             ) -> Result<D::Elem, InterpolateError>
             where
                 D::Elem: Num + Euclid + Copy,
@@ -268,6 +285,14 @@ macro_rules! fixed_strategy_trait {
                 D::Elem: Num + Copy,
             {
                 (**self).batch_interpolate_fast(data, points)
+            }
+
+            #[inline]
+            fn check_batch_domain(
+                &self,
+                points: &[[D::Elem; $N]],
+            ) -> Result<(), InterpolateError> {
+                (**self).check_batch_domain(points)
             }
 
             #[inline]
@@ -463,6 +488,18 @@ where
         out
     }
 
+    /// Domain-checks a batch of points against this strategy's own validity domain
+    /// (distinct from `data.grid`'s bounds), aggregating every violation across the
+    /// whole batch instead of just the first.
+    ///
+    /// Default no-op: most strategies accept any `D::Elem`. Override only if `self`
+    /// (or a wrapped inner strategy) restricts the domain further, e.g.
+    /// [`GridTransform`]'s configured [`Transform`]. Called as a pre-scan before
+    /// doing any actual interpolation work, so it must stay cheap.
+    fn check_batch_domain(&self, _points: &[&[D::Elem]]) -> Result<(), InterpolateError> {
+        Ok(())
+    }
+
     /// Does this type's [`StrategyND::interpolate`] provision for extrapolation?
     fn allow_extrapolate(&self) -> bool;
 }
@@ -496,6 +533,11 @@ where
     #[inline]
     fn allow_extrapolate(&self) -> bool {
         (**self).allow_extrapolate()
+    }
+
+    #[inline]
+    fn check_batch_domain(&self, points: &[&[D::Elem]]) -> Result<(), InterpolateError> {
+        (**self).check_batch_domain(points)
     }
 
     #[inline]

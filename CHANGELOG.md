@@ -86,6 +86,56 @@ Everything below is merged to `main` but not yet tagged/released.
   query point, then interpolates. Default reproduces existing behavior (wraps in the
   grid's own coordinate space) for every built-in strategy; a strategy whose working
   coordinate space differs from the grid's can override it. Groundwork for #56.
+- `strategy::transform::Transform`, `strategy::GridTransform<T, S>`,
+  `strategy::ValuesTransform<T, S>`: composable wrappers for interpolating in a
+  transformed coordinate/value space
+  (`Log`, `Sqrt`, `Reciprocal`, or `Identity`) instead of the raw one: standard for data
+  spanning many orders of magnitude or following a known nonlinear relationship, and for
+  bounding interpolated output (e.g. always-positive via `ValuesTransform::log`).
+  `GridTransform`'s `transforms: Broadcastable<Transform>` (serialized as
+  `grid_transform`) gives one transform per grid dimension or one broadcast to all;
+  `ValuesTransform::transform` (serialized as `values_transform`) applies to the whole
+  values array. Both wrap any `Strategy1D`/`2D`/`3D`/`ND` `inner` and compose by nesting,
+  e.g. `ValuesTransform::log(GridTransform::log(CubicC2::not_a_knot()))` for full log-log
+  interpolation. `log`/`sqrt`/`reciprocal`/`broadcast`/`new` constructors mirror
+  `CubicC2`'s. Included in the `Strategy*Enum` types, with `inner` boxed to break the
+  self-referential size (`Box` around the concrete enum, not `dyn Trait`, so still
+  serde-compatible); `Strategy1D`/`2D`/`3D`/`ND` also gain a `Box<Strategy*DEnum<T>>`
+  forwarding impl for this. New `ValidateError::GridTransformDomain`/
+  `ValidateError::GridTransformNotMonotonic`/`ValidateError::ValuesTransformDomain`
+  variants for a grid coordinate outside a transform's domain (e.g. `Log` requires `x >
+  0`), a raw grid that's non-monotonic once transformed (possible even when every
+  coordinate individually passes the domain check, since a transform's domain can be
+  disconnected, e.g. `Reciprocal`'s `x != 0`), or a data value outside a transform's
+  domain. `Transform::in_domain` treats `NaN` as in-domain for every variant
+  (`forward(NaN)` is a clean `NaN`, never a panic), but `NaN` is still treated
+  differently at the two domain-check call sites built on top of it: a `NaN` query
+  point is rejected regardless (it would otherwise reach the inner strategy's grid
+  search and panic there), while a `NaN` data value passes `ValuesTransform`'s
+  domain check and forward-transforms to `NaN` untouched, so it can still be used as
+  a "no data" sentinel for unmeasured grid points. New
+  `InterpolateError::GridTransformDomain(Vec<OutsideDomainAt>)` for a query
+  point outside a transform's domain under `Extrapolate::Enable`, catching what would
+  otherwise silently `ln()` into `NaN`; one entry per offending point coordinate,
+  aggregated across a whole `batch_interpolate`/`batch_interpolate_into` call rather than
+  erroring on the first one, mirroring `InterpolateError::OutOfBounds`. New
+  `Strategy1D`/`2D`/`3D`/`ND::check_batch_domain`: pre-scans a batch for domain
+  violations before doing any actual interpolation work. Default no-op; `GridTransform`
+  overrides it and `ValuesTransform` forwards to `inner`. Lets `Extrapolate::Wrap`'s
+  per-point dispatch (which can't reach `batch_interpolate_into`'s own aggregation,
+  since which points wrap vs. interpolate normally is decided per point) still
+  aggregate every domain violation across the whole batch instead of erroring on the
+  first one. `GridTransform::interpolate_wrapped` forward-transforms into its own
+  layer, then defers the actual wrap to `inner.interpolate_wrapped`, mirroring
+  `ValuesTransform::interpolate_wrapped`: wrapping doesn't commute with a nonlinear
+  transform, so composing two `GridTransform`s needs the wrap to happen exactly once,
+  in the final (innermost) transformed space where the periodic strategy actually
+  lives. Closes #56.
+- `strategy_enum_impl!`'s generated `Strategy*DEnum` impl now forwards every
+  `Strategy1D`/`2D`/`3D`/`ND` method (previously only `validate`/`init`/`interpolate`/
+  `allow_extrapolate`), so a strategy overriding `interpolate_wrapped` or the batch
+  methods dispatches correctly when nested inside the enum instead of silently falling
+  back to the trait default.
 
 ### Changed
 - **Breaking:** owned data is now the default in type names, following Rust idioms

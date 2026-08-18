@@ -216,3 +216,6 @@ where
         true
     }
 }
+
+grid_transform_strategy_impl!(Strategy2D, InterpData2DBase, InterpData2DView, 2);
+values_transform_strategy_impl!(Strategy2D, InterpData2DBase, InterpData2DView, Ix2, 2);
