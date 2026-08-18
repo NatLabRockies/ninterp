@@ -8,250 +8,70 @@ bump the minor version (`0.x` -> `0.(x+1)`), other changes bump the patch versio
 
 ## [Unreleased]
 
-Everything below is merged to `main` but not yet tagged/released.
+## [0.10.0] - 2026-08-17
 
 ### Added
 - `strategy::LinearUniform`: an O(1)-index alternative to `Linear` for uniformly-spaced
-  grids (1D/2D/3D/ND), validated at construction/`init` time.
-- `strategy::broadcast::Broadcastable<T>`: `Broadcast(T)` applies one value to every
-  grid dimension, `Each(Vec<T>)` gives one value per dimension. Shared by `Step` and
-  `CubicC2` for their per-axis configuration; indexes via `Index<usize>` (panics like a
-  slice if `dim` is out of range) and validates via the public `validate_len`, which
-  reports a mismatched count as `ValidateError::PerAxisLen { label, noun, ndim, found }`.
-  Both are usable by custom strategies built on `Broadcastable`.
-- `strategy::Step`: a parameterized step (piecewise-constant) strategy across all
-  dimensionalities, replacing `LeftNearest`/`RightNearest`. Its `directions` field is a
-  `Broadcastable<StepDirection>`: `Broadcast` applies one direction to every axis, `Each`
-  gives per-axis control. `Step::lower()`/`Step::upper()` construct the common broadcast
-  cases; `Step::new(Vec<StepDirection>)` constructs the per-axis case.
-- `LinearUniform` and `Step` are available for every dimensionality and included in the
-  `Strategy*Enum` types.
-- `strategy::CubicC2`: a C² piecewise cubic spline strategy (1D/2D/3D/ND) with
-  configurable boundary conditions given via
-  `boundary_conditions: Broadcastable<CubicC2BoundaryConditions<T>>` (`Broadcast` for one
-  condition on every axis, `Each` for one per axis), a single tridiagonal solve per axis.
-  `CubicC2BoundaryConditions` is either `Periodic`, or `Endpoints { lower, upper }` where
-  `lower`/`upper` are independent `CubicC2Endpoint`s (`NotAKnot`, `FirstDerivative(T)`
-  "clamped", or `SecondDerivative(T)`, zero being the classic "natural" case); the two
-  ends of an axis can mix types, e.g. `NotAKnot` on one side and a specific derivative on
-  the other. A single-`NotAKnot` axis needs 3 grid points; 4 if both ends are `NotAKnot`.
-  `not_a_knot()`/`natural()`/`clamped(lower, upper)`/`periodic()` construct the common
-  symmetric cases; `CubicC2BoundaryConditions::{not_a_knot, first_derivative,
-  second_derivative}` are the per-condition constructors mixed endpoints are built from.
-  `Strategy1D` caches its second-derivative coefficients; `Strategy2D`/`3D`/`ND` cache
-  the full corner-derivative tensor for O(1) queries.
-  `From<CubicC2BoundaryConditions<T>>` broadcasts a condition obtained generically (e.g.
-  from runtime config) without matching on it first. Included in the `Strategy*Enum`
-  types. With the `serde` feature, serializes keyed by `"CubicC2"` like the other
-  built-in strategies; `NotAKnot`/`Natural`/`Periodic` (symmetric, no explicit value)
-  serialize as bare strings, anything else (an explicit value, or mixed endpoint types)
-  as the general `{"Endpoints": {"lower": ..., "upper": ...}}` form.
-- `Nested` wrapper / `serialize_nested` helper / `SerializeNested` trait (`prelude`,
-  `serde` feature): opt into the nested-array serialization format at a specific call
-  site, e.g. `serde_json::to_string(&Nested(&interp))` or
-  `#[serde(serialize_with = "serialize_nested")]` on a field. Falls back to the `ndarray`
-  format for non-human-readable (binary) serializers.
-- `strategy::utils` per-axis primitives (`exact_index`, `locate_step_index`,
-  `locate_lower_index_uniform`, `validate_uniform_grid`/`validate_uniform_grid_epsilon`,
-  `AxisLocation`/`locate_axis`) are now `pub`, for reuse by custom strategies.
-  `validate_uniform_grid_epsilon` is `Float`-bound and takes a `tolerance: Option<T>`
-  (`None` keeps the default of 1024 × ε); `validate_uniform_grid` is its generic core,
-  taking an explicit `tolerance: T` under just `Copy + PartialOrd + Sub`, for grids over
-  non-`Float` types. Both raise the dedicated `ValidateError::NonUniform { dim, index }`
-  on failure.
-- `interpolate_fast` on `Strategy1D`/`2D`/`3D`/`ND` and `Interpolator<T>`: a `Result`-free
-  interpolation path (panics instead of erroring) for hot loops where the point is
-  already known to be in-bounds. `Interp1D`/`2D`/`3D` also get an inherent
-  `interpolate_fast(&self, &[D::Elem; N])` taking the point as a fixed-size array.
-- `InterpolatorEnum` gains `validate_extrapolate`/`validate_strategy`/`init_strategy`,
-  matching what `Interp1D`/`2D`/`3D`/`ND` already expose.
-- `batch_interpolate`/`batch_interpolate_fast` on `Interpolator<T>`,
-  `Strategy1D`/`2D`/`3D`/`ND`, and the concrete interpolator types: interpolate several
-  points in one call, resolving `self.extrapolate` once and funneling every point into
-  at most one strategy call instead of one `interpolate` call per point. For a
-  `Box<dyn Interpolator<T>>`/`Box<dyn Strategy*D>`, this also collapses what would be one
-  virtual dispatch per point into a single dispatch. Under `Extrapolate::Error`, every
-  out-of-range point is reported in one `InterpolateError::OutOfBounds`, not just the
-  first.
-- `batch_interpolate_into`/`batch_interpolate_fast_into`: allocation-free counterparts
-  that write into a caller-supplied output slice instead of returning a `Vec`.
-  `batch_interpolate`/`batch_interpolate_fast` now defer to these internally. New
-  `InterpolateError::OutputLength` variant for a slice/point-count length mismatch.
-- `interpolator::AnyInterpolator<T>: Interpolator<T> + Send + Sync` (not in the
-  `prelude`): a downcastable counterpart to `Interpolator<T>` for storing heterogeneous
-  interpolators behind `Box<dyn AnyInterpolator<T>>` and recovering the concrete type via
-  `as_any`. Implemented for owned `Interp1D`/`2D`/`3D`/`ND` only, since `as_any` requires
-  `Self: 'static`; viewed interpolators can still be used through `Interpolator<T>`.
-- `Strategy1D`/`2D`/`3D`/`ND::interpolate_wrapped`: resolves an `Extrapolate::Wrap`
-  query point, then interpolates. Default reproduces existing behavior (wraps in the
-  grid's own coordinate space) for every built-in strategy; a strategy whose working
-  coordinate space differs from the grid's can override it. Groundwork for #56.
-- `strategy::transform::Transform`, `strategy::GridTransform<T, S>`,
-  `strategy::ValuesTransform<T, S>`: composable wrappers for interpolating in a
-  transformed coordinate/value space
-  (`Log`, `Sqrt`, `Reciprocal`, or `Identity`) instead of the raw one: standard for data
-  spanning many orders of magnitude or following a known nonlinear relationship, and for
-  bounding interpolated output (e.g. always-positive via `ValuesTransform::log`).
-  `GridTransform`'s `transforms: Broadcastable<Transform>` (serialized as
-  `grid_transform`) gives one transform per grid dimension or one broadcast to all;
-  `ValuesTransform::transform` (serialized as `values_transform`) applies to the whole
-  values array. Both wrap any `Strategy1D`/`2D`/`3D`/`ND` `inner` and compose by nesting,
-  e.g. `ValuesTransform::log(GridTransform::log(CubicC2::not_a_knot()))` for full log-log
-  interpolation. `log`/`sqrt`/`reciprocal`/`broadcast`/`new` constructors mirror
-  `CubicC2`'s. Included in the `Strategy*Enum` types, with `inner` boxed to break the
-  self-referential size (`Box` around the concrete enum, not `dyn Trait`, so still
-  serde-compatible); `Strategy1D`/`2D`/`3D`/`ND` also gain a `Box<Strategy*DEnum<T>>`
-  forwarding impl for this. New `ValidateError::GridTransformDomain`/
-  `ValidateError::GridTransformNotMonotonic`/`ValidateError::ValuesTransformDomain`
-  variants for a grid coordinate outside a transform's domain (e.g. `Log` requires `x >
-  0`), a raw grid that's non-monotonic once transformed (possible even when every
-  coordinate individually passes the domain check, since a transform's domain can be
-  disconnected, e.g. `Reciprocal`'s `x != 0`), or a data value outside a transform's
-  domain. `Transform::in_domain` treats `NaN` as in-domain for every variant
-  (`forward(NaN)` is a clean `NaN`, never a panic), but `NaN` is still treated
-  differently at the two domain-check call sites built on top of it: a `NaN` query
-  point is rejected regardless (it would otherwise reach the inner strategy's grid
-  search and panic there), while a `NaN` data value passes `ValuesTransform`'s
-  domain check and forward-transforms to `NaN` untouched, so it can still be used as
-  a "no data" sentinel for unmeasured grid points. New
-  `InterpolateError::GridTransformDomain(Vec<OutsideDomainAt>)` for a query
-  point outside a transform's domain under `Extrapolate::Enable`, catching what would
-  otherwise silently `ln()` into `NaN`; one entry per offending point coordinate,
-  aggregated across a whole `batch_interpolate`/`batch_interpolate_into` call rather than
-  erroring on the first one, mirroring `InterpolateError::OutOfBounds`. New
-  `Strategy1D`/`2D`/`3D`/`ND::check_batch_domain`: pre-scans a batch for domain
-  violations before doing any actual interpolation work. Default no-op; `GridTransform`
-  overrides it and `ValuesTransform` forwards to `inner`. Lets `Extrapolate::Wrap`'s
-  per-point dispatch (which can't reach `batch_interpolate_into`'s own aggregation,
-  since which points wrap vs. interpolate normally is decided per point) still
-  aggregate every domain violation across the whole batch instead of erroring on the
-  first one. `GridTransform::interpolate_wrapped` forward-transforms into its own
-  layer, then defers the actual wrap to `inner.interpolate_wrapped`, mirroring
-  `ValuesTransform::interpolate_wrapped`: wrapping doesn't commute with a nonlinear
-  transform, so composing two `GridTransform`s needs the wrap to happen exactly once,
-  in the final (innermost) transformed space where the periodic strategy actually
-  lives. Closes #56.
-- `strategy_enum_impl!`'s generated `Strategy*DEnum` impl now forwards every
-  `Strategy1D`/`2D`/`3D`/`ND` method (previously only `validate`/`init`/`interpolate`/
-  `allow_extrapolate`), so a strategy overriding `interpolate_wrapped` or the batch
-  methods dispatches correctly when nested inside the enum instead of silently falling
-  back to the trait default.
+  grids.
+- `strategy::Step`: a parameterized step (piecewise-constant) strategy, replacing
+  `LeftNearest`/`RightNearest`, with per-axis direction control.
+- `strategy::CubicC2`: a C² piecewise cubic spline strategy with configurable boundary
+  conditions (not-a-knot, clamped, natural, periodic).
+- `strategy::GridTransform`/`ValuesTransform`: interpolate in a transformed
+  coordinate/value space (log, sqrt, reciprocal) instead of the raw one, e.g. for
+  log-log interpolation or bounding output to always-positive values. Closes #56.
+- `interpolate_fast`/`batch_interpolate`/`batch_interpolate_fast` (plus allocation-free
+  `_into` variants): panic-instead-of-`Result` and batched point interpolation paths for
+  hot loops.
+- `interpolator::AnyInterpolator<T>`: a downcastable counterpart to `Interpolator<T>`
+  for storing heterogeneous interpolators behind one trait object.
+- `Nested`/`serialize_nested` (serde): opt into nested-array serialization at a specific
+  call site instead of crate-wide.
+- `strategy::Broadcastable<T>`: shared per-axis config helper (`Broadcast` vs `Each`)
+  used by `Step`, `CubicC2`, and `GridTransform`, and reusable by custom strategies.
 
 ### Changed
-- **Breaking:** owned data is now the default in type names, following Rust idioms
-  (`String` vs `&str`, `Vec<T>` vs `&[T]`). Every form generic over the `ndarray` data
-  representation gains a `Base` suffix, the unsuffixed name becomes the owned alias, and
-  `Viewed` becomes `View`:
-  - `Interp{1D,2D,3D,ND}` -> `Interp{1D,2D,3D,ND}Base`, `InterpData` -> `InterpDataBase`,
-    `InterpDataND` -> `InterpDataNDBase`, `InterpolatorEnum` -> `InterpolatorEnumBase`
-    (generic forms). `Interp0D<T>` is unaffected; it was never generic over the
-    representation.
-  - `Interp{1D,2D,3D,ND}Owned`/`InterpData{1D,2D,3D,ND}Owned`/`InterpolatorEnumOwned` drop
-    the `Owned` suffix entirely (they're now the plain, unsuffixed names).
-  - `Interp{1D,2D,3D,ND}Viewed`/`InterpData{1D,2D,3D,ND}Viewed`/`InterpolatorEnumViewed`
-    become `...View`.
-  - `InterpDataBase` is now also re-exported from `ninterp::interpolator` (previously
-    only `ninterp::data`).
-  - **Migrating generic-over-`D` code:** custom strategy impls and anything else written
-    against the representation parameter must move to the `Base` names. Keeping the old
-    unsuffixed name is a compile error, though an indirect one: `InterpData1D<D>` now
-    means `InterpDataBase<OwnedRepr<D>, 1>`, so the failure surfaces as an unsatisfied
-    `D::Elem: PartialEq + Debug` bound rather than a clean "not found".
-- **Breaking:** `check_extrapolate` renamed to `validate_extrapolate`, matching the
-  `validate`/`validate_strategy` naming used elsewhere.
-- **Breaking:** `InterpolateError`, `ValidateError`, `Extrapolate<T>`, and
-  `Strategy1DEnum`/`2DEnum`/`3DEnum`/`NDEnum` are now `#[non_exhaustive]`. An existing
-  exhaustive downstream `match` over any of these needs a `_` arm; construction is
-  unaffected.
+- **Breaking:** owned data types drop their `Owned` suffix (e.g. `Interp1DOwned` ->
+  `Interp1D`, `InterpolatorEnumOwned` -> `InterpolatorEnum`); the forms generic over the
+  `ndarray` representation gain a `Base` suffix instead (`Interp1D` -> `Interp1DBase`);
+  `Viewed` becomes `View`.
+- **Breaking:** `LeftNearest`/`RightNearest` removed; use `Step::lower()`/`Step::upper()`.
+- **Breaking:** `check_extrapolate` renamed `validate_extrapolate`; `find_nearest_index`
+  renamed `locate_lower_index` and moved (with the other index-search helpers) into a
+  new `strategy::utils` module.
 - **Breaking:** `Strategy1DEnum`/`2DEnum`/`3DEnum`/`NDEnum` are now generic over the
-  element type (`Strategy1DEnum<T>` etc.), needed to hold `CubicC2<T>` as a variant.
-  Bare usages (e.g. `Interp1D<_, Strategy1DEnum>`) need a type argument:
-  `Interp1D<_, Strategy1DEnum<f64>>`.
-- **Breaking:** `Strategy1D`/`2D`/`3D`/`ND::init` is split into a pure
-  `validate(&self, data)` and a mutating `init(&mut self, data)`, both default no-op
-  (existing custom strategies keep compiling unchanged). `LinearUniform`'s uniform-grid
-  check and `Step`'s direction-count check moved from `init` to `validate`. `new` and
-  `set_strategy` call both; `Interpolator::validate` now also calls `validate_strategy`.
-- **Breaking:** `find_nearest_index` renamed to `locate_lower_index` (now also clamps
-  out-of-range points to `[0, len - 2]` itself); it and the other index-search helpers
-  (`step_index` -> `locate_step_index`, `uniform_lower_index` ->
-  `locate_lower_index_uniform`, `exact_index`, `validate_uniform_grid`) move from
-  `strategy::traits` to a new `strategy::utils` module.
-- **Breaking:** `LeftNearest`/`RightNearest` removed. Migrate to `Step::lower()`/
-  `Step::upper()`.
-- **Breaking:** `Linear`/`LinearUniform` now require `D::Elem: Float` (previously
-  `Num + PartialOrd`); other strategies keep looser numeric bounds.
-- **Breaking:** interpolation-time failures carry structured positions instead of prose,
-  and aggregate across a batch instead of stopping at the first failure:
-  - `InterpolateError::PointLength(usize)` ->
-    `PointLength { expected: usize, failures: Vec<WrongLengthAt> }`.
-  - `InterpolateError::OutOfBounds(String)` -> `OutOfBounds(Vec<OutOfBoundsAt>)`; the
-    offending coordinate/bounds are no longer echoed into the message (they're
-    `D::Elem`, which the error isn't generic over); index the `points`/`grid` you
-    already have instead.
-  - Both entry types are `#[non_exhaustive]` structs rather than tuples; read by field
-    (`at.index`, `at.dim`, `at.found`).
-  - Both variants render a lone failure as a sentence and several as an indented list,
-    omitting point indices for single-point calls.
-- **Breaking:** `ValidateError::ExtrapolateSelection` becomes the payload-free
-  `ExtrapolateUnsupported`.
-- New `ValidateError::GridAxisCount { expected: usize, found: usize }`, for an
-  `InterpDataND` whose grid axis count doesn't match its values' dimensionality
-  (previously fell through to `ValidateError::Other(String)`).
-- **Breaking:** `ValidateError::Monotonicity` -> `NotStrictlyIncreasing`;
-  `InterpolateError::ExtrapolateError` -> `OutOfBounds` (message rewritten to
-  ``point out of bounds with `Extrapolate::Error` set``). `ValidateError::EmptyGrid` is
-  removed; a grid dimension with 0 or 1 points is now `InsufficientGridPoints`.
-- **Breaking:** grid coordinates must now be strictly increasing; a repeated adjacent
-  coordinate previously passed validation and gave a zero-width interval, dividing by
-  zero (silent NaN/Inf) in any strategy that computes a fractional position or slope
-  across it, instead of the `NotStrictlyIncreasing` error it now raises.
-- **Breaking:** the `serde_ndim` Cargo feature is removed. It switched the nested-array
-  write format on for every array field crate-wide, and because Cargo features are
-  additive, enabling it anywhere in a binary silently flipped the wire format for every
-  other `ninterp` consumer in that binary too. Migrate to wrapping values in `Nested` (or
-  `serialize_with = "serialize_nested"`) at the specific call site that wants it. Reading
-  still accepts either format.
-- **Breaking:** `extrapolate` is now a required field on deserialize instead of silently
-  defaulting to `Extrapolate::Error` when omitted, matching `data`/`strategy`.
-- **Breaking:** `Interp1D`/`2D`/`3D` gain an inherent
-  `interpolate(&self, point: &[D::Elem; N])`, so a wrong-length point is a compile error
-  instead of a runtime `InterpolateError::PointLength`. Because inherent methods shadow
-  trait methods, a call site holding a genuine runtime-length slice (not an array
-  literal) for a concretely-typed `Interp1D`/`2D`/`3D` stops compiling; migrate with
-  `let point: &[D::Elem; N] = slice.try_into()?;`. `Interpolator::interpolate(&self,
-  point: &[T])` (used by `InterpND`, `InterpolatorEnum`, `Box<dyn Interpolator<T>>`) is
-  unaffected.
-- `Interp1D`/`2D`/`3D`/`InterpND` gain a public `validate_strategy()`, mirroring
-  `init_strategy()`, for use after mutating the public `data`/`strategy` fields directly.
-- Significant ND performance work: `Linear`/`Nearest` no longer build coordinate
-  permutation tables via `itertools::multi_cartesian_product` (dropping the `itertools`
-  dependency); corner values are gathered into a flat buffer and reduced via a
-  bitmask/butterfly pass, cutting allocations from O(N·2^N) to O(1)-O(N). 1D strategies
-  no longer linear-scan for exact grid-point matches; 2D/3D `Linear` short-circuits
-  per-dimension on an exact match. Roughly 50-65% faster on 1D/2D hardcoded and
-  multilinear paths (see PR #13).
-- Serde: `Step` accepts the legacy bare `"LeftNearest"`/`"RightNearest"` strings (from the
-  removed unit structs of the same name) on deserialization, in addition to its own wire
-  format (`{"Step": "Lower"}` for `Broadcast`, `{"Step": ["Lower", "Upper"]}` for `Axes`).
-- Various documentation and README improvements; CI workflow polish.
+  element type (`Strategy1DEnum<f64>`).
+- **Breaking:** `InterpolateError`, `ValidateError`, `Extrapolate<T>`, and the strategy
+  enums are now `#[non_exhaustive]`; an exhaustive downstream `match` needs a `_` arm.
+- **Breaking:** `Strategy1D`/`2D`/`3D`/`ND::init` is split into a pure `validate` and a
+  mutating `init`.
+- **Breaking:** grid coordinates must now be strictly increasing (a repeated adjacent
+  coordinate previously passed validation and silently divided by zero).
+- **Breaking:** interpolation failures (`InterpolateError::PointLength`/`OutOfBounds`)
+  carry structured positions instead of prose, and aggregate every failure across a
+  batch instead of stopping at the first one.
+- **Breaking:** error renames/removals: `ValidateError::Monotonicity` ->
+  `NotStrictlyIncreasing`, `ExtrapolateSelection` -> `ExtrapolateUnsupported`,
+  `EmptyGrid` removed (folds into `InsufficientGridLength`);
+  `InterpolateError::ExtrapolateError` -> `OutOfBounds`.
+- **Breaking:** the `serde_ndim` Cargo feature is removed (it silently affected every
+  `ninterp` consumer in a binary, not just the opting-in crate); use `Nested` at the
+  call site instead. Reading still accepts either wire format.
+- **Breaking:** `extrapolate` is now a required field on deserialize.
+- **Breaking:** `Interp1D`/`2D`/`3D` gain an inherent `interpolate(&self, point:
+  &[D::Elem; N])`, so a wrong-length point is a compile error instead of a runtime one.
+  A call site passing a runtime-length slice needs `let point: &[D::Elem; N] =
+  slice.try_into()?;`.
+- Significant ND performance work: dropped `itertools`, cut per-call allocations from
+  O(N·2^N) to O(1)-O(N). 54-64% faster on 1D and up to 63% on 2D multilinear; smaller
+  gains (roughly 1-12%) on 3D and on paths that already hit an exact grid point. See
+  PR #13.
 
 ### Fixed
-- `InterpND` panicked on `n == 0` (the 0-D-via-`InterpND` case, e.g. after
-  dimensionality reduction collapses every axis): the ND `Linear` strategy's exact-match
-  scan now skips empty grid dimensions instead of calling into a binary search that
-  panics on one.
-- A grid dimension with exactly 1 point passed construction and then panicked on the
-  first `interpolate` call, for every strategy except `Extrapolate::Enable` (the only
-  setting that ran the "at least 2 points" check). Now checked unconditionally at
-  construction, raising `ValidateError::InsufficientGridPoints` instead.
-- Serde: non-self-describing formats (bincode, postcard, ...) could never actually read
-  back an interpolator they had just written: `deserialize_any` was called
-  unconditionally, which those formats don't support at all, and a fixed-size grid
-  serializes as a tuple, which those formats encode without a length prefix, so reading
-  it back as a seq desynchronized the byte stream. Both paths are now gated on
-  `is_human_readable()`, falling back to `ndarray`'s own (de)serialization for
-  non-human-readable formats.
+- `InterpND` panicked on a 0-D grid and on any grid dimension with exactly 1 point;
+  both now raise `ValidateError::InsufficientGridLength`/handle the 0-D case cleanly.
+- Serde: non-self-describing formats (bincode, postcard, ...) couldn't round-trip an
+  interpolator they had just written.
 
 ## [0.9.1] - 2026-08-03
 
@@ -469,7 +289,8 @@ Initial release.
 [@robfitzgerald]: https://github.com/robfitzgerald
 [@meredithdoan]: https://github.com/meredithdoan
 
-[Unreleased]: https://github.com/NatLabRockies/ninterp/compare/v0.9.1...main
+[Unreleased]: https://github.com/NatLabRockies/ninterp/compare/v0.10.0...main
+[0.10.0]: https://github.com/NatLabRockies/ninterp/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/NatLabRockies/ninterp/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/NatLabRockies/ninterp/compare/v0.8.2...v0.9.0
 [0.8.2]: https://github.com/NatLabRockies/ninterp/compare/v0.8.1...v0.8.2

@@ -14,10 +14,10 @@ pub enum ValidateError {
     #[error("`Extrapolate::Enable` is not supported by this strategy")]
     ExtrapolateUnsupported,
 
-    /// A grid axis has fewer than the 2 points every strategy needs. The `usize` is
-    /// the offending dimension.
-    #[error("at least 2 grid points are required per dimension: dim {0}")]
-    InsufficientGridPoints(usize),
+    /// A grid axis has fewer than the 2 coordinates every strategy needs. The `usize`
+    /// is the offending dimension.
+    #[error("grid dimension {0} must have a length of at least 2")]
+    InsufficientGridLength(usize),
 
     /// A grid axis isn't strictly increasing. The `usize` is the offending
     /// dimension.

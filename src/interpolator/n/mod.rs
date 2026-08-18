@@ -104,7 +104,7 @@ where
             let i_grid_len = self.grid[i].len();
             // Every strategy needs at least 2 points per dimension to bracket a query point
             if i_grid_len < 2 {
-                return Err(ValidateError::InsufficientGridPoints(i));
+                return Err(ValidateError::InsufficientGridLength(i));
             }
             // Check that grid points are strictly increasing; a repeated coordinate would
             // give a zero-width interval, dividing by zero in any strategy that computes a

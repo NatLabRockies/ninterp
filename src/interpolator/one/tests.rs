@@ -377,7 +377,7 @@ fn test_insufficient_grid_points() {
             Extrapolate::Error
         )
         .unwrap_err(),
-        ValidateError::InsufficientGridPoints(0)
+        ValidateError::InsufficientGridLength(0)
     ));
 }
 
