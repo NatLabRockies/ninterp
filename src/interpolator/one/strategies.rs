@@ -150,12 +150,5 @@ where
     }
 }
 
-grid_transform_strategy_impl!(
-    Strategy1D,
-    InterpData1DBase,
-    InterpData1DView,
-    1,
-    "Checks the axis count (must be 1) and that every raw grid coordinate is in \
-     the configured transform's domain."
-);
+grid_transform_strategy_impl!(Strategy1D, InterpData1DBase, InterpData1DView, 1);
 values_transform_strategy_impl!(Strategy1D, InterpData1DBase, InterpData1DView, Ix1, 1);

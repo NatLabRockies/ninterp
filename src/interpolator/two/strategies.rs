@@ -217,12 +217,5 @@ where
     }
 }
 
-grid_transform_strategy_impl!(
-    Strategy2D,
-    InterpData2DBase,
-    InterpData2DView,
-    2,
-    "Checks the axis count (must be 1 or 2) and that every raw grid coordinate is \
-     in its axis's configured transform's domain."
-);
+grid_transform_strategy_impl!(Strategy2D, InterpData2DBase, InterpData2DView, 2);
 values_transform_strategy_impl!(Strategy2D, InterpData2DBase, InterpData2DView, Ix2, 2);
