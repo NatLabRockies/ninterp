@@ -86,22 +86,24 @@ pub enum ValidateError {
         index: usize,
     },
 
-    /// `transform` isn't monotonic across the whole of `grid[dim]`, raised by
+    /// `transform` isn't strictly monotonic across the whole of `grid[dim]`, raised by
     /// [`crate::strategy::GridTransform`]. Every coordinate can individually pass
     /// [`Transform::in_domain`] and still trigger this: `transform`'s domain can be
     /// disconnected (e.g. [`Transform::Reciprocal`]'s `x != 0` is two separate
     /// pieces), and a transform that's monotonic on each piece separately isn't
-    /// necessarily monotonic across a raw grid that spans both. `index` is the first
-    /// position where the transformed direction breaks, mirroring
-    /// [`ValidateError::NonUniform`].
+    /// necessarily monotonic across a raw grid that spans both. Also catches a
+    /// repeated transformed coordinate (e.g. two raw coordinates mapping to the same
+    /// value under `transform`), mirroring how [`ValidateError::NotStrictlyIncreasing`]
+    /// rejects a repeated raw coordinate. `index` is the first position where the
+    /// transformed direction breaks, mirroring [`ValidateError::NonUniform`].
     #[error(
-        "GridTransform: grid[{dim}] is not monotonic under {transform:?} \
+        "GridTransform: grid[{dim}] is not strictly monotonic under {transform:?} \
          (direction changes at index {index})"
     )]
     GridTransformNotMonotonic {
-        /// The transform under which `grid[dim]` isn't monotonic.
+        /// The transform under which `grid[dim]` isn't strictly monotonic.
         transform: Transform,
-        /// The axis that isn't monotonic under `transform`.
+        /// The axis that isn't strictly monotonic under `transform`.
         dim: usize,
         /// The first position where the transformed direction breaks.
         index: usize,
