@@ -86,8 +86,9 @@ Everything below is merged to `main` but not yet tagged/released.
   query point, then interpolates. Default reproduces existing behavior (wraps in the
   grid's own coordinate space) for every built-in strategy; a strategy whose working
   coordinate space differs from the grid's can override it. Groundwork for #56.
-- `strategy::Transform`, `strategy::GridTransform<T, S>`, `strategy::ValuesTransform<T,
-  S>`: composable wrappers for interpolating in a transformed coordinate/value space
+- `strategy::transform::Transform`, `strategy::GridTransform<T, S>`,
+  `strategy::ValuesTransform<T, S>`: composable wrappers for interpolating in a
+  transformed coordinate/value space
   (`Log`, `Sqrt`, `Reciprocal`, or `Identity`) instead of the raw one: standard for data
   spanning many orders of magnitude or following a known nonlinear relationship, and for
   bounding interpolated output (e.g. always-positive via `ValuesTransform::log`).

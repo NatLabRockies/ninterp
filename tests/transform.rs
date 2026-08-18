@@ -7,6 +7,7 @@
 use ndarray::prelude::*;
 use ninterp::error::{InterpolateError, OutsideDomainAt, ValidateError};
 use ninterp::prelude::*;
+use ninterp::strategy::transform::Transform;
 use ninterp::strategy::*;
 
 #[test]
@@ -870,6 +871,7 @@ fn composed_values_log_grid_log_under_wrap_delegates_to_inner() {
 #[cfg(feature = "serde")]
 mod serde_round_trip {
     use ninterp::strategy::enums::Strategy1DEnum;
+    use ninterp::strategy::transform::Transform;
     use ninterp::strategy::*;
 
     fn round_trip<T>(value: &T)

@@ -16,8 +16,10 @@ pub mod step;
 pub use step::Step;
 
 pub mod transform;
-pub(crate) use transform::{grid_transform_strategy_impl, values_transform_strategy_impl};
-pub use transform::{GridTransform, Transform, ValuesTransform};
+pub(crate) use transform::{
+    grid_transform_strategy_impl, values_transform_strategy_impl, Transform,
+};
+pub use transform::{GridTransform, ValuesTransform};
 
 pub mod enums;
 pub mod traits;
