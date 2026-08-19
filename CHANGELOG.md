@@ -8,6 +8,17 @@ bump the minor version (`0.x` -> `0.(x+1)`), other changes bump the patch versio
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-08-18
+
+### Changed
+- **Breaking:** `InterpolatorEnumBase`'s `From<Interp1DBase<D, S>>`/`From<Interp2DBase<D,
+  S>>`/`From<Interp3DBase<D, S>>`/`From<InterpNDBase<D, S>>` impls are now generic over
+  any strategy `S: Into<Strategy*DEnum<D::Elem>>`, not just the enum strategy type
+  itself, so e.g. `Interp1D::new(x, f_x, strategy::Nearest, extrapolate)?.into()`
+  converts directly into an `InterpolatorEnum` without first converting the strategy to
+  `Strategy1DEnum`. Loosening the bound can change type inference at call sites that
+  chained `.into()` without a turbofish; add an explicit type/turbofish if that happens.
+
 ## [0.10.0] - 2026-08-17
 
 ### Added

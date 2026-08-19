@@ -27,7 +27,7 @@ fn using_enum() {
     interp = Interp1D::new(
         array![0., 1., 2.],
         array![0., 4., 8.],
-        strategy::Nearest.into(),
+        strategy::Nearest,
         Extrapolate::Error,
     )
     .unwrap()

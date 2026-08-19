@@ -445,47 +445,67 @@ where
     }
 }
 
-impl<D> From<Interp1DBase<D, Strategy1DEnum<D::Elem>>> for InterpolatorEnumBase<D>
+impl<D, S> From<Interp1DBase<D, S>> for InterpolatorEnumBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
+    S: Into<Strategy1DEnum<D::Elem>> + Clone,
 {
     #[inline]
-    fn from(interpolator: Interp1DBase<D, Strategy1DEnum<D::Elem>>) -> Self {
-        InterpolatorEnumBase::Interp1D(interpolator)
+    fn from(interpolator: Interp1DBase<D, S>) -> Self {
+        InterpolatorEnumBase::Interp1D(Interp1DBase {
+            data: interpolator.data,
+            strategy: interpolator.strategy.into(),
+            extrapolate: interpolator.extrapolate,
+        })
     }
 }
 
-impl<D> From<Interp2DBase<D, Strategy2DEnum<D::Elem>>> for InterpolatorEnumBase<D>
+impl<D, S> From<Interp2DBase<D, S>> for InterpolatorEnumBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
+    S: Into<Strategy2DEnum<D::Elem>> + Clone,
 {
     #[inline]
-    fn from(interpolator: Interp2DBase<D, Strategy2DEnum<D::Elem>>) -> Self {
-        InterpolatorEnumBase::Interp2D(interpolator)
+    fn from(interpolator: Interp2DBase<D, S>) -> Self {
+        InterpolatorEnumBase::Interp2D(Interp2DBase {
+            data: interpolator.data,
+            strategy: interpolator.strategy.into(),
+            extrapolate: interpolator.extrapolate,
+        })
     }
 }
 
-impl<D> From<Interp3DBase<D, Strategy3DEnum<D::Elem>>> for InterpolatorEnumBase<D>
+impl<D, S> From<Interp3DBase<D, S>> for InterpolatorEnumBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
+    S: Into<Strategy3DEnum<D::Elem>> + Clone,
 {
     #[inline]
-    fn from(interpolator: Interp3DBase<D, Strategy3DEnum<D::Elem>>) -> Self {
-        InterpolatorEnumBase::Interp3D(interpolator)
+    fn from(interpolator: Interp3DBase<D, S>) -> Self {
+        InterpolatorEnumBase::Interp3D(Interp3DBase {
+            data: interpolator.data,
+            strategy: interpolator.strategy.into(),
+            extrapolate: interpolator.extrapolate,
+        })
     }
 }
 
-impl<D> From<InterpNDBase<D, StrategyNDEnum<D::Elem>>> for InterpolatorEnumBase<D>
+impl<D, S> From<InterpNDBase<D, S>> for InterpolatorEnumBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
+    S: Into<StrategyNDEnum<D::Elem>> + Clone,
 {
     #[inline]
-    fn from(interpolator: InterpNDBase<D, StrategyNDEnum<D::Elem>>) -> Self {
-        InterpolatorEnumBase::InterpND(interpolator)
+    fn from(interpolator: InterpNDBase<D, S>) -> Self {
+        InterpolatorEnumBase::InterpND(InterpNDBase {
+            data: interpolator.data,
+            strategy: interpolator.strategy.into(),
+            extrapolate: interpolator.extrapolate,
+        })
     }
 }
 
