@@ -1,0 +1,42 @@
+[package]
+name = "ninterp-uom"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ninterp = { workspace = true, version = "0.11.0" }
+uom = { version = "0.38.0", default-features = false, features = ["si"] }
+num-traits = { workspace = true, version = "0.2.15" }
+
+[features]
+default = ["autoconvert", "std", "f64"]
+
+autoconvert = ["uom/autoconvert"]
+std = ["uom/std"]
+serde = ["uom/serde", "ninterp/serde"]
+
+f32 = ["uom/f32"]
+f64 = ["uom/f64"]
+
+usize = ["uom/usize"]
+u8 = ["uom/u8"]
+u16 = ["uom/u16"]
+u32 = ["uom/u32"]
+u64 = ["uom/u64"]
+u128 = ["uom/u128"]
+isize = ["uom/isize"]
+i8 = ["uom/i8"]
+i16 = ["uom/i16"]
+i32 = ["uom/i32"]
+i64 = ["uom/i64"]
+i128 = ["uom/i128"]
+
+bigint = ["uom/bigint"]
+biguint = ["uom/biguint"]
+rational = ["uom/rational"]
+rational32 = ["uom/rational32"]
+rational64 = ["uom/rational64"]
+bigrational = ["uom/bigrational"]
+
+complex32 = ["uom/complex32"]
+complex64 = ["uom/complex64"]
