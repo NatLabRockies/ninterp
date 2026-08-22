@@ -8,8 +8,7 @@ The `ninterp` crate provides [multivariate interpolation](https://en.wikipedia.o
 
 It is built on [`ndarray`](https://crates.io/crates/ndarray) and uses ndarray arrays/views throughout its API.
 `ndarray` and [`num_traits`](https://crates.io/crates/num_traits) are re-exposed as `ninterp::ndarray` and
-`ninterp::num_traits` for convenience, so `use ninterp::ndarray::prelude::*;` works just as well as a direct
-`ndarray` dependency.
+`ninterp::num_traits` for convenience.
 
 Hard-coded interpolators are provided for N = 1, 2, and 3, based on the observed runtime tradeoff versus a general N-D implementation.
 For higher dimensionalities (N >= 4), use `InterpND`.
