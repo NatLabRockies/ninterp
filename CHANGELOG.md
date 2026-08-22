@@ -8,6 +8,8 @@ bump the minor version (`0.x` -> `0.(x+1)`), other changes bump the patch versio
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-08-22
+
 ### Added
 - `std` feature, on by default: opting out via `default-features = false` makes the
   crate `no_std`-compatible (`alloc` still required). The `serde` feature doesn't yet
