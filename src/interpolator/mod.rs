@@ -277,7 +277,7 @@ macro_rules! interpolate_impl {
                         Extrapolate::Enable => {}
                         Extrapolate::Fill(value) => return Ok(*value),
                         Extrapolate::Clamp => {
-                            let clamped_point = std::array::from_fn(|i| {
+                            let clamped_point = core::array::from_fn(|i| {
                                 *clamp(
                                     &point[i],
                                     self.data.grid[i].first().unwrap(),
@@ -400,7 +400,7 @@ macro_rules! batch_interpolate_into_impl {
                     let clamped: Vec<[D::Elem; N]> = points
                         .iter()
                         .map(|point| {
-                            std::array::from_fn(|i| {
+                            core::array::from_fn(|i| {
                                 *clamp(
                                     &point[i],
                                     self.data.grid[i].first().unwrap(),

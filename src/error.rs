@@ -1,8 +1,9 @@
 //! Crate error types
 
-use std::fmt;
+use core::fmt;
 use thiserror::Error;
 
+use super::*;
 use crate::strategy::Transform;
 
 /// Error in interpolator data validation
