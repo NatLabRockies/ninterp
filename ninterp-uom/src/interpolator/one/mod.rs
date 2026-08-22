@@ -28,7 +28,7 @@ where
     Qv: BaseUnit<D::Elem>,
     S: Clone,
 {
-    interp: Interp1DBase<D, S>,
+    inner: Interp1DBase<D, S>,
     _units: PhantomData<fn() -> (Qx, Qv)>,
 }
 
@@ -57,7 +57,7 @@ where
         let x: ArrayView1<'a, V> = unsafe { mem::transmute::<ArrayView1<'a, Qx>, _>(x) };
         let f_x: ArrayView1<'a, V> = unsafe { mem::transmute::<ArrayView1<'a, Qv>, _>(f_x) };
         Ok(Self {
-            interp: Interp1DView::new(x, f_x, strategy, extrapolate)?,
+            inner: Interp1DView::new(x, f_x, strategy, extrapolate)?,
             _units: PhantomData,
         })
     }
@@ -85,7 +85,7 @@ where
         let x: Array1<V> = unsafe { mem::transmute::<Array1<Qx>, _>(x) };
         let f_x: Array1<V> = unsafe { mem::transmute::<Array1<Qv>, _>(f_x) };
         Ok(Self {
-            interp: Interp1D::new(x, f_x, strategy, extrapolate)?,
+            inner: Interp1D::new(x, f_x, strategy, extrapolate)?,
             _units: PhantomData,
         })
     }
@@ -101,7 +101,7 @@ where
 {
     /// Interpolate at `point`, returning a value in `Qv`.
     pub fn interpolate(&self, point: Qx) -> Result<Qv, InterpolateError> {
-        self.interp
+        self.inner
             .interpolate(&[point.to_base()])
             .map(Qv::from_base)
     }
