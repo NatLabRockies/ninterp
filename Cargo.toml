@@ -28,6 +28,7 @@ serde = { version = "1.0.103", optional = true, default-features = false, featur
     "alloc",
 ] }
 serde_unit_struct = { version = "0.1.3", optional = true }
+# TODO: bump serde-ndim when no-std fix is out
 serde-ndim = { version = "2.2.1", optional = true, default-features = false, features = [
     "ndarray",
 ] }
