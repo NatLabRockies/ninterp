@@ -8,6 +8,12 @@ bump the minor version (`0.x` -> `0.(x+1)`), other changes bump the patch versio
 
 ## [Unreleased]
 
+### Added
+- `std` feature, on by default: opting out via `default-features = false` makes the
+  crate `no_std`-compatible (`alloc` still required). The `serde` feature doesn't yet
+  build without `std`, blocked on an upstream fix
+  ([RReverser/serde-ndim#8](https://github.com/RReverser/serde-ndim/pull/8)).
+
 ## [0.11.0] - 2026-08-18
 
 ### Changed

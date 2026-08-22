@@ -1,5 +1,8 @@
 #![doc = include_str!("../README.md")]
 #![warn(missing_docs)]
+#![cfg_attr(not(feature = "std"), no_std)]
+
+extern crate alloc;
 
 /// The `prelude` module exposes a variety of types:
 /// - All interpolator types:
@@ -54,7 +57,16 @@ pub(crate) use strategy::step::*;
 pub(crate) use strategy::traits::*;
 pub(crate) use strategy::utils::*;
 
-pub(crate) use std::fmt::Debug;
+pub(crate) use core::fmt::Debug;
+
+pub(crate) use alloc::borrow::ToOwned;
+pub(crate) use alloc::boxed::Box;
+pub(crate) use alloc::format;
+pub(crate) use alloc::string::String;
+#[cfg(all(test, feature = "serde"))]
+pub(crate) use alloc::string::ToString;
+pub(crate) use alloc::vec;
+pub(crate) use alloc::vec::Vec;
 
 pub use ndarray;
 pub(crate) use ndarray::prelude::*;

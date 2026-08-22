@@ -35,6 +35,20 @@ jobs:
         # Note: this will be unwieldy if there are many features, but for now it is fine.
         run: cargo hack test --feature-powerset --verbose
 
+      - name: install no_std target
+        run: rustup target add thumbv7m-none-eabi
+
+      - name: verify no_std build (bare-metal target)
+        run: cargo build --lib --no-default-features --target thumbv7m-none-eabi
+
+      # Blocked on an upstream serde-ndim fix (RReverser/serde-ndim#8): serde-ndim
+      # 2.2.1 pulls in serde's default std feature regardless of its own no_std
+      # setting, so this fails until a fixed release ships. "All features" here
+      # means everything except std, which a true no_std target can't build with
+      # anyway. Uncomment once serde-ndim's fix is out.
+      # - name: verify no_std build (bare-metal target, all features)
+      #   run: cargo build --lib --no-default-features --features serde --target thumbv7m-none-eabi
+
       - name: run all examples
         run: |
           for name in $(cargo metadata --no-deps --format-version 1 | \
