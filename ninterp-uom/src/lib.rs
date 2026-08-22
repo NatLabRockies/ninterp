@@ -29,8 +29,8 @@ pub(crate) use ninterp::ndarray::{Data, OwnedRepr, RawDataClone, ViewRepr};
 
 pub use uom;
 pub(crate) use uom::{
-    si::{Dimension, Quantity, Units},
     Conversion,
+    si::{Dimension, Quantity, Units},
 };
 
 pub use num_traits;
