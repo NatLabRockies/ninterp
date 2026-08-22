@@ -30,7 +30,7 @@ where
 {
     type Value = A;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
         formatter.write_str("an ndarray object or a nested array sequence")
     }
 
@@ -105,7 +105,7 @@ where
 {
     type Value = [ArrayBase<D, Ix1>; N];
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
         formatter.write_str("a sequence of arrays")
     }
 
@@ -143,7 +143,7 @@ where
 {
     type Value = Vec<ArrayBase<D, Ix1>>;
 
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
         formatter.write_str("a sequence of arrays")
     }
 
