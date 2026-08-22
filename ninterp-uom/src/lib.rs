@@ -33,5 +33,5 @@ pub(crate) use uom::{
     si::{Dimension, Quantity, Units},
 };
 
-pub use num_traits;
-pub(crate) use num_traits::{Euclid, Num};
+pub use ninterp::num_traits;
+pub(crate) use ninterp::num_traits::{Euclid, Num};
