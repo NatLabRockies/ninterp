@@ -12,7 +12,7 @@ It is built on [`ndarray`](https://crates.io/crates/ndarray) and uses ndarray ar
 
 Hard-coded interpolators are provided for N = 1, 2, and 3, based on the observed runtime tradeoff versus a general N-D implementation.
 For higher dimensionalities (N >= 4), use `InterpND`.
-All interpolators work with both owned and borrowed arrays (array views) of various types.
+All interpolators work with both owned and borrowed arrays (array views), and are generic over various Num types.
 
 A variety of interpolation strategies are implemented and exposed in the [`prelude`](https://docs.rs/ninterp/latest/ninterp/prelude/index.html) module.
 Custom interpolation strategies can be defined in downstream crates.
