@@ -63,6 +63,8 @@ pub(crate) use alloc::borrow::ToOwned;
 pub(crate) use alloc::boxed::Box;
 pub(crate) use alloc::format;
 pub(crate) use alloc::string::String;
+#[cfg(all(test, feature = "serde"))]
+pub(crate) use alloc::string::ToString;
 pub(crate) use alloc::vec;
 pub(crate) use alloc::vec::Vec;
 
