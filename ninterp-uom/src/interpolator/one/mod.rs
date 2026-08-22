@@ -16,10 +16,13 @@
 
 use super::*;
 
+#[cfg(all(test, feature = "f64"))]
+mod tests;
+
 /// 1-D interpolator over `uom` quantities: grid points of unit `Qx`, values of unit `Qv`,
 /// both backed by storage representation `D` (`OwnedRepr<V>` or `ViewRepr<&'a V>` - see
 /// the [`UomInterp1D`]/[`UomInterp1DView`] aliases below).
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct UomInterp1DBase<D, Qx, Qv, S>
 where
     D: Data + RawDataClone + Clone,
@@ -28,7 +31,19 @@ where
     Qv: BaseUnit<D::Elem>,
     S: Clone,
 {
-    inner: Interp1DBase<D, S>,
+    /// The wrapped, unit-erased `ninterp` interpolator - an escape hatch, mirroring
+    /// core's own public `data`/`strategy`/`extrapolate` fields on `Interp1DBase`. The
+    /// validated path (`new`, `set_strategy`, `set_extrapolate`, ...) is the default; use
+    /// this directly only when you explicitly want to bypass it (e.g. mutating
+    /// `strategy`/`extrapolate` without re-validating, or reaching `data` for `Debug`
+    /// output).
+    ///
+    /// **Caveat**: `inner.data.grid`/`values` are stored in each dimension's `uom` *base*
+    /// unit (e.g. meters for `Length`), not necessarily the unit originally used to
+    /// construct the array - `Quantity::new::<foot>(3.0)` stores `0.9144`. Reading raw
+    /// numbers here gives you that base-unit value with no `Qx`/`Qv` left to say which
+    /// unit it is.
+    pub inner: Interp1DBase<D, S>,
     _units: PhantomData<fn() -> (Qx, Qv)>,
 }
 
@@ -105,4 +120,18 @@ where
             .interpolate(&[point.to_base()])
             .map(Qv::from_base)
     }
+
+    uom_interp_common_methods!(
+        UomInterp1DBase,
+        Strategy1D,
+        UomInterp1DView<'_, Qx, Qv, D::Elem, S>,
+        UomInterp1D<Qx, Qv, D::Elem, S>,
+        (Qx),
+        (point)
+    );
 }
+
+uom_interp_partial_eq!(UomInterp1DBase, Interp1DBase, (Qx));
+uom_interp_set_strategy_box!(UomInterp1DBase, Strategy1D, (Qx));
+uom_interp_set_strategy_enum!(UomInterp1DBase, Strategy1DEnum, (Qx));
+uom_interp_serde!(UomInterp1DBase, Interp1DBase, (Qx));

@@ -6,6 +6,7 @@ ninterp = { path = ".", version = "0.11.1" }
 num-traits = { version = "0.2.15", default-features = false, features = [
     "libm",
 ] }
+serde = { version = "1.0.103", default-features = false }
 
 [package]
 name = "ninterp"
@@ -29,10 +30,7 @@ categories = ["mathematics"]
 dyn-clone = "1"
 ndarray = { version = "0.17", default-features = false }
 num-traits = { workspace = true, version = "0.2.15" }
-serde = { version = "1.0.103", optional = true, default-features = false, features = [
-    "derive",
-    "alloc",
-] }
+serde = { workspace = true, optional = true, features = ["derive", "alloc"] }
 serde_unit_struct = { version = "0.1.3", optional = true }
 serde-ndim = { version = "2.2.1", optional = true, default-features = false, features = [
     "ndarray",
