@@ -18,6 +18,14 @@ fn grid_to_f64<T: NumCast + Copy>(grid: ArrayView1<T>) -> Array1<f64> {
 
 /// Casts a blended `f64` result back down to `Dv::Elem`, for the checked (`Result`
 /// returning) interpolation path.
+///
+/// Known limitation: this goes through `NumCast`, whose float-to-integer conversion
+/// truncates toward zero (`as`'s own semantics) rather than rounding to nearest. So
+/// for an integer `Dv`, a blend that lands on e.g. `15.5` casts down to `15`, not a
+/// rounded `16`, silently biasing every non-exact blend downward. Fixing this
+/// properly needs a type-aware cast (round for integer `Dv`, exact passthrough for a
+/// float `Dv`, since rounding *that* would wrongly destroy real fractional output),
+/// deferred for now; revisit alongside a real `Tp` type if this prototype proceeds.
 fn from_f64_checked<Tv: NumCast>(x: f64) -> Result<Tv, InterpolateError> {
     num_traits::cast(x)
         .ok_or_else(|| InterpolateError::Other("blended value doesn't fit in value type".into()))
@@ -543,6 +551,8 @@ where
     /// Calls `inner.interpolate_fast` rather than `inner.interpolate`, so "fast"
     /// propagates through nested `GridTransform`/`ValuesTransform` layers instead of
     /// stopping at the outermost one.
+    ///
+    /// Truncates rather than rounds for an integer `Dv`, same as [`from_f64_checked`].
     fn interpolate_fast(&self, data: &InterpDataNDBase<Dg, Dv>, point: &[f64]) -> Dv::Elem {
         let view = InterpDataNDBase {
             grid: data.grid.iter().map(|g| g.view()).collect(),
