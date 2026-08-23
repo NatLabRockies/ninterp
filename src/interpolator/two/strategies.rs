@@ -217,5 +217,42 @@ where
     }
 }
 
+impl<D> Strategy2D<D> for CubicC1<D::Elem>
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug,
+{
+    /// Precomputes the full corner-derivative tensor under [`CubicC1CacheMode::Full`]
+    /// (the default); under [`CubicC1CacheMode::None`], only validates.
+    fn init(&mut self, data: &InterpData2DBase<D>) -> Result<(), ValidateError> {
+        if self.cache_mode == CubicC1CacheMode::Full {
+            let data_view = data.view();
+            self.cache = compute_corner_cache_fd(&data_view.grid, data_view.values.into_dyn());
+        }
+        Ok(())
+    }
+
+    fn interpolate(
+        &self,
+        data: &InterpData2DBase<D>,
+        point: &[D::Elem; 2],
+    ) -> Result<D::Elem, InterpolateError> {
+        let grids: Vec<ArrayView1<D::Elem>> = data.grid.iter().map(|g| g.view()).collect();
+        Ok(match self.cache_mode {
+            CubicC1CacheMode::Full => {
+                evaluate_spline_corner_cached(&grids, self.cache.view(), point)
+            }
+            CubicC1CacheMode::None => {
+                evaluate_spline_corner_local(&grids, data.values.view().into_dyn(), point)
+            }
+        })
+    }
+
+    /// Returns `true`: the boundary Hermite patch extends naturally.
+    fn allow_extrapolate(&self) -> bool {
+        true
+    }
+}
+
 grid_transform_strategy_impl!(Strategy2D, InterpData2DBase, InterpData2DView, 2);
 values_transform_strategy_impl!(Strategy2D, InterpData2DBase, InterpData2DView, Ix2, 2);

@@ -150,5 +150,36 @@ where
     }
 }
 
+impl<D> Strategy1D<D> for CubicC1<D::Elem>
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug,
+{
+    /// Caches the finite-difference derivative vector. `cache_mode` is ignored here:
+    /// the cache is already O(1) regardless.
+    fn init(&mut self, data: &InterpData1DBase<D>) -> Result<(), ValidateError> {
+        self.cache = compute_fd_cache(data.grid[0].view(), data.values.view());
+        Ok(())
+    }
+
+    fn interpolate(
+        &self,
+        data: &InterpData1DBase<D>,
+        point: &[D::Elem; 1],
+    ) -> Result<D::Elem, InterpolateError> {
+        evaluate_hermite_1d_cached(
+            data.grid[0].view(),
+            data.values.view(),
+            self.cache.view(),
+            point[0],
+        )
+    }
+
+    /// Returns `true`: the boundary Hermite segment extends naturally.
+    fn allow_extrapolate(&self) -> bool {
+        true
+    }
+}
+
 grid_transform_strategy_impl!(Strategy1D, InterpData1DBase, InterpData1DView, 1);
 values_transform_strategy_impl!(Strategy1D, InterpData1DBase, InterpData1DView, Ix1, 1);

@@ -20,6 +20,7 @@ extern crate alloc;
 ///     directions)
 ///   - [`strategy::Linear`]
 ///   - [`strategy::LinearUniform`]
+///   - [`strategy::CubicC1`] (C¹ local cubic Hermite spline)
 ///   - [`strategy::CubicC2`] (C² cubic spline)
 ///   - `serde`-compatible strategy enums: [`strategy::enums::Strategy1DEnum`]/etc.
 /// - The extrapolation setting enum: [`Extrapolate`](`interpolator::Extrapolate`)

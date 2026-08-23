@@ -1,6 +1,6 @@
-//! Corner-derivative-tensor evaluation, shared by [`CubicC2`] and (once it exists)
-//! `CubicC1`: BC-agnostic, works the same regardless of how the tensor's entries were
-//! populated (a solve for `CubicC2`, finite differences for `CubicC1`).
+//! Corner-derivative-tensor evaluation, shared by [`c1`](super::c1) and
+//! [`c2`](super::c2): BC-agnostic, works the same regardless of how the tensor's
+//! entries were populated (a solve for `CubicC2`, finite differences for `CubicC1`).
 
 use super::*;
 use ndarray::Zip;
@@ -8,7 +8,7 @@ use ndarray::Zip;
 /// Standard cubic Hermite basis blend of endpoint values `p0`/`p1` and their derivatives
 /// `m0`/`m1` (actual derivatives, not yet scaled by the interval width `h`) at
 /// fractional position `t` in `[0, 1]` between them.
-fn evaluate_hermite_1d<T: Float>(p0: T, m0: T, p1: T, m1: T, h: T, t: T) -> T {
+pub(crate) fn evaluate_hermite_1d<T: Float>(p0: T, m0: T, p1: T, m1: T, h: T, t: T) -> T {
     let two = T::one() + T::one();
     let three = two + T::one();
     let t2 = t * t;

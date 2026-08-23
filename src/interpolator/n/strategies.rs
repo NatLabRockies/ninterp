@@ -253,6 +253,51 @@ where
     }
 }
 
+impl<D> StrategyND<D> for CubicC1<D::Elem>
+where
+    D: Data + RawDataClone + Clone,
+    D::Elem: Float + Debug,
+{
+    /// Precomputes the full corner-derivative tensor under [`CubicC1CacheMode::Full`]
+    /// (the default); under [`CubicC1CacheMode::None`], only validates.
+    fn init(&mut self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
+        if data.ndim() == 0 {
+            return Ok(());
+        }
+        if self.cache_mode == CubicC1CacheMode::Full {
+            let data_view = data.view();
+            self.cache = compute_corner_cache_fd(&data_view.grid, data_view.values);
+        }
+        Ok(())
+    }
+
+    fn interpolate(
+        &self,
+        data: &InterpDataNDBase<D>,
+        point: &[D::Elem],
+    ) -> Result<D::Elem, InterpolateError> {
+        if data.ndim() == 0 {
+            return data.values.first().copied().ok_or_else(|| {
+                InterpolateError::Other("internal: 0-D interpolation data has no value".into())
+            });
+        }
+        let grids: Vec<ArrayView1<D::Elem>> = data.grid.iter().map(|g| g.view()).collect();
+        Ok(match self.cache_mode {
+            CubicC1CacheMode::Full => {
+                evaluate_spline_corner_cached(&grids, self.cache.view(), point)
+            }
+            CubicC1CacheMode::None => {
+                evaluate_spline_corner_local(&grids, data.values.view(), point)
+            }
+        })
+    }
+
+    /// Returns `true`: the boundary Hermite patch extends naturally.
+    fn allow_extrapolate(&self) -> bool {
+        true
+    }
+}
+
 impl<D, S> StrategyND<D> for GridTransform<D::Elem, S>
 where
     D: Data + RawDataClone + Clone,

@@ -416,6 +416,106 @@ fn test_cubic_c2_clamped_uses_given_derivative() {
 }
 
 #[test]
+fn test_cubic_c1_linear_exact() {
+    // Linear data: finite differences recover the exact constant slope on each axis, so
+    // the Hermite patch reduces exactly to the plane, under both cache modes.
+    fn f(x: f64, y: f64, z: f64) -> f64 {
+        2. * x + 3. * y - z + 1.
+    }
+    let grid = [0., 1., 2., 3.];
+    let values = Array3::from_shape_fn((4, 4, 4), |(i, j, k)| f(grid[i], grid[j], grid[k]));
+    for cache_mode in [CubicC1CacheMode::Full, CubicC1CacheMode::None] {
+        let interp = Interp3D::new(
+            array![0., 1., 2., 3.],
+            array![0., 1., 2., 3.],
+            array![0., 1., 2., 3.],
+            values.clone(),
+            strategy::CubicC1::new().with_cache_mode(cache_mode),
+            Extrapolate::Enable,
+        )
+        .unwrap();
+        for &(x, y, z) in &[(0.5, 0.5, 0.5), (1.5, 2.5, 0.25), (-0.5, 3.5, 2.25)] {
+            assert_approx_eq!(interp.interpolate(&[x, y, z]).unwrap(), f(x, y, z));
+        }
+    }
+}
+
+#[test]
+fn test_cubic_c1_full_none_agree() {
+    // `Full` and `None` build the same corner-derivative tensor at different scales
+    // (whole grid vs. a local window); they must agree exactly on any query.
+    fn f(x: f64, y: f64, z: f64) -> f64 {
+        x * x * y + y * y * z + z * z * x
+    }
+    let grid = [0., 1., 2., 3.];
+    let values = Array3::from_shape_fn((4, 4, 4), |(i, j, k)| f(grid[i], grid[j], grid[k]));
+    let interp_full = Interp3D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        values.clone(),
+        strategy::CubicC1::default(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let interp_none = Interp3D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        array![0., 1., 2., 3.],
+        values,
+        strategy::CubicC1::new().with_cache_mode(CubicC1CacheMode::None),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &(x, y, z) in &[(0.5, 0.5, 0.5), (1.5, 2.5, 0.25), (2.25, 0.75, 1.5)] {
+        assert_eq!(
+            interp_full.interpolate(&[x, y, z]).unwrap(),
+            interp_none.interpolate(&[x, y, z]).unwrap()
+        );
+    }
+}
+
+#[test]
+fn test_cubic_c1_3d_matches_nd() {
+    // `Interp3D` and `InterpND` both build their corner-derivative tensor via
+    // `compute_corner_cache_fd`; this confirms the two wrappers agree on the same
+    // grid/values, under both cache modes.
+    fn f(x: f64, y: f64, z: f64) -> f64 {
+        x * x * y + y * y * z + z * z * x
+    }
+    let grid = [0., 1., 2., 3.];
+    let values = Array3::from_shape_fn((4, 4, 4), |(i, j, k)| f(grid[i], grid[j], grid[k]));
+    for cache_mode in [CubicC1CacheMode::Full, CubicC1CacheMode::None] {
+        let interp3d = Interp3D::new(
+            array![0., 1., 2., 3.],
+            array![0., 1., 2., 3.],
+            array![0., 1., 2., 3.],
+            values.clone(),
+            strategy::CubicC1::new().with_cache_mode(cache_mode),
+            Extrapolate::Error,
+        )
+        .unwrap();
+        let interp_nd = InterpND::new(
+            vec![
+                array![0., 1., 2., 3.],
+                array![0., 1., 2., 3.],
+                array![0., 1., 2., 3.],
+            ],
+            values.clone().into_dyn(),
+            strategy::CubicC1::new().with_cache_mode(cache_mode),
+            Extrapolate::Error,
+        )
+        .unwrap();
+        for &(x, y, z) in &[(0.5, 0.5, 0.5), (1.5, 2.5, 0.25), (2.25, 0.75, 1.5)] {
+            assert_approx_eq!(
+                interp3d.interpolate(&[x, y, z]).unwrap(),
+                interp_nd.interpolate(&[x, y, z]).unwrap()
+            );
+        }
+    }
+}
+
+#[test]
 fn test_invalid_args() {
     let interp = Interp3D::new(
         array![0.05, 0.10, 0.15],

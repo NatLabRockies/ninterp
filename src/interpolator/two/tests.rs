@@ -444,6 +444,108 @@ fn test_cubic_c2_mixed_endpoints_scipy_oracle() {
 }
 
 #[test]
+fn test_cubic_c1_linear_exact() {
+    // Linear data: finite differences recover the exact constant slope on each axis, so
+    // the Hermite patch reduces exactly to the plane, under both cache modes.
+    fn f(x: f64, y: f64) -> f64 {
+        2. * x + 3. * y + 1.
+    }
+    let grid = array![0., 1., 2., 3.];
+    let values = array![
+        [f(0., 0.), f(0., 1.), f(0., 2.), f(0., 3.)],
+        [f(1., 0.), f(1., 1.), f(1., 2.), f(1., 3.)],
+        [f(2., 0.), f(2., 1.), f(2., 2.), f(2., 3.)],
+        [f(3., 0.), f(3., 1.), f(3., 2.), f(3., 3.)],
+    ];
+    for cache_mode in [CubicC1CacheMode::Full, CubicC1CacheMode::None] {
+        let interp = Interp2D::new(
+            grid.clone(),
+            grid.clone(),
+            values.clone(),
+            strategy::CubicC1::new().with_cache_mode(cache_mode),
+            Extrapolate::Enable,
+        )
+        .unwrap();
+        for &(x, y) in &[(0.5, 0.5), (1.5, 2.5), (2.5, 1.5), (-0.5, 3.5)] {
+            assert_approx_eq!(interp.interpolate(&[x, y]).unwrap(), f(x, y));
+        }
+    }
+}
+
+#[test]
+fn test_cubic_c1_full_none_agree() {
+    // `CubicC1CacheMode::Full` and `::None` build the same corner-derivative tensor at
+    // different scales (whole grid vs. a local window); they must agree exactly on any
+    // query, not just approximately.
+    let grid = array![0., 1., 2., 3.];
+    let values = array![
+        [0., 1., 4., 9.],
+        [1., 2., 5., 10.],
+        [4., 5., 8., 13.],
+        [9., 10., 13., 18.],
+    ]; // f(x, y) = x^2 + y
+    let interp_full = Interp2D::new(
+        grid.clone(),
+        grid.clone(),
+        values.clone(),
+        strategy::CubicC1::default(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let interp_none = Interp2D::new(
+        grid.clone(),
+        grid,
+        values,
+        strategy::CubicC1::new().with_cache_mode(CubicC1CacheMode::None),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &(x, y) in &[(0.5, 0.5), (1.5, 2.5), (2.5, 1.5), (0.25, 2.75)] {
+        assert_eq!(
+            interp_full.interpolate(&[x, y]).unwrap(),
+            interp_none.interpolate(&[x, y]).unwrap()
+        );
+    }
+}
+
+#[test]
+fn test_cubic_c1_2d_matches_nd() {
+    // `Interp2D` and `InterpND` both build their corner-derivative tensor via
+    // `compute_corner_cache_fd` and evaluate via `evaluate_spline_corner_cached`; this
+    // confirms the two wrappers agree on the same grid/values, under both cache modes.
+    let grid = array![0., 1., 2., 3.];
+    let values = array![
+        [0., 1., 4., 9.],
+        [1., 2., 5., 10.],
+        [4., 5., 8., 13.],
+        [9., 10., 13., 18.],
+    ]; // f(x, y) = x^2 + y
+    for cache_mode in [CubicC1CacheMode::Full, CubicC1CacheMode::None] {
+        let interp2d = Interp2D::new(
+            grid.clone(),
+            grid.clone(),
+            values.clone(),
+            strategy::CubicC1::new().with_cache_mode(cache_mode),
+            Extrapolate::Error,
+        )
+        .unwrap();
+        let interp_nd = InterpND::new(
+            vec![grid.clone(), grid.clone()],
+            values.clone().into_dyn(),
+            strategy::CubicC1::new().with_cache_mode(cache_mode),
+            Extrapolate::Error,
+        )
+        .unwrap();
+        for &(x, y) in &[(0.5, 0.5), (1.5, 2.5), (2.5, 1.5), (0.25, 2.75)] {
+            assert_approx_eq!(
+                interp2d.interpolate(&[x, y]).unwrap(),
+                interp_nd.interpolate(&[x, y]).unwrap()
+            );
+        }
+    }
+}
+
+#[test]
 fn test_invalid_args() {
     let interp = Interp2D::new(
         array![0.05, 0.10, 0.15],

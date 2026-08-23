@@ -8,6 +8,17 @@ bump the minor version (`0.x` -> `0.(x+1)`), other changes bump the patch versio
 
 ## [Unreleased]
 
+### Added
+- `strategy::CubicC1`: a C¹ local cubic Hermite spline strategy (finite-difference
+  derivative estimate, no global solve). Cheaper to build than `CubicC2`, matching the
+  local/uncached recipe LHAPDF-style consumers (e.g. neopdf) use by default at 3D+, but
+  not aiming for bit-for-bit LHAPDF parity. `derivative_mode` carries the
+  derivative-estimate method (`FiniteDifference` for now, `#[non_exhaustive]` for future
+  monotonicity-preserving variants); `cache_mode` chooses between precomputing the full
+  corner-derivative tensor at `init()` (`Full`, the default, same mechanism as
+  `CubicC2`) or deriving it fresh from a bounded local neighborhood on every query
+  (`None`) at 2-D and above. Closes #55.
+
 ## [0.11.1] - 2026-08-22
 
 ### Added
