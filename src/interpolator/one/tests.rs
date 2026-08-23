@@ -300,6 +300,66 @@ fn test_cubic_c2_clamped_uses_given_derivative() {
 }
 
 #[test]
+fn test_cubic_c1_linear_exact() {
+    // Linear data: finite differences recover the exact constant slope with no error
+    // term, so the Hermite blend reduces exactly to the line, same as any spline.
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3.],
+        array![1., 3., 5., 7.], // f(x) = 2x + 1
+        strategy::CubicC1::default(),
+        Extrapolate::Enable,
+    )
+    .unwrap();
+    assert_approx_eq!(interp.interpolate(&[0.5]).unwrap(), 2.0);
+    assert_approx_eq!(interp.interpolate(&[1.5]).unwrap(), 4.0);
+    assert_approx_eq!(interp.interpolate(&[2.5]).unwrap(), 6.0);
+    assert_approx_eq!(interp.interpolate(&[-1.0]).unwrap(), -1.0);
+    assert_approx_eq!(interp.interpolate(&[4.0]).unwrap(), 9.0);
+}
+
+#[test]
+fn test_cubic_c1_interior_accuracy() {
+    // Unlike `CubicC2`'s `NotAKnot` (which reproduces any degree-<=3 polynomial
+    // exactly), `CubicC1`'s finite-difference derivatives carry a real error term for
+    // genuinely nonlinear data (`f'''(x) != 0`), so this checks bounded accuracy
+    // against a known cubic, not exact reproduction. `1.5` is a real, checked bound
+    // (max observed error ~1.24 at these points), not an arbitrarily loose one.
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 8., 27.], // f(x) = x^3
+        strategy::CubicC1::default(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &x in &[1.3, 2.3, 2.7, 2.9] {
+        let got = interp.interpolate(&[x]).unwrap();
+        let expected = x * x * x;
+        assert!(
+            (got - expected).abs() < 1.5,
+            "f({x}) = {expected}, got {got} (diff {})",
+            (got - expected).abs()
+        );
+    }
+}
+
+#[test]
+fn test_cubic_c1_knot_exactness() {
+    // Hermite splines interpolate the supplied value at every knot exactly by
+    // construction, regardless of how the derivative there was estimated.
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3., 4.],
+        array![0.5, 1.2, 0.3, 2.1, 1.0], // non-polynomial data
+        strategy::CubicC1::default(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    let x = interp.data.grid[0].clone();
+    for (i, xi) in x.iter().enumerate() {
+        assert_approx_eq!(interp.interpolate(&[*xi]).unwrap(), interp.data.values[i]);
+    }
+}
+
+#[test]
 fn test_invalid_args() {
     let interp = Interp1D::new(
         array![0., 1., 2., 3., 4.],

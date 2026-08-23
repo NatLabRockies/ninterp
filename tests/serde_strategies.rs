@@ -27,6 +27,13 @@ fn cubic_c2_variants() -> Vec<CubicC2<f64>> {
     ]
 }
 
+fn cubic_c1_variants() -> Vec<CubicC1<f64>> {
+    vec![
+        CubicC1::default(),
+        CubicC1::new().with_cache_mode(CubicC1CacheMode::None),
+    ]
+}
+
 #[test]
 fn bare_strategies_round_trip() {
     round_trip(&Nearest);
@@ -37,6 +44,9 @@ fn bare_strategies_round_trip() {
     round_trip(&Step::new(vec![StepDirection::Lower, StepDirection::Upper]));
     for bc in cubic_c2_variants() {
         round_trip(&bc);
+    }
+    for c1 in cubic_c1_variants() {
+        round_trip(&c1);
     }
     round_trip(&GridTransform::<f64, _>::log(Linear));
     round_trip(&ValuesTransform::<f64, _>::log(Linear));
@@ -60,6 +70,9 @@ macro_rules! enum_round_trip_test {
             ])));
             for bc in cubic_c2_variants() {
                 round_trip(&$Enum::from(bc));
+            }
+            for c1 in cubic_c1_variants() {
+                round_trip(&$Enum::from(c1));
             }
             let inner: Box<$Enum<f64>> = Box::new($Enum::<f64>::from(Linear));
             round_trip(&$Enum::<f64>::from(GridTransform::log(inner.clone())));

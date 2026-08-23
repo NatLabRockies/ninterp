@@ -10,7 +10,7 @@ pub mod broadcast;
 use broadcast::Broadcastable;
 
 pub mod cubic;
-pub use cubic::CubicC2;
+pub use cubic::{CubicC1, CubicC1CacheMode, CubicC1DerivativeMode, CubicC2};
 
 pub mod step;
 pub use step::Step;

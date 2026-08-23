@@ -11,6 +11,7 @@ strategy_enum_impl!(
         (Step, strategy::Step),
         (Linear, strategy::Linear),
         (LinearUniform, strategy::LinearUniform),
+        (CubicC1, strategy::CubicC1<T>),
         (CubicC2, strategy::CubicC2<T>),
         (GridTransform, strategy::GridTransform<T, Box<Strategy3DEnum<T>>>),
         (ValuesTransform, strategy::ValuesTransform<T, Box<Strategy3DEnum<T>>>),

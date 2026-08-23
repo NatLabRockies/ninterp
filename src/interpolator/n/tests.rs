@@ -67,6 +67,18 @@ fn test_cubic_spline_0d() {
 }
 
 #[test]
+fn test_cubic_c1_0d() {
+    let interp = InterpND::new(
+        vec![array![]],
+        array![0.5].into_dyn(),
+        strategy::CubicC1::default(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    assert_eq!(interp.interpolate(&[]).unwrap(), 0.5);
+}
+
+#[test]
 fn test_cubic_c2_periodic_outer_axis() {
     // Smoke test: `Periodic` on a non-innermost axis still interpolates successfully.
     let interp = InterpND::new(
