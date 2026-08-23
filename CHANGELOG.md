@@ -8,6 +8,12 @@ bump the minor version (`0.x` -> `0.(x+1)`), other changes bump the patch versio
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-08-23
+
+### Fixed
+- `serde` feature no longer require `std` build,
+  making the crate fully no-std friendly!
+
 ## [0.11.1] - 2026-08-22
 
 ### Added
