@@ -318,6 +318,31 @@ fn test_cubic_c1_linear_exact() {
 }
 
 #[test]
+fn test_cubic_c1_interior_accuracy() {
+    // Unlike `CubicC2`'s `NotAKnot` (which reproduces any degree-<=3 polynomial
+    // exactly), `CubicC1`'s finite-difference derivatives carry a real error term for
+    // genuinely nonlinear data (`f'''(x) != 0`), so this checks bounded accuracy
+    // against a known cubic, not exact reproduction. `1.5` is a real, checked bound
+    // (max observed error ~1.24 at these points), not an arbitrarily loose one.
+    let interp = Interp1D::new(
+        array![0., 1., 2., 3.],
+        array![0., 1., 8., 27.], // f(x) = x^3
+        strategy::CubicC1::default(),
+        Extrapolate::Error,
+    )
+    .unwrap();
+    for &x in &[1.3, 2.3, 2.7, 2.9] {
+        let got = interp.interpolate(&[x]).unwrap();
+        let expected = x * x * x;
+        assert!(
+            (got - expected).abs() < 1.5,
+            "f({x}) = {expected}, got {got} (diff {})",
+            (got - expected).abs()
+        );
+    }
+}
+
+#[test]
 fn test_cubic_c1_knot_exactness() {
     // Hermite splines interpolate the supplied value at every knot exactly by
     // construction, regardless of how the derivative there was estimated.

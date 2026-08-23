@@ -416,6 +416,71 @@ fn test_cubic_c2_clamped_uses_given_derivative() {
 }
 
 #[test]
+fn test_cubic_c1_knot_exactness() {
+    // Values at all knots must be reproduced exactly regardless of data shape, under
+    // both cache modes.
+    fn f(x: f64, y: f64, z: f64) -> f64 {
+        x * x * y + y * y * z + z * z * x
+    }
+    let grid = [0., 1., 2., 3.];
+    let values = Array3::from_shape_fn((4, 4, 4), |(i, j, k)| f(grid[i], grid[j], grid[k]));
+    for cache_mode in [CubicC1CacheMode::Full, CubicC1CacheMode::None] {
+        let interp = Interp3D::new(
+            array![0., 1., 2., 3.],
+            array![0., 1., 2., 3.],
+            array![0., 1., 2., 3.],
+            values.clone(),
+            strategy::CubicC1::new().with_cache_mode(cache_mode),
+            Extrapolate::Error,
+        )
+        .unwrap();
+        for (i, &xi) in grid.iter().enumerate() {
+            for (j, &yj) in grid.iter().enumerate() {
+                for (k, &zk) in grid.iter().enumerate() {
+                    assert_approx_eq!(
+                        interp.interpolate(&[xi, yj, zk]).unwrap(),
+                        values[[i, j, k]]
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn test_cubic_c1_interior_accuracy() {
+    // Unlike `CubicC2`'s `NotAKnot`, `CubicC1`'s finite differences carry a real error
+    // term for genuinely nonlinear data, so this checks bounded accuracy against a
+    // known function, not exact reproduction, under both cache modes. `0.5` is a real,
+    // checked bound (max observed error ~0.24 at these points).
+    fn f(x: f64, y: f64, z: f64) -> f64 {
+        x * x * y + y * y * z + z * z * x
+    }
+    let grid = [0., 1., 2., 3.];
+    let values = Array3::from_shape_fn((4, 4, 4), |(i, j, k)| f(grid[i], grid[j], grid[k]));
+    for cache_mode in [CubicC1CacheMode::Full, CubicC1CacheMode::None] {
+        let interp = Interp3D::new(
+            array![0., 1., 2., 3.],
+            array![0., 1., 2., 3.],
+            array![0., 1., 2., 3.],
+            values.clone(),
+            strategy::CubicC1::new().with_cache_mode(cache_mode),
+            Extrapolate::Error,
+        )
+        .unwrap();
+        for &(x, y, z) in &[(0.5, 0.5, 0.5), (1.5, 2.5, 0.25), (2.25, 0.75, 1.5)] {
+            let got = interp.interpolate(&[x, y, z]).unwrap();
+            let expected = f(x, y, z);
+            assert!(
+                (got - expected).abs() < 0.5,
+                "f({x}, {y}, {z}) = {expected}, got {got} (diff {})",
+                (got - expected).abs()
+            );
+        }
+    }
+}
+
+#[test]
 fn test_cubic_c1_linear_exact() {
     // Linear data: finite differences recover the exact constant slope on each axis, so
     // the Hermite patch reduces exactly to the plane, under both cache modes.
