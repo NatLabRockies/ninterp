@@ -552,7 +552,7 @@ where
     /// propagates through nested `GridTransform`/`ValuesTransform` layers instead of
     /// stopping at the outermost one.
     ///
-    /// Truncates rather than rounds for an integer `Dv`, same as [`from_f64_checked`].
+    /// Truncates rather than rounds for an integer `Dv`, same as `from_f64_checked`.
     fn interpolate_fast(&self, data: &InterpDataNDBase<Dg, Dv>, point: &[f64]) -> Dv::Elem {
         let view = InterpDataNDBase {
             grid: data.grid.iter().map(|g| g.view()).collect(),
