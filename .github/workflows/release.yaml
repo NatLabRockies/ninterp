@@ -34,15 +34,18 @@ jobs:
 
           # CHANGELOG.md entry for this version (e.g. "## [0.11.2]" for tag "v0.11.2"),
           # stops at the next "## [" header.
-          sed -n "/## \[${version}\]/,/## \[/p" CHANGELOG.md | sed '$d' > release_notes.md
-          if [ ! -s release_notes.md ]; then
-            echo "Release notes for ${GITHUB_REF_NAME}" > release_notes.md
+          notes_file="${RUNNER_TEMP}/release_notes.md"
+          echo "RELEASE_NOTES_FILE=${notes_file}" >> "${GITHUB_ENV}"
+
+          sed -n "/## \[${version}\]/,/## \[/p" CHANGELOG.md | sed '$d' > "${notes_file}"
+          if [ ! -s "${notes_file}" ]; then
+            echo "Release notes for ${GITHUB_REF_NAME}" > "${notes_file}"
           fi
 
           # GitHub's auto-generated notes (PRs/commits/contributors since the last tag).
-          echo "" >> release_notes.md
+          echo "" >> "${notes_file}"
           gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
-            -f tag_name="${GITHUB_REF_NAME}" --jq .body >> release_notes.md
+            -f tag_name="${GITHUB_REF_NAME}" --jq .body >> "${notes_file}"
 
       - name: draft GitHub release
         env:
@@ -51,7 +54,7 @@ jobs:
           gh release create ${{ github.ref_name }} \
             --repo ${{ github.repository }} \
             --title "Release ${{ github.ref_name }}" \
-            --notes-file release_notes.md \
+            --notes-file "${RELEASE_NOTES_FILE}" \
             --draft
 
       - run: cargo publish
