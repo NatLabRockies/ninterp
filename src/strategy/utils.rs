@@ -42,6 +42,66 @@ pub fn locate_lower_index<T: PartialOrd>(grid: ArrayView1<T>, point: &T) -> usiz
     }
 }
 
+/// [`locate_lower_index`], but for a `grid` whose element type differs from `point`'s:
+/// casts each probed grid element to `f64` via [`NumCast`] for the comparison instead
+/// of requiring both to share a type. Used where the query point has been normalized
+/// to `f64` (ninterp's Tg/Tv split; see the `n` module) ahead of a grid whose own
+/// element type may not even be [`Float`].
+///
+/// # Panics
+/// Panics if any grid element fails to cast to `f64` (not expected for any numeric `T`).
+pub fn locate_lower_index_cast<T: NumCast + PartialOrd + Copy>(
+    grid: ArrayView1<T>,
+    point: f64,
+) -> usize {
+    let cast = |x: T| -> f64 { num_traits::cast(x).expect("grid element must cast to f64") };
+    let first = cast(*grid.first().unwrap());
+    let last = cast(*grid.last().unwrap());
+    if point < first {
+        return 0;
+    }
+    if point >= last {
+        return grid.len() - 2;
+    }
+
+    let mut low = 0;
+    let mut high = grid.len() - 1;
+
+    while low < high {
+        let mid = low + (high - low) / 2;
+
+        if cast(grid[mid]) >= point {
+            high = mid;
+        } else {
+            low = mid + 1;
+        }
+    }
+
+    if low > 0 && cast(grid[low]) >= point {
+        low - 1
+    } else {
+        low
+    }
+}
+
+/// [`exact_index`], but for a `grid` whose element type differs from `point`'s: casts
+/// each probed grid element to `f64` via [`NumCast`] for the comparison. See
+/// [`locate_lower_index_cast`].
+pub fn exact_index_cast<T: NumCast + PartialOrd + Copy>(
+    grid: ArrayView1<T>,
+    lower: usize,
+    point: f64,
+) -> Option<usize> {
+    let cast = |x: T| -> f64 { num_traits::cast(x).expect("grid element must cast to f64") };
+    if cast(grid[lower]) == point {
+        Some(lower)
+    } else if cast(grid[lower + 1]) == point {
+        Some(lower + 1)
+    } else {
+        None
+    }
+}
+
 /// Per-axis locate for linear-family strategies: either an exact grid hit,
 /// or an interior interpolation position.
 pub enum AxisLocation<T> {
@@ -100,6 +160,36 @@ pub fn locate_step_index<T: PartialOrd + Copy>(
                 0
             } else {
                 locate_lower_index(grid, point) + 1
+            }
+        }
+    }
+}
+
+/// [`locate_step_index`], but for a `grid` whose element type differs from `point`'s:
+/// casts each probed grid element to `f64` via [`NumCast`] for the comparison. See
+/// [`locate_lower_index_cast`].
+pub fn locate_step_index_cast<T: NumCast + PartialOrd + Copy>(
+    dir: StepDirection,
+    grid: ArrayView1<T>,
+    point: f64,
+) -> usize {
+    let cast = |x: T| -> f64 { num_traits::cast(x).expect("grid element must cast to f64") };
+    match dir {
+        StepDirection::Lower => {
+            let x_l = locate_lower_index_cast(grid, point);
+            if point == cast(*grid.last().unwrap()) {
+                grid.len() - 1
+            } else if point == cast(grid[x_l + 1]) {
+                x_l + 1
+            } else {
+                x_l
+            }
+        }
+        StepDirection::Upper => {
+            if point == cast(*grid.first().unwrap()) {
+                0
+            } else {
+                locate_lower_index_cast(grid, point) + 1
             }
         }
     }

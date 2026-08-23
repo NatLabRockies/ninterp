@@ -954,3 +954,29 @@ fn test_dyn_interpolator_heterogeneous_storage() {
         .downcast_ref::<Interp2D<f64, strategy::Nearest>>()
         .is_none());
 }
+
+/// Tg/Tv split prototype (issue #57): an integer grid (`Dg::Elem = i32`, no `Float`
+/// bound at all) paired with `u8` values through `Linear`. Reached through
+/// `InterpNDBase`'s inherent `interpolate_f64` directly, since `Dg != Dv` can't go
+/// through the `Interpolator<T>` trait (see `InterpNDBase`'s own docs).
+#[test]
+fn test_tg_tv_split_integer_grid_u8_values() {
+    let interp: InterpNDBase<OwnedRepr<i32>, OwnedRepr<u8>, strategy::Linear> = InterpNDBase::new(
+        vec![array![0i32, 10, 20]],
+        array![10u8, 20, 30].into_dyn(),
+        strategy::Linear,
+        Extrapolate::Error,
+    )
+    .unwrap();
+
+    // Blended point: halfway between grid[0]=0 (value 10) and grid[1]=10 (value 20),
+    // blended in f64 precision and cast down to u8 once at the end.
+    assert_eq!(interp.interpolate_f64(&[5.0]).unwrap(), 15u8);
+
+    // Exact grid hit: a direct, uncast `u8` read, no precision lost to a blend that
+    // never happens.
+    assert_eq!(interp.interpolate_f64(&[10.0]).unwrap(), 20u8);
+
+    // Out-of-bounds query still goes through the usual `Extrapolate::Error` path.
+    assert!(interp.interpolate_f64(&[25.0]).is_err());
+}

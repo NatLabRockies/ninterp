@@ -1,16 +1,40 @@
 use super::*;
 use strategy::*;
 
-impl<D> StrategyND<D> for Linear
+/// Casts a single grid coordinate to `f64`, the shared blend/query precision every
+/// ND strategy computes in (see [`StrategyND`]'s docs).
+fn to_f64<T: NumCast>(x: T) -> f64 {
+    num_traits::cast(x).expect("grid element must cast to f64")
+}
+
+/// Casts a whole grid axis to `f64`, for a strategy that needs to do real arithmetic
+/// across the axis (`LinearUniform`'s uniformity check, `CubicC2`'s corner cache,
+/// `GridTransform`'s forward transform) rather than a single per-probe comparison
+/// (which `locate_lower_index_cast`/`exact_index_cast`/`locate_step_index_cast`
+/// handle without this allocation).
+fn grid_to_f64<T: NumCast + Copy>(grid: ArrayView1<T>) -> Array1<f64> {
+    grid.iter().map(|&x| to_f64(x)).collect()
+}
+
+/// Casts a blended `f64` result back down to `Dv::Elem`, for the checked (`Result`
+/// returning) interpolation path.
+fn from_f64_checked<Tv: NumCast>(x: f64) -> Result<Tv, InterpolateError> {
+    num_traits::cast(x)
+        .ok_or_else(|| InterpolateError::Other("blended value doesn't fit in value type".into()))
+}
+
+impl<Dg, Dv> StrategyND<Dg, Dv> for Linear
 where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
+    Dg: Data + RawDataClone + Clone,
+    Dg::Elem: NumCast + PartialOrd + Copy + Debug,
+    Dv: Data + RawDataClone + Clone,
+    Dv::Elem: NumCast + Copy + Debug + PartialEq,
 {
     fn interpolate(
         &self,
-        data: &InterpDataNDBase<D>,
-        point: &[D::Elem],
-    ) -> Result<D::Elem, InterpolateError> {
+        data: &InterpDataNDBase<Dg, Dv>,
+        point: &[f64],
+    ) -> Result<Dv::Elem, InterpolateError> {
         // Dimensionality
         let mut n = data.values.ndim();
 
@@ -22,13 +46,11 @@ where
         let mut values_view = data.values.view();
         for dim in (0..n).rev() {
             // Skip empty grid dimensions (e.g. the 0-D multilinear case uses an empty grid).
-            // The original iter().position() returned None on empty grids without touching point[dim];
-            // the binary search path would panic on first().unwrap(), so we guard it here.
             if grid[dim].is_empty() {
                 continue;
             }
-            let lower = locate_lower_index(grid[dim].view(), &point[dim]);
-            let pos = exact_index(grid[dim].view(), lower, &point[dim]);
+            let lower = locate_lower_index_cast(grid[dim], point[dim]);
+            let pos = exact_index_cast(grid[dim], lower, point[dim]);
             if let Some(pos) = pos {
                 point.remove(dim);
                 grid.remove(dim);
@@ -37,6 +59,7 @@ where
         }
         if values_view.len() == 1 {
             // Supplied point is coincident with a grid point, so just return the value
+            // directly: no blending, so no precision lost to the f64 round trip below.
             return Ok(values_view.first().copied().unwrap());
         }
         // Simplified dimensionality
@@ -49,35 +72,35 @@ where
         for dim in 0..n {
             // Extrapolation is checked previously in Interpolator::interpolate,
             // meaning by now, point is within grid bounds or extrapolation is enabled
-            let lower_idx = locate_lower_index(grid[dim].view(), &point[dim]);
-            let interp_diff = (point[dim] - grid[dim][lower_idx])
-                / (grid[dim][lower_idx + 1] - grid[dim][lower_idx]);
+            let lower_idx = locate_lower_index_cast(grid[dim], point[dim]);
+            let g_lower = to_f64(grid[dim][lower_idx]);
+            let g_upper = to_f64(grid[dim][lower_idx + 1]);
+            let interp_diff = (point[dim] - g_lower) / (g_upper - g_lower);
             lower_idxs.push(lower_idx);
             interp_diffs.push(interp_diff);
         }
-        // Fill all 2^n corner values into a flat array indexed by bitmask.
-        // Bit (n-1-d) of the mask = 1 selects the upper index in dimension d.
-        // This layout supports an in-place butterfly reduction with no coordinate permutation tables.
+        // Fill all 2^n corner values into a flat array indexed by bitmask, blending in
+        // f64 (the shared precision, independent of Dv) so an integer-ish Dv (e.g. an
+        // image's u8 pixel values) doesn't lose precision to repeated integer blends.
         let size = 1usize << n;
-        let mut vals = vec![D::Elem::zero(); size];
+        let mut vals = vec![0f64; size];
         let mut idx = vec![0usize; n];
         for (mask, val) in vals.iter_mut().enumerate() {
             for d in 0..n {
                 idx[d] = lower_idxs[d] + ((mask >> (n - 1 - d)) & 1);
             }
-            *val = values_view[idx.as_slice()];
+            *val = to_f64(values_view[idx.as_slice()]);
         }
 
         // Butterfly reduction: one pass per dimension.
-        // After pass d, vals[0..2^(n-d-1)] holds the result with dimensions 0..=d blended.
         for (d, diff) in interp_diffs.iter().enumerate() {
             let half = 1 << (n - 1 - d);
             for i in 0..half {
-                vals[i] = vals[i] * (D::Elem::one() - *diff) + vals[i + half] * *diff;
+                vals[i] = vals[i] * (1.0 - *diff) + vals[i + half] * *diff;
             }
         }
 
-        Ok(vals[0])
+        from_f64_checked(vals[0])
     }
 
     /// Returns `true`.
@@ -86,52 +109,57 @@ where
     }
 }
 
-impl<D> StrategyND<D> for LinearUniform
+impl<Dg, Dv> StrategyND<Dg, Dv> for LinearUniform
 where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
+    Dg: Data + RawDataClone + Clone,
+    Dg::Elem: NumCast + PartialOrd + Copy + Debug,
+    Dv: Data + RawDataClone + Clone,
+    Dv::Elem: NumCast + Copy + Debug + PartialEq,
 {
     /// Ensures grid uniformity in all dimensions
-    fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
+    fn validate(&self, data: &InterpDataNDBase<Dg, Dv>) -> Result<(), ValidateError> {
         for (dim, grid) in data.grid.iter().enumerate() {
-            validate_uniform_grid_epsilon(grid.view(), dim, None)?;
+            let grid_f64 = grid_to_f64(grid.view());
+            validate_uniform_grid_epsilon(grid_f64.view(), dim, None)?;
         }
         Ok(())
     }
 
     fn interpolate(
         &self,
-        data: &InterpDataNDBase<D>,
-        point: &[D::Elem],
-    ) -> Result<D::Elem, InterpolateError> {
+        data: &InterpDataNDBase<Dg, Dv>,
+        point: &[f64],
+    ) -> Result<Dv::Elem, InterpolateError> {
         let n = data.values.ndim();
         let mut lower_idxs = Vec::with_capacity(n);
         let mut interp_diffs = Vec::with_capacity(n);
         for (grid_dim, &point_dim) in data.grid.iter().zip(point.iter()) {
-            let step = grid_dim[1] - grid_dim[0];
-            let lower_idx =
-                locate_lower_index_uniform(grid_dim[0], step, grid_dim.len(), point_dim);
-            let diff = (point_dim - grid_dim[lower_idx]) / step;
+            let g0 = to_f64(grid_dim[0]);
+            let g1 = to_f64(grid_dim[1]);
+            let step = g1 - g0;
+            let lower_idx = locate_lower_index_uniform(g0, step, grid_dim.len(), point_dim);
+            let g_lower = to_f64(grid_dim[lower_idx]);
+            let diff = (point_dim - g_lower) / step;
             lower_idxs.push(lower_idx);
             interp_diffs.push(diff);
         }
         // Same bitmask/butterfly reduction as Linear ND
         let size = 1usize << n;
-        let mut vals = vec![D::Elem::zero(); size];
+        let mut vals = vec![0f64; size];
         let mut idx = vec![0usize; n];
         for (mask, val) in vals.iter_mut().enumerate() {
             for d in 0..n {
                 idx[d] = lower_idxs[d] + ((mask >> (n - 1 - d)) & 1);
             }
-            *val = data.values.view()[idx.as_slice()];
+            *val = to_f64(data.values.view()[idx.as_slice()]);
         }
         for (d, diff) in interp_diffs.iter().enumerate() {
             let half = 1 << (n - 1 - d);
             for i in 0..half {
-                vals[i] = vals[i] * (D::Elem::one() - *diff) + vals[i + half] * *diff;
+                vals[i] = vals[i] * (1.0 - *diff) + vals[i + half] * *diff;
             }
         }
-        Ok(vals[0])
+        from_f64_checked(vals[0])
     }
 
     /// Returns `true`.
@@ -140,26 +168,28 @@ where
     }
 }
 
-impl<D> StrategyND<D> for Nearest
+impl<Dg, Dv> StrategyND<Dg, Dv> for Nearest
 where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Sub<Output = D::Elem> + PartialOrd + Copy + Debug,
+    Dg: Data + RawDataClone + Clone,
+    Dg::Elem: NumCast + PartialOrd + Copy + Debug,
+    Dv: Data + RawDataClone + Clone,
+    Dv::Elem: Copy + Debug + PartialEq,
 {
     fn interpolate(
         &self,
-        data: &InterpDataNDBase<D>,
-        point: &[D::Elem],
-    ) -> Result<D::Elem, InterpolateError> {
+        data: &InterpDataNDBase<Dg, Dv>,
+        point: &[f64],
+    ) -> Result<Dv::Elem, InterpolateError> {
         let n = data.values.ndim();
         // Nearest-neighbor on a rectilinear grid factorizes: select the nearest index
-        // independently per dimension, then do a single lookup. No corner extraction or
-        // dimensionality reduction needed; the distance comparison handles exact matches correctly.
+        // independently per dimension, then do a single lookup: a direct, uncast
+        // `Dv::Elem` read, so no precision is lost regardless of `Dv`.
         let mut idx = vec![0usize; n];
         for dim in 0..n {
-            let lower_idx = locate_lower_index(data.grid[dim].view(), &point[dim]);
-            idx[dim] = if point[dim] - data.grid[dim][lower_idx]
-                < data.grid[dim][lower_idx + 1] - point[dim]
-            {
+            let lower_idx = locate_lower_index_cast(data.grid[dim].view(), point[dim]);
+            let lo = to_f64(data.grid[dim][lower_idx]);
+            let hi = to_f64(data.grid[dim][lower_idx + 1]);
+            idx[dim] = if point[dim] - lo < hi - point[dim] {
                 lower_idx
             } else {
                 lower_idx + 1
@@ -174,26 +204,29 @@ where
     }
 }
 
-impl<D> StrategyND<D> for Step
+impl<Dg, Dv> StrategyND<Dg, Dv> for Step
 where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialOrd + Copy + Debug,
+    Dg: Data + RawDataClone + Clone,
+    Dg::Elem: NumCast + PartialOrd + Copy + Debug,
+    Dv: Data + RawDataClone + Clone,
+    Dv::Elem: Copy + Debug + PartialEq,
 {
     /// Ensures the number of provided step directions matches the dimensionality of the interpolator
-    fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
+    fn validate(&self, data: &InterpDataNDBase<Dg, Dv>) -> Result<(), ValidateError> {
         self.directions
             .validate_len(data.values.ndim(), "Step", "directions")
     }
 
     fn interpolate(
         &self,
-        data: &InterpDataNDBase<D>,
-        point: &[D::Elem],
-    ) -> Result<D::Elem, InterpolateError> {
+        data: &InterpDataNDBase<Dg, Dv>,
+        point: &[f64],
+    ) -> Result<Dv::Elem, InterpolateError> {
         let n = data.values.ndim();
         let mut idx = vec![0usize; n];
         for dim in 0..n {
-            idx[dim] = locate_step_index(self.directions[dim], data.grid[dim].view(), &point[dim]);
+            idx[dim] =
+                locate_step_index_cast(self.directions[dim], data.grid[dim].view(), point[dim]);
         }
         Ok(data.values.view()[idx.as_slice()])
     }
@@ -204,12 +237,14 @@ where
     }
 }
 
-impl<D> StrategyND<D> for CubicC2<D::Elem>
+impl<Dg, Dv> StrategyND<Dg, Dv> for CubicC2<f64>
 where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
+    Dg: Data + RawDataClone + Clone,
+    Dg::Elem: NumCast + PartialOrd + Copy + Debug,
+    Dv: Data + RawDataClone + Clone,
+    Dv::Elem: NumCast + Copy + Debug + PartialEq,
 {
-    fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
+    fn validate(&self, data: &InterpDataNDBase<Dg, Dv>) -> Result<(), ValidateError> {
         self.boundary_conditions
             .validate_len(data.ndim(), "CubicC2", "boundary conditions")?;
         for dim in 0..data.ndim() {
@@ -218,33 +253,39 @@ where
         Ok(())
     }
 
-    /// Precomputes the full corner-derivative tensor via `compute_corner_cache`.
-    fn init(&mut self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
+    /// Precomputes the full corner-derivative tensor via `compute_corner_cache`,
+    /// casting the grid and values to `f64` first (the tensor is a blend
+    /// intermediate, like `Linear`'s corner blend, so it's `f64`-typed regardless of
+    /// `Dg`/`Dv`). A one-time cost per `init`, not per query.
+    fn init(&mut self, data: &InterpDataNDBase<Dg, Dv>) -> Result<(), ValidateError> {
         if data.ndim() == 0 {
             return Ok(());
         }
-        let data_view = data.view();
+        let grids_f64: Vec<Array1<f64>> = data.grid.iter().map(|g| grid_to_f64(g.view())).collect();
+        let grid_views: Vec<ArrayView1<f64>> = grids_f64.iter().map(|g| g.view()).collect();
+        let values_f64: ArrayD<f64> = data.values.map(|&x| to_f64(x));
         self.cache =
-            compute_corner_cache(&data_view.grid, data_view.values, &self.boundary_conditions);
+            compute_corner_cache(&grid_views, values_f64.view(), &self.boundary_conditions);
         Ok(())
     }
 
     fn interpolate(
         &self,
-        data: &InterpDataNDBase<D>,
-        point: &[D::Elem],
-    ) -> Result<D::Elem, InterpolateError> {
+        data: &InterpDataNDBase<Dg, Dv>,
+        point: &[f64],
+    ) -> Result<Dv::Elem, InterpolateError> {
         if data.ndim() == 0 {
             return data.values.first().copied().ok_or_else(|| {
                 InterpolateError::Other("internal: 0-D interpolation data has no value".into())
             });
         }
-        let grids: Vec<ArrayView1<D::Elem>> = data.grid.iter().map(|g| g.view()).collect();
-        Ok(evaluate_spline_corner_cached(
-            &grids,
-            self.cache.view(),
-            point,
-        ))
+        // Re-cast the grid to `f64` per query: `CubicC2`'s own struct (shared with
+        // `Interp1D`/`2D`/`3D`) isn't touched by this prototype, so there's no spare
+        // field here to cache it in the way `GridTransform::grid_cache` does.
+        let grids_f64: Vec<Array1<f64>> = data.grid.iter().map(|g| grid_to_f64(g.view())).collect();
+        let grid_views: Vec<ArrayView1<f64>> = grids_f64.iter().map(|g| g.view()).collect();
+        let result = evaluate_spline_corner_cached(&grid_views, self.cache.view(), point);
+        from_f64_checked(result)
     }
 
     /// Returns `true`: the boundary cubic polynomials extend naturally.
@@ -253,48 +294,48 @@ where
     }
 }
 
-impl<D, S> StrategyND<D> for GridTransform<D::Elem, S>
+impl<Dg, Dv, S> StrategyND<Dg, Dv> for GridTransform<f64, S>
 where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
-    S: for<'a> StrategyND<ViewRepr<&'a D::Elem>> + Clone + Debug,
+    Dg: Data + RawDataClone + Clone,
+    Dg::Elem: NumCast + PartialOrd + Copy + Debug,
+    Dv: Data + RawDataClone + Clone,
+    Dv::Elem: PartialEq + Debug,
+    // Both sides are view-repr'd here: `data.values.view()` produces a view
+    // regardless of what `Dv` itself is (owned or already a view), matching how the
+    // pre-split code bounded this the same way on its single shared type param.
+    S: for<'a> StrategyND<ViewRepr<&'a f64>, ViewRepr<&'a Dv::Elem>> + Clone + Debug,
 {
-    /// Checks the axis count and that every raw grid coordinate is in its axis's
-    /// configured transform's domain.
-    fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
+    /// Checks the axis count and that every raw grid coordinate (cast to `f64`) is
+    /// in its axis's configured transform's domain.
+    fn validate(&self, data: &InterpDataNDBase<Dg, Dv>) -> Result<(), ValidateError> {
         self.transforms
             .validate_len(data.ndim(), "GridTransform", "transforms")?;
-        let transformed_grid: Vec<Array1<D::Elem>> = data
+        let transformed_grid: Vec<Array1<f64>> = data
             .grid
             .iter()
             .enumerate()
-            .map(|(dim, grid)| self.transform_axis(dim, grid.view()))
+            .map(|(dim, grid)| self.transform_axis(dim, grid_to_f64(grid.view()).view()))
             .collect::<Result<_, _>>()?;
         let values = self.transformed_values_view(data.values.view());
-        let view = InterpDataNDView {
+        let view = InterpDataNDBase {
             grid: transformed_grid.iter().map(|g| g.view()).collect(),
             values,
         };
         self.inner.validate(&view)
     }
 
-    /// Transforms the grid into `grid_cache`, then initializes `inner` against a
-    /// transient view zipping `grid_cache` with `data.values`.
-    ///
-    /// A raw grid is always strictly increasing, but a decreasing transform (e.g.
-    /// `Reciprocal`) would otherwise leave that axis of `grid_cache` decreasing;
-    /// `Transform::is_increasing` flags that case so the transformed axis (and the
-    /// matching `values` axis) can be reversed back to ascending, matching every
-    /// downstream strategy's ascending-grid assumption.
-    fn init(&mut self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
+    /// Transforms the (`f64`-cast) grid into `grid_cache`, then initializes `inner`
+    /// against a transient view zipping `grid_cache` with `data.values` (untouched;
+    /// `GridTransform` is grid-side only).
+    fn init(&mut self, data: &InterpDataNDBase<Dg, Dv>) -> Result<(), ValidateError> {
         self.grid_cache = data
             .grid
             .iter()
             .enumerate()
-            .map(|(dim, grid)| self.transform_axis(dim, grid.view()))
+            .map(|(dim, grid)| self.transform_axis(dim, grid_to_f64(grid.view()).view()))
             .collect::<Result<_, _>>()?;
         let values = self.transformed_values_view(data.values.view());
-        let view = InterpDataNDView {
+        let view = InterpDataNDBase {
             grid: self.grid_cache.iter().map(|g| g.view()).collect(),
             values,
         };
@@ -303,89 +344,64 @@ where
 
     fn interpolate(
         &self,
-        data: &InterpDataNDBase<D>,
-        point: &[D::Elem],
-    ) -> Result<D::Elem, InterpolateError> {
+        data: &InterpDataNDBase<Dg, Dv>,
+        point: &[f64],
+    ) -> Result<Dv::Elem, InterpolateError> {
         self.check_point_domain(point)?;
-        let transformed_point: Vec<D::Elem> = point
+        let transformed_point: Vec<f64> = point
             .iter()
             .enumerate()
             .map(|(dim, &x)| self.transforms[dim].forward(x))
             .collect();
         let values = self.transformed_values_view(data.values.view());
-        let view = InterpDataNDView {
+        let view = InterpDataNDBase {
             grid: self.grid_cache.iter().map(|g| g.view()).collect(),
             values,
         };
         self.inner.interpolate(&view, &transformed_point)
     }
 
-    /// Forward-transforms into `grid_cache`'s coordinate space, then delegates the
-    /// actual wrap to `inner.interpolate_wrapped` rather than wrapping here itself:
-    /// wrapping doesn't commute with a nonlinear transform, so it must happen in the
-    /// *final* (innermost) transformed space where the periodic strategy actually
-    /// lives, mirroring how `ValuesTransform::interpolate_wrapped` defers to `inner`
-    /// for the same reason (composing two `GridTransform`s and wrapping at the outer
-    /// layer's space, then forward-transforming again, uses the wrong period). For a
-    /// non-transform `inner`, `StrategyND::interpolate_wrapped`'s default wraps
-    /// directly against `grid_cache`, reproducing this layer's own wrap exactly.
     fn interpolate_wrapped(
         &self,
-        data: &InterpDataNDBase<D>,
-        point: &[D::Elem],
-    ) -> Result<D::Elem, InterpolateError>
+        data: &InterpDataNDBase<Dg, Dv>,
+        point: &[f64],
+    ) -> Result<Dv::Elem, InterpolateError>
     where
-        D::Elem: Num + Euclid + Copy,
+        Dg::Elem: NumCast + Copy,
     {
         self.check_point_domain(point)?;
-        let transformed_point: Vec<D::Elem> = point
+        let transformed_point: Vec<f64> = point
             .iter()
             .enumerate()
             .map(|(dim, &x)| self.transforms[dim].forward(x))
             .collect();
         let values = self.transformed_values_view(data.values.view());
-        let view = InterpDataNDView {
+        let view = InterpDataNDBase {
             grid: self.grid_cache.iter().map(|g| g.view()).collect(),
             values,
         };
         self.inner.interpolate_wrapped(&view, &transformed_point)
     }
 
-    /// Skips the domain check `interpolate` does, and calls `inner.interpolate_fast`
-    /// rather than `inner.interpolate`, so "fast" propagates through nested
-    /// `GridTransform`/`ValuesTransform` layers instead of stopping at the outermost
-    /// one.
-    ///
-    /// An out-of-domain point is the caller's problem here, same as any other
-    /// unchecked `_fast` method: `forward`-ing it produces `NaN` (`Log`/`Sqrt`) or
-    /// `+-inf` (`Reciprocal`, only at `x == 0`). `NaN` poisons the grid search's
-    /// comparisons and panics; `+-inf` compares normally, so it's treated like an
-    /// ordinary out-of-bounds extrapolation query and silently produces `NaN` output
-    /// instead. Expected, not a bug: check [`Transform::in_domain`] yourself first if
-    /// you need a guarantee either way.
-    fn interpolate_fast(&self, data: &InterpDataNDBase<D>, point: &[D::Elem]) -> D::Elem {
-        let transformed_point: Vec<D::Elem> = point
+    fn interpolate_fast(&self, data: &InterpDataNDBase<Dg, Dv>, point: &[f64]) -> Dv::Elem {
+        let transformed_point: Vec<f64> = point
             .iter()
             .enumerate()
             .map(|(dim, &x)| self.transforms[dim].forward(x))
             .collect();
         let values = self.transformed_values_view(data.values.view());
-        let view = InterpDataNDView {
+        let view = InterpDataNDBase {
             grid: self.grid_cache.iter().map(|g| g.view()).collect(),
             values,
         };
         self.inner.interpolate_fast(&view, &transformed_point)
     }
 
-    /// Domain-checks every point in the batch before transforming, aggregating
-    /// every violation across the *whole batch* into one
-    /// [`InterpolateError::GridTransformDomain`] instead of erroring on the first
-    /// one, mirroring how `Extrapolate::Error` aggregates out-of-bounds points.
     fn batch_interpolate_into(
         &self,
-        data: &InterpDataNDBase<D>,
-        points: &[&[D::Elem]],
-        out: &mut [D::Elem],
+        data: &InterpDataNDBase<Dg, Dv>,
+        points: &[&[f64]],
+        out: &mut [Dv::Elem],
     ) -> Result<(), InterpolateError> {
         if out.len() != points.len() {
             return Err(InterpolateError::OutputLength {
@@ -394,7 +410,7 @@ where
             });
         }
         self.check_batch_domain(points.iter().copied())?;
-        let transformed_points: Vec<Vec<D::Elem>> = points
+        let transformed_points: Vec<Vec<f64>> = points
             .iter()
             .map(|point| {
                 point
@@ -404,10 +420,9 @@ where
                     .collect()
             })
             .collect();
-        let transformed_refs: Vec<&[D::Elem]> =
-            transformed_points.iter().map(Vec::as_slice).collect();
+        let transformed_refs: Vec<&[f64]> = transformed_points.iter().map(Vec::as_slice).collect();
         let values = self.transformed_values_view(data.values.view());
-        let view = InterpDataNDView {
+        let view = InterpDataNDBase {
             grid: self.grid_cache.iter().map(|g| g.view()).collect(),
             values,
         };
@@ -415,19 +430,10 @@ where
             .batch_interpolate_into(&view, &transformed_refs, out)
     }
 
-    /// Checks this layer's own domain per point (not bailing on the first violation),
-    /// then recurses into `inner` with only the *outer-valid* points' forward
-    /// transforms, remapping `inner`'s failure indices back to their true batch
-    /// position: an outer-invalid point can't be forward-transformed meaningfully, but
-    /// its presence must not hide `inner`'s own violations for the *other* points, so
-    /// a `GridTransform` nested inside another one still gets every one of its
-    /// violations aggregated, not just the outer layer's. Exposed here so generic
-    /// callers (e.g. `Extrapolate::Wrap`'s batch dispatch) can pre-scan a batch
-    /// without knowing the concrete strategy type.
-    fn check_batch_domain(&self, points: &[&[D::Elem]]) -> Result<(), InterpolateError> {
+    fn check_batch_domain(&self, points: &[&[f64]]) -> Result<(), InterpolateError> {
         let mut failures = Vec::new();
         let mut valid_indices = Vec::new();
-        let mut transformed_points: Vec<Vec<D::Elem>> = Vec::new();
+        let mut transformed_points: Vec<Vec<f64>> = Vec::new();
         for (index, &point) in points.iter().enumerate() {
             let point_failures = self.point_domain_failures(index, point);
             if point_failures.is_empty() {
@@ -443,8 +449,7 @@ where
                 failures.extend(point_failures);
             }
         }
-        let transformed_refs: Vec<&[D::Elem]> =
-            transformed_points.iter().map(Vec::as_slice).collect();
+        let transformed_refs: Vec<&[f64]> = transformed_points.iter().map(Vec::as_slice).collect();
         match self.inner.check_batch_domain(&transformed_refs) {
             Ok(()) => {}
             Err(InterpolateError::GridTransformDomain(inner_failures)) => {
@@ -468,27 +473,36 @@ where
     }
 }
 
-impl<D, S> StrategyND<D> for ValuesTransform<D::Elem, S>
+impl<Dg, Dv, S> StrategyND<Dg, Dv> for ValuesTransform<f64, S>
 where
-    D: Data + RawDataClone + Clone,
-    D::Elem: Float + Debug,
-    S: for<'a> StrategyND<ViewRepr<&'a D::Elem>> + Clone + Debug,
+    Dg: Data + RawDataClone + Clone,
+    Dg::Elem: PartialEq + Debug,
+    Dv: Data + RawDataClone + Clone,
+    Dv::Elem: NumCast + Copy + Debug + PartialEq,
+    // Both sides are view-repr'd here: `data.grid[i].view()` produces a view
+    // regardless of what `Dg` itself is, matching how the pre-split code bounded
+    // this the same way on its single shared type param.
+    S: for<'a> StrategyND<ViewRepr<&'a Dg::Elem>, ViewRepr<&'a f64>> + Clone + Debug,
 {
-    /// Checks that every data value is in the configured transform's domain.
-    fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
-        let transformed_values = self.transform_values(data.values.view())?;
-        let view = InterpDataNDView {
+    /// Checks that every data value (cast to `f64`) is in the configured transform's
+    /// domain.
+    fn validate(&self, data: &InterpDataNDBase<Dg, Dv>) -> Result<(), ValidateError> {
+        let values_f64: ArrayD<f64> = data.values.map(|&x| to_f64(x));
+        let transformed_values = self.transform_values(values_f64.view())?;
+        let view = InterpDataNDBase {
             grid: data.grid.iter().map(|g| g.view()).collect(),
             values: transformed_values.view(),
         };
         self.inner.validate(&view)
     }
 
-    /// Transforms `data.values` into `values_cache`, then initializes `inner`
-    /// against a transient view zipping `data.grid` (untouched) with `values_cache`.
-    fn init(&mut self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
-        self.values_cache = self.transform_values(data.values.view())?;
-        let view = InterpDataNDView {
+    /// Transforms `data.values` (cast to `f64`) into `values_cache`, then
+    /// initializes `inner` against a transient view zipping `data.grid` (untouched;
+    /// `ValuesTransform` is value-side only) with `values_cache`.
+    fn init(&mut self, data: &InterpDataNDBase<Dg, Dv>) -> Result<(), ValidateError> {
+        let values_f64: ArrayD<f64> = data.values.map(|&x| to_f64(x));
+        self.values_cache = self.transform_values(values_f64.view())?;
+        let view = InterpDataNDBase {
             grid: data.grid.iter().map(|g| g.view()).collect(),
             values: self.values_cache.view(),
         };
@@ -497,55 +511,55 @@ where
 
     fn interpolate(
         &self,
-        data: &InterpDataNDBase<D>,
-        point: &[D::Elem],
-    ) -> Result<D::Elem, InterpolateError> {
-        let view = InterpDataNDView {
+        data: &InterpDataNDBase<Dg, Dv>,
+        point: &[f64],
+    ) -> Result<Dv::Elem, InterpolateError> {
+        let view = InterpDataNDBase {
             grid: data.grid.iter().map(|g| g.view()).collect(),
             values: self.values_cache.view(),
         };
         let result = self.inner.interpolate(&view, point)?;
-        Ok(self.transform.inverse(result))
+        from_f64_checked(self.transform.inverse(result))
     }
 
     /// Hands `point` unmodified to `inner.interpolate_wrapped`, so a nested
     /// `GridTransform` handles the actual raw-space wrap; must not wrap here itself.
     fn interpolate_wrapped(
         &self,
-        data: &InterpDataNDBase<D>,
-        point: &[D::Elem],
-    ) -> Result<D::Elem, InterpolateError>
+        data: &InterpDataNDBase<Dg, Dv>,
+        point: &[f64],
+    ) -> Result<Dv::Elem, InterpolateError>
     where
-        D::Elem: Num + Euclid + Copy,
+        Dg::Elem: NumCast + Copy,
     {
-        let view = InterpDataNDView {
+        let view = InterpDataNDBase {
             grid: data.grid.iter().map(|g| g.view()).collect(),
             values: self.values_cache.view(),
         };
         let result = self.inner.interpolate_wrapped(&view, point)?;
-        Ok(self.transform.inverse(result))
+        from_f64_checked(self.transform.inverse(result))
     }
 
     /// Calls `inner.interpolate_fast` rather than `inner.interpolate`, so "fast"
     /// propagates through nested `GridTransform`/`ValuesTransform` layers instead of
     /// stopping at the outermost one.
-    fn interpolate_fast(&self, data: &InterpDataNDBase<D>, point: &[D::Elem]) -> D::Elem {
-        let view = InterpDataNDView {
+    fn interpolate_fast(&self, data: &InterpDataNDBase<Dg, Dv>, point: &[f64]) -> Dv::Elem {
+        let view = InterpDataNDBase {
             grid: data.grid.iter().map(|g| g.view()).collect(),
             values: self.values_cache.view(),
         };
         let result = self.inner.interpolate_fast(&view, point);
-        self.transform.inverse(result)
+        num_traits::cast(self.transform.inverse(result))
+            .expect("inverse-transformed value doesn't fit in value type")
     }
 
-    /// Delegates the whole batch to `inner` via a transient view over `values_cache`,
-    /// so a nested `GridTransform`'s batch-domain aggregation isn't lost to the
-    /// point-by-point default; inverse-transforms every output afterward.
+    /// Delegates the whole batch to `inner` via a transient `f64` view over
+    /// `values_cache`, then casts + inverse-transforms every output afterward.
     fn batch_interpolate_into(
         &self,
-        data: &InterpDataNDBase<D>,
-        points: &[&[D::Elem]],
-        out: &mut [D::Elem],
+        data: &InterpDataNDBase<Dg, Dv>,
+        points: &[&[f64]],
+        out: &mut [Dv::Elem],
     ) -> Result<(), InterpolateError> {
         if out.len() != points.len() {
             return Err(InterpolateError::OutputLength {
@@ -553,20 +567,22 @@ where
                 found: out.len(),
             });
         }
-        let view = InterpDataNDView {
+        let view = InterpDataNDBase {
             grid: data.grid.iter().map(|g| g.view()).collect(),
             values: self.values_cache.view(),
         };
-        self.inner.batch_interpolate_into(&view, points, out)?;
-        for o in out.iter_mut() {
-            *o = self.transform.inverse(*o);
+        let mut scratch = vec![0f64; points.len()];
+        self.inner
+            .batch_interpolate_into(&view, points, &mut scratch)?;
+        for (o, v) in out.iter_mut().zip(scratch) {
+            *o = from_f64_checked(self.transform.inverse(v))?;
         }
         Ok(())
     }
 
     /// Forwards to `inner`, so a nested `GridTransform`'s domain is still checked
     /// through a wrapping `ValuesTransform`.
-    fn check_batch_domain(&self, points: &[&[D::Elem]]) -> Result<(), InterpolateError> {
+    fn check_batch_domain(&self, points: &[&[f64]]) -> Result<(), InterpolateError> {
         self.inner.check_batch_domain(points)
     }
 
