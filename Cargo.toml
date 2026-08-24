@@ -14,7 +14,7 @@ keywords = [
     "numerical",
     "linear",
 ]
-categories = ["mathematics"]
+categories = ["mathematics", "no-std"]
 
 [dependencies]
 dyn-clone = "1"
