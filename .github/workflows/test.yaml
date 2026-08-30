@@ -24,16 +24,21 @@ jobs:
         run: cargo fmt --check
 
       - name: clippy
-        run: cargo clippy --all-features --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-features --all-targets -- -D warnings
 
       - name: doc
-        run: cargo doc --all-features --no-deps
+        run: cargo doc --workspace --all-features --no-deps
         env:
           RUSTDOCFLAGS: -D warnings
 
       - name: test
-        # Note: this will be unwieldy if there are many features, but for now it is fine.
+        # ninterp crate has few enough features that this isn't too hefty
         run: cargo hack test --feature-powerset --verbose
+
+      - name: test ninterp-uom
+        # Powerset over autoconvert/serde/std only; f64 pinned as the required storage
+        # type, other ~21 storage-type alternatives excluded (uom passthrough, not this crate's logic).
+        run: cargo hack test -p ninterp-uom --feature-powerset --features f64 --exclude-features f32,usize,u8,u16,u32,u64,u128,isize,i8,i16,i32,i64,i128,bigint,biguint,rational,rational32,rational64,bigrational,complex32,complex64 --verbose
 
       - name: install no_std target
         run: rustup target add thumbv7m-none-eabi
