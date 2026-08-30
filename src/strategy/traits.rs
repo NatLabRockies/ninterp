@@ -4,7 +4,9 @@ use super::*;
 
 /// Generates a fixed-dimensionality strategy trait (`Strategy1D`/`2D`/`3D`) plus its
 /// `impl … for Box<dyn …>` forwarding impl. `StrategyND` takes points as `&[D::Elem]`
-/// instead of `&[D::Elem; N]`, so it can't share this shape and stays hand-written below.
+/// instead of `&[D::Elem; N]`, and is split into separate grid/value type parameters
+/// (`Dg`/`Dv`, with `point: &[f64]`, see [`StrategyND`]'s docs), so it can't share
+/// this shape and stays hand-written below.
 macro_rules! fixed_strategy_trait {
     ($Trait:ident, $InterpData:ident, $N:literal, $doc:literal) => {
         #[doc = $doc]
@@ -323,16 +325,28 @@ fixed_strategy_trait!(
 );
 
 /// N-D interpolation strategy.
-pub trait StrategyND<D>: Debug + DynClone
+///
+/// Split into a grid type `Dg` and a value type `Dv` (ninterp's Tg/Tv split,
+/// prototyped here first, see issue #57). The query `point` is always `&[f64]`:
+/// a query point falls *between* grid points, so it can't be `Dg`-typed once `Dg`
+/// isn't assumed `Float` (an integer or date-like grid can't represent a fractional
+/// position), and `f64` serves as the shared continuous precision both `Dg` and `Dv`
+/// cast into/out of for any strategy that needs real arithmetic (fractional
+/// position, blending). A strategy that does no arithmetic (`Nearest`, `Step`) still
+/// takes `point: &[f64]` for a uniform trait shape, casting `Dg` into `f64` only to
+/// compare.
+pub trait StrategyND<Dg, Dv>: Debug + DynClone
 where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialEq + Debug,
+    Dg: Data + RawDataClone + Clone,
+    Dg::Elem: PartialEq + Debug,
+    Dv: Data + RawDataClone + Clone,
+    Dv::Elem: PartialEq + Debug,
 {
     /// Validate strategy state against interpolation data. Pure check, no mutation.
     ///
     /// Default no-op. Override for invariant checks that don't require precomputed
     /// state (grid uniformity, direction-count matching, etc).
-    fn validate(&self, _data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
+    fn validate(&self, _data: &InterpDataNDBase<Dg, Dv>) -> Result<(), ValidateError> {
         Ok(())
     }
 
@@ -341,7 +355,7 @@ where
     /// Default no-op. Override only when the strategy caches something derived from
     /// `data` (e.g. precomputed spline coefficients). Unlike [`StrategyND::validate`],
     /// this may do real, non-trivial calculation.
-    fn init(&mut self, _data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
+    fn init(&mut self, _data: &InterpDataNDBase<Dg, Dv>) -> Result<(), ValidateError> {
         Ok(())
     }
 
@@ -352,34 +366,36 @@ where
     /// panics on non-contiguous storage (possible with `Interp*View`). See
     /// [`crate::strategy::utils`] for ready-made per-axis search helpers (bracket search,
     /// exact-match short-circuit, step-direction lookup, uniform-grid fast path) built from
-    /// the same primitives the built-in strategies use.
+    /// the same primitives the built-in strategies use, including cast-aware variants for
+    /// when `Dg::Elem` isn't `f64` itself.
     fn interpolate(
         &self,
-        data: &InterpDataNDBase<D>,
-        point: &[D::Elem],
-    ) -> Result<D::Elem, InterpolateError>;
+        data: &InterpDataNDBase<Dg, Dv>,
+        point: &[f64],
+    ) -> Result<Dv::Elem, InterpolateError>;
 
     /// Resolves an out-of-bounds point under [`Extrapolate::Wrap`](`crate::interpolator::Extrapolate::Wrap`), then interpolates.
     ///
-    /// Default wraps in `data.grid`'s own (raw) coordinate space. Override only if
-    /// this strategy's working coordinate space differs from `data.grid`'s.
+    /// Default wraps in `data.grid`'s own (raw) coordinate space, casting each grid
+    /// bound to `f64` to match `point`. Override only if this strategy's working
+    /// coordinate space differs from `data.grid`'s.
     fn interpolate_wrapped(
         &self,
-        data: &InterpDataNDBase<D>,
-        point: &[D::Elem],
-    ) -> Result<D::Elem, InterpolateError>
+        data: &InterpDataNDBase<Dg, Dv>,
+        point: &[f64],
+    ) -> Result<Dv::Elem, InterpolateError>
     where
-        D::Elem: Num + Euclid + Copy,
+        Dg::Elem: NumCast + Copy,
     {
-        let wrapped: Vec<D::Elem> = point
+        let wrapped: Vec<f64> = point
             .iter()
             .enumerate()
             .map(|(dim, &pt)| {
-                wrap(
-                    pt,
-                    *data.grid[dim].first().unwrap(),
-                    *data.grid[dim].last().unwrap(),
-                )
+                let first: f64 = num_traits::cast(*data.grid[dim].first().unwrap())
+                    .expect("grid element must cast to f64");
+                let last: f64 = num_traits::cast(*data.grid[dim].last().unwrap())
+                    .expect("grid element must cast to f64");
+                wrap(pt, first, last)
             })
             .collect();
         self.interpolate(data, &wrapped)
@@ -392,7 +408,7 @@ where
     /// strategy's checked path does real internal fallible work beyond producing
     /// the final `Ok(...)`; otherwise the default already compiles to the same thing.
     #[inline]
-    fn interpolate_fast(&self, data: &InterpDataNDBase<D>, point: &[D::Elem]) -> D::Elem {
+    fn interpolate_fast(&self, data: &InterpDataNDBase<Dg, Dv>, point: &[f64]) -> Dv::Elem {
         self.interpolate(data, point)
             .expect("interpolate_fast: invalid point or data")
     }
@@ -406,9 +422,9 @@ where
     /// no strategy shipped in this crate does that today.
     fn batch_interpolate_into(
         &self,
-        data: &InterpDataNDBase<D>,
-        points: &[&[D::Elem]],
-        out: &mut [D::Elem],
+        data: &InterpDataNDBase<Dg, Dv>,
+        points: &[&[f64]],
+        out: &mut [Dv::Elem],
     ) -> Result<(), InterpolateError> {
         if out.len() != points.len() {
             return Err(InterpolateError::OutputLength {
@@ -429,9 +445,9 @@ where
     /// [`StrategyND::interpolate_fast`].
     fn batch_interpolate_fast_into(
         &self,
-        data: &InterpDataNDBase<D>,
-        points: &[&[D::Elem]],
-        out: &mut [D::Elem],
+        data: &InterpDataNDBase<Dg, Dv>,
+        points: &[&[f64]],
+        out: &mut [Dv::Elem],
     ) {
         assert_eq!(
             out.len(),
@@ -451,15 +467,15 @@ where
     /// for a locate sweep instead of one binary search per point).
     fn batch_interpolate(
         &self,
-        data: &InterpDataNDBase<D>,
-        points: &[&[D::Elem]],
-    ) -> Result<Vec<D::Elem>, InterpolateError>
+        data: &InterpDataNDBase<Dg, Dv>,
+        points: &[&[f64]],
+    ) -> Result<Vec<Dv::Elem>, InterpolateError>
     where
-        D::Elem: Num,
+        Dv::Elem: Num,
     {
         let mut out = Vec::with_capacity(points.len());
         for _ in 0..points.len() {
-            out.push(D::Elem::zero());
+            out.push(Dv::Elem::zero());
         }
         self.batch_interpolate_into(data, points, &mut out)?;
         Ok(out)
@@ -474,15 +490,15 @@ where
     /// with no additional override needed.
     fn batch_interpolate_fast(
         &self,
-        data: &InterpDataNDBase<D>,
-        points: &[&[D::Elem]],
-    ) -> Vec<D::Elem>
+        data: &InterpDataNDBase<Dg, Dv>,
+        points: &[&[f64]],
+    ) -> Vec<Dv::Elem>
     where
-        D::Elem: Num + Copy,
+        Dv::Elem: Num + Copy,
     {
         let mut out = Vec::with_capacity(points.len());
         for _ in 0..points.len() {
-            out.push(D::Elem::zero());
+            out.push(Dv::Elem::zero());
         }
         self.batch_interpolate_fast_into(data, points, &mut out);
         out
@@ -492,11 +508,11 @@ where
     /// (distinct from `data.grid`'s bounds), aggregating every violation across the
     /// whole batch instead of just the first.
     ///
-    /// Default no-op: most strategies accept any `D::Elem`. Override only if `self`
+    /// Default no-op: most strategies accept any point. Override only if `self`
     /// (or a wrapped inner strategy) restricts the domain further, e.g.
     /// [`GridTransform`]'s configured [`Transform`]. Called as a pre-scan before
     /// doing any actual interpolation work, so it must stay cheap.
-    fn check_batch_domain(&self, _points: &[&[D::Elem]]) -> Result<(), InterpolateError> {
+    fn check_batch_domain(&self, _points: &[&[f64]]) -> Result<(), InterpolateError> {
         Ok(())
     }
 
@@ -504,29 +520,31 @@ where
     fn allow_extrapolate(&self) -> bool;
 }
 
-clone_trait_object!(<D> StrategyND<D>);
+clone_trait_object!(<Dg, Dv> StrategyND<Dg, Dv>);
 
-impl<D> StrategyND<D> for Box<dyn StrategyND<D>>
+impl<Dg, Dv> StrategyND<Dg, Dv> for Box<dyn StrategyND<Dg, Dv>>
 where
-    D: Data + RawDataClone + Clone,
-    D::Elem: PartialEq + Debug,
+    Dg: Data + RawDataClone + Clone,
+    Dg::Elem: PartialEq + Debug,
+    Dv: Data + RawDataClone + Clone,
+    Dv::Elem: PartialEq + Debug,
 {
     #[inline]
-    fn validate(&self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
+    fn validate(&self, data: &InterpDataNDBase<Dg, Dv>) -> Result<(), ValidateError> {
         (**self).validate(data)
     }
 
     #[inline]
-    fn init(&mut self, data: &InterpDataNDBase<D>) -> Result<(), ValidateError> {
+    fn init(&mut self, data: &InterpDataNDBase<Dg, Dv>) -> Result<(), ValidateError> {
         (**self).init(data)
     }
 
     #[inline]
     fn interpolate(
         &self,
-        data: &InterpDataNDBase<D>,
-        point: &[D::Elem],
-    ) -> Result<D::Elem, InterpolateError> {
+        data: &InterpDataNDBase<Dg, Dv>,
+        point: &[f64],
+    ) -> Result<Dv::Elem, InterpolateError> {
         (**self).interpolate(data, point)
     }
 
@@ -536,33 +554,33 @@ where
     }
 
     #[inline]
-    fn check_batch_domain(&self, points: &[&[D::Elem]]) -> Result<(), InterpolateError> {
+    fn check_batch_domain(&self, points: &[&[f64]]) -> Result<(), InterpolateError> {
         (**self).check_batch_domain(points)
     }
 
     #[inline]
     fn interpolate_wrapped(
         &self,
-        data: &InterpDataNDBase<D>,
-        point: &[D::Elem],
-    ) -> Result<D::Elem, InterpolateError>
+        data: &InterpDataNDBase<Dg, Dv>,
+        point: &[f64],
+    ) -> Result<Dv::Elem, InterpolateError>
     where
-        D::Elem: Num + Euclid + Copy,
+        Dg::Elem: NumCast + Copy,
     {
         (**self).interpolate_wrapped(data, point)
     }
 
     #[inline]
-    fn interpolate_fast(&self, data: &InterpDataNDBase<D>, point: &[D::Elem]) -> D::Elem {
+    fn interpolate_fast(&self, data: &InterpDataNDBase<Dg, Dv>, point: &[f64]) -> Dv::Elem {
         (**self).interpolate_fast(data, point)
     }
 
     #[inline]
     fn batch_interpolate_into(
         &self,
-        data: &InterpDataNDBase<D>,
-        points: &[&[D::Elem]],
-        out: &mut [D::Elem],
+        data: &InterpDataNDBase<Dg, Dv>,
+        points: &[&[f64]],
+        out: &mut [Dv::Elem],
     ) -> Result<(), InterpolateError> {
         (**self).batch_interpolate_into(data, points, out)
     }
@@ -570,9 +588,9 @@ where
     #[inline]
     fn batch_interpolate_fast_into(
         &self,
-        data: &InterpDataNDBase<D>,
-        points: &[&[D::Elem]],
-        out: &mut [D::Elem],
+        data: &InterpDataNDBase<Dg, Dv>,
+        points: &[&[f64]],
+        out: &mut [Dv::Elem],
     ) {
         (**self).batch_interpolate_fast_into(data, points, out)
     }
@@ -580,11 +598,11 @@ where
     #[inline]
     fn batch_interpolate(
         &self,
-        data: &InterpDataNDBase<D>,
-        points: &[&[D::Elem]],
-    ) -> Result<Vec<D::Elem>, InterpolateError>
+        data: &InterpDataNDBase<Dg, Dv>,
+        points: &[&[f64]],
+    ) -> Result<Vec<Dv::Elem>, InterpolateError>
     where
-        D::Elem: Num,
+        Dv::Elem: Num,
     {
         (**self).batch_interpolate(data, points)
     }
@@ -592,11 +610,11 @@ where
     #[inline]
     fn batch_interpolate_fast(
         &self,
-        data: &InterpDataNDBase<D>,
-        points: &[&[D::Elem]],
-    ) -> Vec<D::Elem>
+        data: &InterpDataNDBase<Dg, Dv>,
+        points: &[&[f64]],
+    ) -> Vec<Dv::Elem>
     where
-        D::Elem: Num + Copy,
+        Dv::Elem: Num + Copy,
     {
         (**self).batch_interpolate_fast(data, points)
     }

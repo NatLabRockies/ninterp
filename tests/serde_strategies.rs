@@ -71,4 +71,27 @@ macro_rules! enum_round_trip_test {
 enum_round_trip_test!(strategy_1d_enum_round_trips_every_variant, Strategy1DEnum);
 enum_round_trip_test!(strategy_2d_enum_round_trips_every_variant, Strategy2DEnum);
 enum_round_trip_test!(strategy_3d_enum_round_trips_every_variant, Strategy3DEnum);
-enum_round_trip_test!(strategy_nd_enum_round_trips_every_variant, StrategyNDEnum);
+
+/// Same coverage as [`enum_round_trip_test!`], hand-written for `StrategyNDEnum`:
+/// it's the one enum not covered by that macro, since it's non-generic (the Tg/Tv
+/// split prototype, see `src/strategy/enums/n.rs`, hardcodes every ND strategy's
+/// blend precision to `f64` rather than parameterizing the enum by it), unlike
+/// `Strategy1D`/`2D`/`3DEnum<T>`.
+#[test]
+fn strategy_nd_enum_round_trips_every_variant() {
+    round_trip(&StrategyNDEnum::from(Nearest));
+    round_trip(&StrategyNDEnum::from(Linear));
+    round_trip(&StrategyNDEnum::from(LinearUniform));
+    round_trip(&StrategyNDEnum::from(Step::lower()));
+    round_trip(&StrategyNDEnum::from(Step::upper()));
+    round_trip(&StrategyNDEnum::from(Step::new(vec![
+        StepDirection::Lower,
+        StepDirection::Upper,
+    ])));
+    for bc in cubic_c2_variants() {
+        round_trip(&StrategyNDEnum::from(bc));
+    }
+    let inner: Box<StrategyNDEnum> = Box::new(StrategyNDEnum::from(Linear));
+    round_trip(&StrategyNDEnum::from(GridTransform::log(inner.clone())));
+    round_trip(&StrategyNDEnum::from(ValuesTransform::log(inner)));
+}

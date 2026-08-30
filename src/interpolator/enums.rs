@@ -386,7 +386,7 @@ where
     Interp1D(Interp1DBase<D, Strategy1DEnum<D::Elem>>),
     Interp2D(Interp2DBase<D, Strategy2DEnum<D::Elem>>),
     Interp3D(Interp3DBase<D, Strategy3DEnum<D::Elem>>),
-    InterpND(InterpNDBase<D, StrategyNDEnum<D::Elem>>),
+    InterpND(InterpNDBase<D, D, StrategyNDEnum>),
 }
 /// Owned interpolator enum (see [`InterpolatorEnumBase`] for the generic form).
 pub type InterpolatorEnum<T> = InterpolatorEnumBase<OwnedRepr<T>>;
@@ -493,14 +493,14 @@ where
     }
 }
 
-impl<D, S> From<InterpNDBase<D, S>> for InterpolatorEnumBase<D>
+impl<D, S> From<InterpNDBase<D, D, S>> for InterpolatorEnumBase<D>
 where
     D: Data + RawDataClone + Clone,
     D::Elem: Float + Debug,
-    S: Into<StrategyNDEnum<D::Elem>> + Clone,
+    S: Into<StrategyNDEnum> + Clone,
 {
     #[inline]
-    fn from(interpolator: InterpNDBase<D, S>) -> Self {
+    fn from(interpolator: InterpNDBase<D, D, S>) -> Self {
         InterpolatorEnumBase::InterpND(InterpNDBase {
             data: interpolator.data,
             strategy: interpolator.strategy.into(),
@@ -579,7 +579,7 @@ where
     pub fn new_nd(
         grid: Vec<ArrayBase<D, Ix1>>,
         values: ArrayBase<D, IxDyn>,
-        strategy: impl Into<StrategyNDEnum<D::Elem>>,
+        strategy: impl Into<StrategyNDEnum>,
         extrapolate: Extrapolate<D::Elem>,
     ) -> Result<Self, ValidateError> {
         Ok(Self::InterpND(InterpNDBase::new(
@@ -759,7 +759,7 @@ mod tests {
         .unwrap();
         let interp1 = InterpolatorEnumBase::from(interp0.clone());
 
-        let interp2: InterpNDBase<_, strategy::enums::StrategyNDEnum<f64>> = InterpNDBase::new(
+        let interp2: InterpNDBase<_, _, strategy::enums::StrategyNDEnum> = InterpNDBase::new(
             vec![x.view(), y.view()],
             f_xy_dyn.view(),
             strategy::Nearest.into(),

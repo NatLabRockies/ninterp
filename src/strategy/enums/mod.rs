@@ -411,7 +411,7 @@ mod tests {
 
     #[test]
     fn test_nd() {
-        let mut interp: InterpND<_, strategy::enums::StrategyNDEnum<f64>> = InterpND::new(
+        let mut interp: InterpND<_, strategy::enums::StrategyNDEnum> = InterpND::new(
             vec![
                 array![0.05, 0.10, 0.15],
                 array![0.10, 0.20, 0.30],
